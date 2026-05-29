@@ -91,6 +91,39 @@ When adding a new feature, you'll typically touch:
 6. **Tests** (`src/test/`) — service layer tests at minimum
 7. **UI** (`src/components/`, `src/app/`) — if user-facing
 
+## Publishing to npm
+
+Releases are published automatically via GitHub Actions when a version tag is pushed. The workflow runs all checks (typecheck, lint, format, tests) and then `npm publish`.
+
+### Prerequisites
+
+1. An npm account with publish access to the `kinti` package.
+2. A GitHub repository secret named `NPM_TOKEN` set to an npm access token with publish permissions (`Automation` type recommended so it bypasses 2FA).
+   - Generate at: npmjs.com → Account → Access Tokens → Generate New Token.
+   - Add at: GitHub repo → Settings → Secrets and variables → Actions → New repository secret.
+
+### Cutting a release
+
+```bash
+# 1. Bump the version in package.json
+npm version patch   # or minor / major
+#    This commits the bump and creates a local tag (e.g. v0.1.1).
+
+# 2. Push the commit and tag
+git push origin main --follow-tags
+```
+
+Pushing the `v*` tag triggers the publish workflow. Monitor it under the Actions tab on GitHub.
+
+### What the workflow does
+
+1. Checks out the repo and sets up Node 20 with the npm registry.
+2. Runs `npm ci`, `npx tsc --noEmit`, `npm run check`, and `npm test`.
+3. Runs `npm run build` to produce the `.next/` output included in the package.
+4. Runs `npm publish` authenticated via `NODE_AUTH_TOKEN`.
+
+The `prepack` script automatically strips the `.next/cache` and `.next/dev` directories before packing to keep the published artifact small.
+
 ## Pull Requests
 
 - One focused change per PR.

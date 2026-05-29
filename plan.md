@@ -295,31 +295,7 @@ drizzle/                         # Generated migrations
 
 Each sprint is a self-contained chunk of work. Sprints are organized into two phases: **MVP** and **Full App**.
 
-**Completed sprints (1-22):** Project scaffolding, database schema, validators, service layer (transactions, categories, reports, budgets, recurring), API routes, MCP server, scheduled tasks, app shell + dashboard, transactions page, common MCP read operations, categories page, budgets page, recurring page, reports page, receipts flow, financial data service (exchange rates + market prices), assets & net worth tracking (transfer type, asset lots, price snapshots, portfolio), portfolio reports backend (asset–market price linking via symbolMap, unified price resolver, portfolio report services — net worth history, asset performance, allocation, currency exposure, realized P&L, asset history), portfolio reports UI (reports sidebar with Cash Flow / Portfolio sub-pages, portfolio reports page, enhanced assets page with summary cards and charts, asset detail enhancements, dashboard net worth sparkline / top movers / allocation donut, onboarding tools and interactive tutorial), polish & hardening (dark mode, mobile-responsive fixes, error boundaries, streaming symbol search, more financial data providers, E2E Playwright tests, performance tuning, sample data clear flow, decimal amounts refactor — integer cents → real columns end-to-end).
-
-**Sprint 27 — Multi-Currency:** Immutable base currency set at onboarding; `currency`/`amount_base` columns on transactions (migration 0008) with async FX conversion at write time via Frankfurter → Fawazahmed fallback chain; `CurrencySchema`, `formatCurrency`, `roundToCurrency`; base-currency formatting everywhere (charts, budgets, reports, cash balance, portfolio); asset lots store `price_per_unit_base` (migration 0009) for FX vs price P&L decomposition; `convert_currency` MCP tool; currency picker in transaction form with "Converting…" feedback; symbol-search surfaces currency hint and pre-fills asset form; OpenAPI spec, CLAUDE.md Currency Conventions, and MCP INSTRUCTIONS updated.
-
----
-
-### Sprint 23: Packaging & Auto-Updates
-**Goal:** Make Kinti trivial to deploy and maintain for anyone (human or AI agent).
-
-- [ ] Provide simple, robust packaging (e.g., Docker container or single install script)
-- [ ] Build an auto-updater mechanism for easy rolling releases
-
----
-
-### Sprint 25: Documentation & Project Files
-**Goal:** Make this a proper public open-source project.
-
-- [x] README.md — project overview, feature list, screenshots/demo, tech stack, quick start guide, usage instructions
-- [x] LICENSE file — AGPL-3.0-or-later
-- [x] CONTRIBUTING.md — dev setup, how to run tests, coding standards, PR workflow
-- [x] API documentation — REST endpoints (Swagger at `/api-docs`) and MCP tools (`get_started` tool) referenced in README
-- [x] Extend MCP `instructions` field: Added behavioral prompts for categorization, budget alerts, recurring suggestions, data quality
-- [x] Verify .gitignore, .env.example, and any other dotfiles are in order
-
-**Done when:** A developer can clone the repo, read the README, and get running. Project looks professional on GitHub.
+**Completed sprints (1-25, 27):** Project scaffolding, database schema, validators, service layer (transactions, categories, reports, budgets, recurring), API routes, MCP server, scheduled tasks, app shell + dashboard, transactions page, common MCP read operations, categories page, budgets page, recurring page, reports page, receipts flow, financial data service (exchange rates + market prices), assets & net worth tracking (transfer type, asset lots, price snapshots, portfolio), portfolio reports backend (asset–market price linking via symbolMap, unified price resolver, portfolio report services — net worth history, asset performance, allocation, currency exposure, realized P&L, asset history), portfolio reports UI (reports sidebar with Cash Flow / Portfolio sub-pages, portfolio reports page, enhanced assets page with summary cards and charts, asset detail enhancements, dashboard net worth sparkline / top movers / allocation donut, onboarding tools and interactive tutorial), polish & hardening (dark mode, mobile-responsive fixes, error boundaries, streaming symbol search, more financial data providers, E2E Playwright tests, performance tuning, sample data clear flow, decimal amounts refactor — integer cents → real columns end-to-end), npm packaging (`bin/kinti.js` CLI with `kinti start` / `kinti update`, `update-notifier` for background update checks), multi-currency support (immutable base currency, `currency`/`amount_base` columns with async FX conversion at write time, `formatCurrency`, base-currency formatting everywhere, `price_per_unit_base` on lots, `convert_currency` MCP tool, currency picker in transaction form), documentation & open-source setup (README, LICENSE, CONTRIBUTING.md, Swagger API docs, extended MCP `instructions`, dotfiles).
 
 ---
 
