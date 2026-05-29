@@ -19,24 +19,20 @@ import { generateAssets, lotsToEvents } from "./assets";
 import { buildFxRates } from "./fx-rates";
 import { Temporal } from "@js-temporal/polyfill";
 import { isoDate } from "./rng";
-import { logger, seedLogger } from "@/lib/logger";
+import { seedLogger } from "@/lib/logger";
 
 const BASE_CURRENCY = "EUR";
 const OPENING_BALANCE = 2000; // €2 000 — previous month's salary leftovers
 
-async function seed(): Promise<void> {
+export async function seed(): Promise<void> {
   const db = getDb();
 
   // Abort if database already has data
   const existingCategories = await db.select().from(categories);
   const existingTransactions = await db.select({ id: transactions.id }).from(transactions).limit(1);
   if (existingCategories.length > 0 || existingTransactions.length > 0) {
-    seedLogger.error(
-      "Database is not empty. Delete the database file and run again.\n" +
-        "  rm data/kinti.db && npm run db:seed"
-    );
-    logger.flush();
-    process.exit(1);
+    seedLogger.info("Database already has data — skipping seed.");
+    return;
   }
 
   // ── Categories ──────────────────────────────────────────────────────────
@@ -351,8 +347,3 @@ async function seed(): Promise<void> {
   seedLogger.info(`  Final cash:     €${finalCash.toFixed(2)}`);
 }
 
-seed().catch((err) => {
-  seedLogger.error({ err }, "Seed failed");
-  logger.flush();
-  process.exit(1);
-});

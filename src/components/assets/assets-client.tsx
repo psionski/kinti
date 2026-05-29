@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { Plus, TrendingUp, TrendingDown, ArrowRight } from "lucide-react";
 import { PnlDisplay } from "@/components/shared/pnl-display";
+import { EmptyState } from "@/components/shared/empty-state";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -214,10 +215,10 @@ export function AssetsClient({ initialAssets, portfolio }: AssetsClientProps): R
       </div>
 
       {assets.length === 0 ? (
-        <p className="text-muted-foreground">
-          No assets yet. Add a savings account, investment, or crypto holding to track your net
-          worth.
-        </p>
+        <EmptyState
+          message="No assets yet."
+          description="Add a savings account, investment, or crypto holding to track your net worth."
+        />
       ) : (
         <>
           <SummaryCards portfolio={currentPortfolio} />

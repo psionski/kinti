@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/shared/empty-state";
 import { formatCurrency } from "@/lib/format";
 import type { AssetWithMetrics } from "@/lib/validators/assets";
 
@@ -22,7 +23,7 @@ export function TopMovers({ assets }: TopMoversProps): React.ReactElement {
       </CardHeader>
       <CardContent>
         {movers.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No P&amp;L data yet.</p>
+          <EmptyState message="No P&L data yet." />
         ) : (
           <div className="space-y-3">
             {movers.map((asset) => {

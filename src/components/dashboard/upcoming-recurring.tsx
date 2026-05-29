@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/shared/empty-state";
 import { formatCurrency, formatDate, formatFrequency } from "@/lib/format";
 import type { RecurringResponse } from "@/lib/validators/recurring";
 
@@ -39,9 +40,7 @@ export function UpcomingRecurring({ items }: UpcomingRecurringProps): React.Reac
             ))}
           </div>
         ) : (
-          <p className="text-muted-foreground py-10 text-center text-sm">
-            No upcoming recurring transactions.
-          </p>
+          <EmptyState message="No upcoming recurring transactions." />
         )}
       </CardContent>
     </Card>

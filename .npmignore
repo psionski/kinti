@@ -1,0 +1,26 @@
+# Development & testing
+src/test/
+e2e/
+coverage/
+*.spec.ts
+vitest.config.ts
+playwright.config.ts
+
+# Runtime data
+data/
+logs/
+*.db
+*.db-shm
+*.db-wal
+
+# Dev tooling
+.claude/
+.env
+.env.*
+!.env.example
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

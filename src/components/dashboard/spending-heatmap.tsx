@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { Temporal } from "@js-temporal/polyfill";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { EmptyState } from "@/components/shared/empty-state";
 import { formatCurrency } from "@/lib/format";
 import type { DailySpendPoint } from "@/lib/validators/reports";
 
@@ -171,7 +172,7 @@ export function SpendingHeatmap({ points, today }: SpendingHeatmapProps): React.
       </CardHeader>
       <CardContent>
         {!grid ? (
-          <p className="text-muted-foreground py-10 text-center text-sm">No spending yet.</p>
+          <EmptyState message="No spending yet." />
         ) : (
           <div className="flex flex-col">
             {/* Month labels row, aligned with the cell columns. Padded on the

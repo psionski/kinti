@@ -3,6 +3,7 @@
 import { Pie, PieChart, Cell } from "recharts";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/shared/empty-state";
 
 const FALLBACK_COLORS = [
   "var(--chart-1)",
@@ -48,7 +49,7 @@ export function AllocationMiniDonut({ data }: AllocationMiniDonutProps): React.R
           <CardTitle className="text-sm font-medium">Allocation</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground text-sm">No allocation data</p>
+          <EmptyState message="No allocation data." />
         </CardContent>
       </Card>
     );

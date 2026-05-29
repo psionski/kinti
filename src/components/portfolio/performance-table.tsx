@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/shared/empty-state";
 import { formatCurrency, getBaseCurrency } from "@/lib/format";
 import type { AssetPerformanceItem } from "@/lib/validators/portfolio-reports";
 
@@ -122,9 +123,7 @@ export function PerformanceTable({ data }: PerformanceTableProps): React.ReactEl
       </CardHeader>
       <CardContent>
         {data.length === 0 ? (
-          <p className="text-muted-foreground py-8 text-center text-sm">
-            No asset performance data available.
-          </p>
+          <EmptyState message="No asset performance data available." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

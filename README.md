@@ -81,17 +81,32 @@ Your biggest controllable levers are **dining out** (€899 over 3 months, 73 tr
 - Node.js 20+
 - npm
 
-### Setup
+### Install
+
+```bash
+npm install -g kinti
+kinti start
+```
+
+Starts on port 4000. Data (database, logs, backups, receipts) is stored in `~/.kinti/` and persists across updates.
+
+```bash
+# Custom port or data directory
+kinti start --port 3000 --data /path/to/data
+
+# Update to the latest version
+kinti update
+```
+
+Open [http://localhost:4000](http://localhost:4000). You'll be prompted to configure your timezone and base currency to get started.
+
+### Development Setup
 
 ```bash
 git clone https://github.com/psionski/kinti.git
 cd kinti
 npm install
-```
 
-### Run
-
-```bash
 # (Optional) Seed with 12 months of realistic sample data
 npm run db:seed
 
@@ -99,7 +114,7 @@ npm run db:seed
 npm run dev
 ```
 
-Open [http://localhost:4000](http://localhost:4000). If you seeded sample data, you'll get an interactive tutorial that walks you through the UI — after which you can clear the sample data and start fresh. Without sample data, you'll be prompted to configure your timezone to get started.
+If you seeded sample data, you'll get an interactive tutorial that walks you through the UI — after which you can clear the sample data and start fresh.
 
 ### Connect your AI
 
