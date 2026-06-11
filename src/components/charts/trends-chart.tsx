@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { CategorySelectItems } from "@/components/categories/category-select-items";
 import { formatCurrency, formatCurrencyCompact, formatMonth } from "@/lib/format";
-import type { TrendPoint } from "@/lib/validators/reports";
+import type { TrendPoint, TrendsResult } from "@/lib/validators/reports";
 import type { CategoryWithCountResponse } from "@/lib/validators/categories";
 
 const chartConfig = {
@@ -59,7 +59,7 @@ export function TrendsChart({
         }
         const res = await fetch(`/api/reports/trends?${params}`);
         if (res.ok) {
-          setData((await res.json()) as TrendPoint[]);
+          setData(((await res.json()) as TrendsResult).points);
         }
       } finally {
         setLoading(false);

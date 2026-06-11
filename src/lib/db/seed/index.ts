@@ -346,4 +346,3 @@ export async function seed(): Promise<void> {
   seedLogger.info(`  Net transfers:  €${transfers.toFixed(2)}`);
   seedLogger.info(`  Final cash:     €${finalCash.toFixed(2)}`);
 }
-

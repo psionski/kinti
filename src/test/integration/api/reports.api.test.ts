@@ -95,6 +95,35 @@ describe("Report API Routes", () => {
     expect(body.currency).toBe("EUR");
   });
 
+  // Regression: TrendsChart's category dropdown re-fetched this endpoint and
+  // cast the whole response to TrendPoint[], then called .map() on it — but the
+  // endpoint returns the envelope { points, currency }, not a bare array. The
+  // mismatch threw "data.map is not a function" and surfaced as the global
+  // error page. Pin the contract: the body is an object exposing `.points`, and
+  // is NOT itself an array. Holds for the categoryId-filtered path too.
+  it("GET /trends returns a { points } envelope, not a bare array", async () => {
+    const cat = await json<{ id: number }>(
+      await POST_CAT(makeJson("POST", "/api/categories", { name: "Travel" }))
+    );
+    await POST_TX(
+      makeJson("POST", "/api/transactions", {
+        amount: 40,
+        description: "Train",
+        date: "2025-01-10",
+        categoryId: cat.id,
+      })
+    );
+
+    const res = await GET_TRENDS(
+      makeGet("/api/reports/trends", { months: "3", categoryId: String(cat.id), type: "expense" })
+    );
+    expect(res.status).toBe(200);
+    const body = await json<unknown>(res);
+
+    expect(Array.isArray(body)).toBe(false);
+    expect(body).toMatchObject({ points: expect.any(Array), currency: "EUR" });
+  });
+
   it("GET /top-merchants returns top merchants", async () => {
     await seedData();
     const res = await GET_TOP_MERCHANTS(
