@@ -1,11 +1,11 @@
 export const dynamic = "force-dynamic";
 
-import { requireTimezone } from "@/lib/api/require-timezone";
+import { requireOnboarding } from "@/lib/api/require-timezone";
 import { getTransactionService, getCategoryService } from "@/lib/api/services";
 import { TransactionsClient } from "@/components/transactions/transactions-client";
 
 export default function TransactionsPage(): React.ReactElement {
-  requireTimezone();
+  requireOnboarding();
   const transactionService = getTransactionService();
   const categoryService = getCategoryService();
 

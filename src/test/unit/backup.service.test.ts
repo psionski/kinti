@@ -13,23 +13,23 @@ import {
 
 describe("parseFilenameTimestamp", () => {
   it("extracts UTC ISO from a standard backup filename", () => {
-    expect(parseFilenameTimestamp("pinch-backup-2026-03-22T16-07-49Z.db")).toBe(
+    expect(parseFilenameTimestamp("kinti-backup-2026-03-22T16-07-49Z.db")).toBe(
       "2026-03-22T16:07:49Z"
     );
   });
 
   it("extracts UTC ISO from a pre-restore backup filename", () => {
-    expect(parseFilenameTimestamp("pinch-backup-pre-restore-2026-03-22T16-07-49Z.db")).toBe(
+    expect(parseFilenameTimestamp("kinti-backup-pre-restore-2026-03-22T16-07-49Z.db")).toBe(
       "2026-03-22T16:07:49Z"
     );
   });
 
   it("returns null for legacy filenames without Z suffix", () => {
-    expect(parseFilenameTimestamp("pinch-backup-2026-03-22T16-07-49.db")).toBeNull();
+    expect(parseFilenameTimestamp("kinti-backup-2026-03-22T16-07-49.db")).toBeNull();
   });
 
   it("returns null for epoch-based filenames", () => {
-    expect(parseFilenameTimestamp("pinch-backup-pre-restore-1774193571481.db")).toBeNull();
+    expect(parseFilenameTimestamp("kinti-backup-pre-restore-1774193571481.db")).toBeNull();
   });
 });
 
@@ -38,7 +38,7 @@ describe("runBackup", () => {
   let dbPath: string;
 
   beforeEach(() => {
-    tmpDir = join(tmpdir(), `pinch-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    tmpDir = join(tmpdir(), `kinti-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(tmpDir, { recursive: true });
     dbPath = join(tmpDir, "test.db");
     const db = new Database(dbPath);
@@ -55,12 +55,12 @@ describe("runBackup", () => {
     const backupDir = join(tmpDir, "backups");
     const result = await runBackup(dbPath, { backupDir });
 
-    expect(result.path).toContain("pinch-backup-");
+    expect(result.path).toContain("kinti-backup-");
     expect(result.rotatedCount).toBe(0);
 
     const files = readdirSync(backupDir);
     expect(files).toHaveLength(1);
-    expect(files[0]).toMatch(/^pinch-backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z\.db$/);
+    expect(files[0]).toMatch(/^kinti-backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z\.db$/);
 
     const backup = new Database(result.path, { readonly: true });
     const rows = backup.prepare("SELECT * FROM t").all();
@@ -73,7 +73,7 @@ describe("runBackup", () => {
     mkdirSync(backupDir, { recursive: true });
 
     for (let i = 0; i < 3; i++) {
-      const fName = `pinch-backup-2026-01-0${i + 1}T00-00-00Z.db`;
+      const fName = `kinti-backup-2026-01-0${i + 1}T00-00-00Z.db`;
       writeFileSync(join(backupDir, fName), "fake");
     }
 
@@ -81,7 +81,7 @@ describe("runBackup", () => {
 
     expect(result.rotatedCount).toBe(2);
     const files = readdirSync(backupDir).filter(
-      (f) => f.startsWith("pinch-backup-") && f.endsWith(".db")
+      (f) => f.startsWith("kinti-backup-") && f.endsWith(".db")
     );
     expect(files).toHaveLength(2);
     expect(files).toContain(result.path.split(/[\\/]/).pop());
@@ -92,7 +92,7 @@ describe("listBackups", () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = join(tmpdir(), `pinch-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    tmpDir = join(tmpdir(), `kinti-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(tmpDir, { recursive: true });
   });
 
@@ -108,9 +108,9 @@ describe("listBackups", () => {
     const backupDir = join(tmpDir, "backups");
     mkdirSync(backupDir, { recursive: true });
 
-    writeFileSync(join(backupDir, "pinch-backup-2026-03-20T10-00-00Z.db"), "data");
-    writeFileSync(join(backupDir, "pinch-backup-2026-03-21T14-30-00Z.db"), "data");
-    writeFileSync(join(backupDir, "pinch-backup-pre-restore-2026-03-21T14-25-00Z.db"), "data");
+    writeFileSync(join(backupDir, "kinti-backup-2026-03-20T10-00-00Z.db"), "data");
+    writeFileSync(join(backupDir, "kinti-backup-2026-03-21T14-30-00Z.db"), "data");
+    writeFileSync(join(backupDir, "kinti-backup-pre-restore-2026-03-21T14-25-00Z.db"), "data");
 
     const backups = listBackups(backupDir);
     expect(backups).toHaveLength(3);
@@ -125,17 +125,17 @@ describe("listBackups", () => {
     const backupDir = join(tmpDir, "backups");
     mkdirSync(backupDir, { recursive: true });
 
-    writeFileSync(join(backupDir, "pinch-backup-2026-01-01T00-00-00Z.db"), "data");
+    writeFileSync(join(backupDir, "kinti-backup-2026-01-01T00-00-00Z.db"), "data");
     // Legacy format without Z — skipped
-    writeFileSync(join(backupDir, "pinch-backup-2026-01-01T00-00-00.db"), "data");
+    writeFileSync(join(backupDir, "kinti-backup-2026-01-01T00-00-00.db"), "data");
     // Epoch format — skipped
-    writeFileSync(join(backupDir, "pinch-backup-pre-restore-1774193571481.db"), "data");
+    writeFileSync(join(backupDir, "kinti-backup-pre-restore-1774193571481.db"), "data");
     // Non-backup files — skipped
     writeFileSync(join(backupDir, "random-file.txt"), "data");
 
     const backups = listBackups(backupDir);
     expect(backups).toHaveLength(1);
-    expect(backups[0].filename).toBe("pinch-backup-2026-01-01T00-00-00Z.db");
+    expect(backups[0].filename).toBe("kinti-backup-2026-01-01T00-00-00Z.db");
   });
 });
 
@@ -145,7 +145,7 @@ describe("restoreBackup", () => {
   let backupDir: string;
 
   beforeEach(() => {
-    tmpDir = join(tmpdir(), `pinch-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    tmpDir = join(tmpdir(), `kinti-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(tmpDir, { recursive: true });
     backupDir = join(tmpDir, "backups");
     dbPath = join(tmpDir, "test.db");
@@ -172,7 +172,7 @@ describe("restoreBackup", () => {
 
     const result = await restoreBackup(dbPath, backupFilename, backupDir);
     expect(result.restoredFrom).toBe(backupFilename);
-    expect(result.safetyBackup).toMatch(/^pinch-backup-pre-restore-.*Z\.db$/);
+    expect(result.safetyBackup).toMatch(/^kinti-backup-pre-restore-.*Z\.db$/);
 
     const restored = new Database(dbPath, { readonly: true });
     const rows = restored.prepare("SELECT * FROM t").all();
@@ -193,7 +193,7 @@ describe("restoreBackup", () => {
 
   it("rejects non-existent backup files", async () => {
     await expect(
-      restoreBackup(dbPath, "pinch-backup-2099-01-01T00-00-00Z.db", backupDir)
+      restoreBackup(dbPath, "kinti-backup-2099-01-01T00-00-00Z.db", backupDir)
     ).rejects.toThrow("Backup file not found");
   });
 

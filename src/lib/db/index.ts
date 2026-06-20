@@ -8,7 +8,7 @@ import { dbLogger } from "@/lib/logger";
 
 export type AppDb = BetterSQLite3Database<typeof schema>;
 
-const DB_PATH = process.env.DATABASE_URL ?? "./data/pinch.db";
+const DB_PATH = process.env.DATABASE_URL ?? "./data/kinti.db";
 
 /**
  * Idempotently (re)creates FTS5 sync triggers for the transactions table.
@@ -95,21 +95,21 @@ function initClient(path: string): InstanceType<typeof Database> {
 // Singleton for the application DB connection stored on globalThis so it
 // survives Next.js re-bundling across server components and API routes.
 // In tests, use createDb() directly with a separate path/in-memory DB.
-const g = globalThis as unknown as { __pinchDb?: AppDb };
+const g = globalThis as unknown as { __kintiDb?: AppDb };
 
 /** App-level singleton. Runs pending migrations on first call. */
 export function getDb(): AppDb {
-  if (!g.__pinchDb) {
+  if (!g.__kintiDb) {
     const client = initClient(DB_PATH);
     const db = drizzle({ client, schema });
     migrate(db, { migrationsFolder: join(process.cwd(), "drizzle") });
     dbLogger.debug("Migrations applied");
     ensureFtsTriggers(client);
     dbLogger.debug("FTS triggers ensured");
-    g.__pinchDb = db;
+    g.__kintiDb = db;
     dbLogger.info({ path: DB_PATH }, "Database initialized");
   }
-  return g.__pinchDb;
+  return g.__kintiDb;
 }
 
 /**
@@ -118,15 +118,15 @@ export function getDb(): AppDb {
  * to pick up the new database without a server restart.
  */
 export function resetDb(): void {
-  if (g.__pinchDb) {
+  if (g.__kintiDb) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const client = (g.__pinchDb as any).$client as InstanceType<typeof Database>;
+      const client = (g.__kintiDb as any).$client as InstanceType<typeof Database>;
       client.close();
     } catch {
       // Connection may already be closed — safe to ignore
     }
-    g.__pinchDb = undefined;
+    g.__kintiDb = undefined;
     dbLogger.info("Database connection reset");
   }
 }

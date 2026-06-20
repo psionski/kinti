@@ -6,21 +6,21 @@ import type { Window, Interval } from "@/lib/validators/portfolio-reports";
 // Stored on globalThis so the value survives Next.js re-bundling across
 // server components, API routes, and instrumentation — same pattern as the
 // DB singleton in lib/db/index.ts.
-const g = globalThis as unknown as { __pinchTz?: string };
+const g = globalThis as unknown as { __kintiTz?: string };
 
 /** Returns the cached timezone. Defaults to UTC until setUserTimezone() is called. */
 function tz(): string {
-  return g.__pinchTz ?? "UTC";
+  return g.__kintiTz ?? "UTC";
 }
 
 /** Set the timezone used by all date functions. Called at server startup from settings DB. */
 export function setUserTimezone(timezone: string): void {
-  g.__pinchTz = timezone;
+  g.__kintiTz = timezone;
 }
 
 /** Clear the cached timezone so it's re-read on next access. */
 export function clearTimezoneCache(): void {
-  g.__pinchTz = undefined;
+  g.__kintiTz = undefined;
 }
 
 // ─── Timestamp Conversion ────────────────────────────────────────────────────

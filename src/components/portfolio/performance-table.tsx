@@ -5,12 +5,19 @@ import Link from "next/link";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency } from "@/lib/format";
+import { EmptyState } from "@/components/shared/empty-state";
+import { formatCurrency, getBaseCurrency } from "@/lib/format";
 import type { AssetPerformanceItem } from "@/lib/validators/portfolio-reports";
 
 type SortKey = keyof Pick<
   AssetPerformanceItem,
-  "name" | "costBasis" | "currentValue" | "pnl" | "pnlPct" | "annualizedReturn" | "daysHeld"
+  | "name"
+  | "costBasisBase"
+  | "currentValueBase"
+  | "pnlBase"
+  | "pnlPct"
+  | "annualizedReturn"
+  | "daysHeld"
 >;
 
 type SortDir = "asc" | "desc";
@@ -80,8 +87,10 @@ function SortIcon({
 }
 
 export function PerformanceTable({ data }: PerformanceTableProps): React.ReactElement {
-  const [sortKey, setSortKey] = useState<SortKey>("pnl");
+  const [sortKey, setSortKey] = useState<SortKey>("pnlBase");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const baseCurrency = getBaseCurrency();
+  const hasMultiCurrency = data.some((d) => d.currency !== baseCurrency);
 
   function handleSort(key: SortKey): void {
     if (key === sortKey) {
@@ -114,9 +123,7 @@ export function PerformanceTable({ data }: PerformanceTableProps): React.ReactEl
       </CardHeader>
       <CardContent>
         {data.length === 0 ? (
-          <p className="text-muted-foreground py-8 text-center text-sm">
-            No asset performance data available.
-          </p>
+          <EmptyState message="No asset performance data available." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -126,17 +133,22 @@ export function PerformanceTable({ data }: PerformanceTableProps): React.ReactEl
                     {renderSortableHeader("Asset", "name")}
                   </th>
                   <th className="text-muted-foreground hidden px-2 py-2 text-right text-xs font-medium md:table-cell">
-                    {renderSortableHeader("Cost Basis", "costBasis")}
+                    {renderSortableHeader("Cost Basis", "costBasisBase")}
                   </th>
                   <th className="text-muted-foreground hidden px-2 py-2 text-right text-xs font-medium md:table-cell">
-                    {renderSortableHeader("Current Value", "currentValue")}
+                    {renderSortableHeader("Current Value", "currentValueBase")}
                   </th>
                   <th className="text-muted-foreground px-2 py-2 text-right text-xs font-medium">
-                    {renderSortableHeader("P&L (€)", "pnl")}
+                    {renderSortableHeader("P&L", "pnlBase")}
                   </th>
                   <th className="text-muted-foreground px-2 py-2 text-right text-xs font-medium">
                     {renderSortableHeader("P&L (%)", "pnlPct")}
                   </th>
+                  {hasMultiCurrency && (
+                    <th className="text-muted-foreground hidden px-2 py-2 text-right text-xs font-medium md:table-cell">
+                      FX Effect
+                    </th>
+                  )}
                   <th className="text-muted-foreground hidden px-2 py-2 text-right text-xs font-medium md:table-cell">
                     {renderSortableHeader("Ann. Return", "annualizedReturn")}
                   </th>
@@ -146,39 +158,81 @@ export function PerformanceTable({ data }: PerformanceTableProps): React.ReactEl
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((item) => (
-                  <tr key={item.assetId} className="border-b">
-                    <td className="px-2 py-2">
-                      <div className="flex items-center gap-2">
-                        <Link
-                          href={`/assets/${item.assetId}`}
-                          className="text-foreground font-medium hover:underline"
+                {sorted.map((item) => {
+                  const isForeign = item.currency !== baseCurrency;
+                  const nativePnl = `${item.pnl >= 0 ? "+" : ""}${formatCurrency(item.pnl, item.currency)}`;
+                  return (
+                    <tr key={item.assetId} className="border-b">
+                      <td className="px-2 py-2">
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/assets/${item.assetId}`}
+                            className="text-foreground font-medium hover:underline"
+                          >
+                            {item.name}
+                          </Link>
+                          <Badge variant="secondary">{item.type}</Badge>
+                          {isForeign && (
+                            <Badge variant="outline" className="text-xs">
+                              {item.currency}
+                            </Badge>
+                          )}
+                        </div>
+                      </td>
+                      <td
+                        className="hidden px-2 py-2 text-right md:table-cell"
+                        title={
+                          isForeign
+                            ? `Native: ${formatCurrency(item.costBasis, item.currency)}`
+                            : undefined
+                        }
+                      >
+                        {formatCurrency(item.costBasisBase)}
+                      </td>
+                      <td
+                        className="hidden px-2 py-2 text-right md:table-cell"
+                        title={
+                          isForeign
+                            ? `Native: ${formatCurrency(item.currentValue, item.currency)}`
+                            : undefined
+                        }
+                      >
+                        {item.currentValueBase !== null
+                          ? formatCurrency(item.currentValueBase)
+                          : "—"}
+                      </td>
+                      <td
+                        className={`px-2 py-2 text-right font-medium ${item.pnlBase !== null ? pnlColor(item.pnlBase) : ""}`}
+                        title={isForeign ? `Native: ${nativePnl}` : undefined}
+                      >
+                        {item.pnlBase !== null ? formatPnlCurrency(item.pnlBase) : "—"}
+                      </td>
+                      <td className={`px-2 py-2 text-right font-medium ${pnlColor(item.pnlPct)}`}>
+                        {formatPct(item.pnlPct)}
+                      </td>
+                      {hasMultiCurrency && (
+                        <td
+                          className={`hidden px-2 py-2 text-right md:table-cell ${item.fxPnlBase !== null ? pnlColor(item.fxPnlBase) : ""}`}
+                          title={
+                            item.pricePnlBase !== null
+                              ? `Price: ${formatPnlCurrency(item.pricePnlBase)}, FX: ${item.fxPnlBase !== null ? formatPnlCurrency(item.fxPnlBase) : "—"}`
+                              : undefined
+                          }
                         >
-                          {item.name}
-                        </Link>
-                        <Badge variant="secondary">{item.type}</Badge>
-                      </div>
-                    </td>
-                    <td className="hidden px-2 py-2 text-right md:table-cell">
-                      {formatCurrency(item.costBasis)}
-                    </td>
-                    <td className="hidden px-2 py-2 text-right md:table-cell">
-                      {formatCurrency(item.currentValue)}
-                    </td>
-                    <td className={`px-2 py-2 text-right font-medium ${pnlColor(item.pnl)}`}>
-                      {formatPnlCurrency(item.pnl)}
-                    </td>
-                    <td className={`px-2 py-2 text-right font-medium ${pnlColor(item.pnlPct)}`}>
-                      {formatPct(item.pnlPct)}
-                    </td>
-                    <td
-                      className={`hidden px-2 py-2 text-right md:table-cell ${item.annualizedReturn !== null ? pnlColor(item.annualizedReturn) : ""}`}
-                    >
-                      {item.annualizedReturn !== null ? formatPct(item.annualizedReturn) : "—"}
-                    </td>
-                    <td className="hidden px-2 py-2 text-right md:table-cell">{item.daysHeld}</td>
-                  </tr>
-                ))}
+                          {item.fxPnlBase !== null && item.fxPnlBase !== 0
+                            ? formatPnlCurrency(item.fxPnlBase)
+                            : "—"}
+                        </td>
+                      )}
+                      <td
+                        className={`hidden px-2 py-2 text-right md:table-cell ${item.annualizedReturn !== null ? pnlColor(item.annualizedReturn) : ""}`}
+                      >
+                        {item.annualizedReturn !== null ? formatPct(item.annualizedReturn) : "—"}
+                      </td>
+                      <td className="hidden px-2 py-2 text-right md:table-cell">{item.daysHeld}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

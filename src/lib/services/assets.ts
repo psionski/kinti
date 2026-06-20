@@ -9,7 +9,9 @@ import type {
   AssetWithMetrics,
 } from "@/lib/validators/assets";
 import { resolvePrice } from "./price-resolver";
-import { utcToLocal } from "@/lib/date-ranges";
+import { findCachedFxRate } from "./fx-cache";
+import { isoToday, utcToLocal } from "@/lib/date-ranges";
+import { getBaseCurrency, roundToCurrency } from "@/lib/format";
 
 type Db = BetterSQLite3Database<typeof schema>;
 
@@ -32,12 +34,16 @@ export class AssetService {
   constructor(private db: Db) {}
 
   create(input: CreateAssetInput): AssetResponse {
+    // Default currency to the configured base when the caller omits it. Done
+    // here rather than in the Zod schema because Zod can't default to a
+    // runtime value that's read from settings.
+    const currency = input.currency ?? getBaseCurrency();
     const [row] = this.db
       .insert(assets)
       .values({
         name: input.name,
         type: input.type,
-        currency: input.currency,
+        currency,
         symbolMap: input.symbolMap ? JSON.stringify(input.symbolMap) : null,
         icon: input.icon ?? null,
         color: input.color ?? null,
@@ -86,16 +92,24 @@ export class AssetService {
     // Each sell consumes the oldest buy lots first, so the remaining queue
     // represents the actual cost of current holdings.
     const lots = this.db
-      .select({ quantity: assetLots.quantity, pricePerUnit: assetLots.pricePerUnit })
+      .select({
+        quantity: assetLots.quantity,
+        pricePerUnit: assetLots.pricePerUnit,
+        pricePerUnitBase: assetLots.pricePerUnitBase,
+      })
       .from(assetLots)
       .where(eq(assetLots.assetId, asset.id))
       .orderBy(asc(assetLots.date), asc(assetLots.id))
       .all();
 
-    const queue: Array<{ qty: number; price: number }> = [];
+    const queue: Array<{ qty: number; price: number; priceBase: number }> = [];
     for (const lot of lots) {
       if (lot.quantity > 0) {
-        queue.push({ qty: lot.quantity, price: lot.pricePerUnit });
+        queue.push({
+          qty: lot.quantity,
+          price: lot.pricePerUnit,
+          priceBase: lot.pricePerUnitBase,
+        });
       } else {
         let toConsume = -lot.quantity;
         while (toConsume > 0 && queue.length > 0) {
@@ -111,17 +125,59 @@ export class AssetService {
       }
     }
 
+    const baseCurrency = getBaseCurrency();
     const currentHoldings = parseFloat(queue.reduce((sum, e) => sum + e.qty, 0).toFixed(8));
-    const costBasis = Math.round(queue.reduce((sum, e) => sum + e.qty * e.price, 0) * 100) / 100;
+    const costBasis = roundToCurrency(
+      queue.reduce((sum, e) => sum + e.qty * e.price, 0),
+      asset.currency
+    );
+    const costBasisBase = roundToCurrency(
+      queue.reduce((sum, e) => sum + e.qty * e.priceBase, 0),
+      baseCurrency
+    );
 
     // Unified price resolution: user override → market → lot → deposit
     const resolved = resolvePrice(this.db, asset);
     const pricePerUnit = resolved?.price ?? null;
 
     const currentValue =
-      pricePerUnit !== null ? Math.round(currentHoldings * pricePerUnit * 100) / 100 : null;
-    const pnl = currentValue !== null ? currentValue - costBasis : null;
+      pricePerUnit !== null
+        ? roundToCurrency(currentHoldings * pricePerUnit, asset.currency)
+        : null;
+    const pnl =
+      currentValue !== null ? roundToCurrency(currentValue - costBasis, asset.currency) : null;
 
-    return { ...asset, currentHoldings, costBasis, currentValue, pnl, latestPrice: pricePerUnit };
+    // Convert current value to base currency using a cached FX rate.
+    // For base-currency assets the rate is 1; for foreign currencies we look up
+    // the most recent rate within the 7-day cache window. If none is cached
+    // (e.g. nightly cron hasn't run yet), currentValueBase is null and the
+    // portfolio sum simply skips this asset rather than mixing units.
+    let currentValueBase: number | null = null;
+    if (currentValue !== null) {
+      if (asset.currency === baseCurrency) {
+        currentValueBase = currentValue;
+      } else {
+        const rate = findCachedFxRate(this.db, asset.currency, baseCurrency, isoToday());
+        if (rate !== null) {
+          currentValueBase = roundToCurrency(currentValue * rate, baseCurrency);
+        }
+      }
+    }
+    const pnlBase =
+      currentValueBase !== null
+        ? roundToCurrency(currentValueBase - costBasisBase, baseCurrency)
+        : null;
+
+    return {
+      ...asset,
+      currentHoldings,
+      costBasis,
+      costBasisBase,
+      currentValue,
+      currentValueBase,
+      pnl,
+      pnlBase,
+      latestPrice: pricePerUnit,
+    };
   }
 }

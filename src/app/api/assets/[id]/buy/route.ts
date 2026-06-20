@@ -21,7 +21,7 @@ export async function POST(req: Request, ctx: RouteContext): Promise<NextRespons
   if (isErrorResponse(input)) return input;
 
   try {
-    const result = getAssetLotService().buy(id, input);
+    const result = await getAssetLotService().buy(id, input);
     return NextResponse.json(result, { status: 201 });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Internal error";

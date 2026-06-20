@@ -14,7 +14,8 @@ import { PortfolioService } from "@/lib/services/portfolio";
 import { PortfolioReportService } from "@/lib/services/portfolio-reports";
 
 export function getTransactionService(): TransactionService {
-  return new TransactionService(getDb());
+  const db = getDb();
+  return new TransactionService(db, new FinancialDataService(db, new SettingsService(db)));
 }
 
 export function getCategoryService(): CategoryService {
@@ -31,7 +32,8 @@ export function getBudgetService(): BudgetService {
 }
 
 export function getRecurringService(): RecurringService {
-  return new RecurringService(getDb());
+  const db = getDb();
+  return new RecurringService(db, new FinancialDataService(db, new SettingsService(db)));
 }
 
 export function getReceiptService(): ReceiptService {
@@ -52,7 +54,8 @@ export function getAssetService(): AssetService {
 }
 
 export function getAssetLotService(): AssetLotService {
-  return new AssetLotService(getDb());
+  const db = getDb();
+  return new AssetLotService(db, new FinancialDataService(db, new SettingsService(db)));
 }
 
 export function getAssetPriceService(): AssetPriceService {

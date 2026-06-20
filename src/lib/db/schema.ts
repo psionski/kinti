@@ -49,6 +49,7 @@ export const recurringTransactions = sqliteTable(
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     amount: real("amount").notNull(),
+    currency: text("currency").notNull().default("EUR"), // ISO 4217. Generated transactions inherit this.
     type: text("type").notNull().default("expense"),
     description: text("description").notNull(),
     merchant: text("merchant"),
@@ -88,7 +89,9 @@ export const transactions = sqliteTable(
   "transactions",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    amount: real("amount").notNull(), // positive for income/expense, signed for transfers (negative = cash out, positive = cash in)
+    amount: real("amount").notNull(), // native amount: positive for income/expense, signed for transfers (negative = cash out, positive = cash in)
+    currency: text("currency").notNull().default("EUR"), // ISO 4217 native currency
+    amountBase: real("amount_base").notNull().default(0), // amount converted to the configured base currency at write time (denormalized for fast aggregation)
     type: text("type").notNull().default("expense"), // 'income' | 'expense' | 'transfer'
     description: text("description").notNull(),
     merchant: text("merchant"),
@@ -211,7 +214,8 @@ export const assetLots = sqliteTable(
       .notNull()
       .references(() => assets.id, { onDelete: "cascade" }),
     quantity: real("quantity").notNull(), // positive = buy/deposit, negative = sell/withdraw
-    pricePerUnit: real("price_per_unit").notNull(),
+    pricePerUnit: real("price_per_unit").notNull(), // native, in the asset's currency
+    pricePerUnitBase: real("price_per_unit_base").notNull().default(0), // converted to base currency at lot creation; constant for the life of the lot
     date: text("date").notNull(), // ISO 8601 date
     transactionId: integer("transaction_id").references(() => transactions.id, {
       onDelete: "set null",

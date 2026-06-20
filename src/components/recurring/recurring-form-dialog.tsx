@@ -20,6 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CategorySelectItems } from "@/components/categories/category-select-items";
+import { CurrencyPicker } from "@/components/settings/currency-picker";
+import { getBaseCurrency } from "@/lib/format";
 import type { CategoryWithCountResponse } from "@/lib/validators/categories";
 import type { RecurringResponse } from "@/lib/validators/recurring";
 
@@ -47,6 +49,7 @@ export function RecurringFormDialog({
   const [type, setType] = useState<string>(initialData?.type ?? "expense");
   const [description, setDescription] = useState(initialData?.description ?? "");
   const [amount, setAmount] = useState(initialData ? String(initialData.amount) : "");
+  const [currency, setCurrency] = useState<string>(initialData?.currency ?? getBaseCurrency());
   const [merchant, setMerchant] = useState(initialData?.merchant ?? "");
   const [categoryId, setCategoryId] = useState<string>(
     initialData?.categoryId ? String(initialData.categoryId) : ""
@@ -93,6 +96,7 @@ export function RecurringFormDialog({
       type,
       description: description.trim(),
       amount: parsedAmount,
+      currency,
       frequency,
       startDate,
     };
@@ -151,7 +155,7 @@ export function RecurringFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="recurring-amount">Amount (EUR)</Label>
+            <Label htmlFor="recurring-amount">Amount</Label>
             <Input
               id="recurring-amount"
               type="number"
@@ -161,6 +165,11 @@ export function RecurringFormDialog({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="recurring-currency">Currency</Label>
+            <CurrencyPicker id="recurring-currency" value={currency} onChange={setCurrency} />
           </div>
 
           <div className="space-y-2">

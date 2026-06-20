@@ -24,7 +24,7 @@ export interface BackupOptions {
   keep?: number;
 }
 
-const BACKUP_PREFIX = "pinch-backup-";
+const BACKUP_PREFIX = "kinti-backup-";
 const BACKUP_SUFFIX = ".db";
 
 /** Regex matching the `YYYY-MM-DDTHH-MM-SSZ` timestamp embedded before `.db`. */
@@ -66,7 +66,7 @@ export function parseFilenameTimestamp(filename: string): string | null {
  * Back up the SQLite database at `dbPath` to `backupDir`, then rotate old backups
  * so that at most `keep` files are retained.
  *
- * File naming: `pinch-backup-YYYY-MM-DDTHH-MM-SSZ.db`
+ * File naming: `kinti-backup-YYYY-MM-DDTHH-MM-SSZ.db`
  */
 export async function runBackup(
   dbPath: string,

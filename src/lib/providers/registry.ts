@@ -2,6 +2,7 @@ import type { FinancialDataProvider, ProviderName } from "./types";
 import type { SettingsService } from "@/lib/services/settings";
 import type { AssetType } from "@/lib/validators/assets";
 import { FrankfurterProvider } from "./frankfurter";
+import { FawazahmedProvider } from "./fawazahmed";
 import { EcbProvider } from "./ecb";
 import { CoinGeckoProvider } from "./coingecko";
 import { OpenExchangeRatesProvider } from "./open-exchange-rates";
@@ -28,6 +29,12 @@ const PROVIDER_REGISTRY: readonly ProviderMeta[] = [
     assetTypes: ["deposit"],
     apiKeyRequired: "none",
     create: () => new FrankfurterProvider(),
+  },
+  {
+    name: "fawazahmed",
+    assetTypes: ["deposit"],
+    apiKeyRequired: "none",
+    create: () => new FawazahmedProvider(),
   },
   {
     name: "ecb",

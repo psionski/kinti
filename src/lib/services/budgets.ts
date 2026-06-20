@@ -64,7 +64,11 @@ export class BudgetService {
    * Returns `inheritedFrom` so the UI can show the source month.
    */
   getForMonth(input: GetBudgetStatusInput): BudgetStatusResponse {
-    const { items: allStats, inheritedFrom } = this.reportService.getBudgetStats({
+    const {
+      items: allStats,
+      inheritedFrom,
+      currency,
+    } = this.reportService.getBudgetStats({
       month: input.month,
       type: "expense",
       includeZeroSpend: true,
@@ -94,7 +98,7 @@ export class BudgetService {
         };
       });
 
-    return { items, inheritedFrom };
+    return { items, inheritedFrom, currency };
   }
 
   /**

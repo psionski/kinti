@@ -8,6 +8,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppSidebar } from "@/components/app-sidebar";
 import { getSettingsService } from "@/lib/api/services";
 import { TimezoneInit } from "@/components/timezone-init";
+import { BaseCurrencyInit } from "@/components/base-currency-init";
+import { setBaseCurrencyCache, getBaseCurrency } from "@/lib/format";
 import { SampleDataBar } from "@/components/sample-data-bar";
 import { LazyTour } from "@/components/tour/lazy-tour";
 import { hasSampleData } from "@/lib/services/sample-data";
@@ -25,7 +27,7 @@ const geistMono = Geist_Mono({
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Pinch",
+  title: "Kinti",
   description: "AI-powered personal finance tracker",
 };
 
@@ -42,6 +44,12 @@ export default function RootLayout({
 }>) {
   const settingsService = getSettingsService();
   const timezone = settingsService.getTimezone() ?? "UTC";
+  const baseCurrency = settingsService.getBaseCurrency();
+  // Mirror the cache on the server side for any server components rendered
+  // in this request — instrumentation runs once at boot, but a fresh DB
+  // configured during this process won't have triggered it.
+  if (baseCurrency) setBaseCurrencyCache(baseCurrency);
+  const effectiveBaseCurrency = getBaseCurrency();
   const tutorial = settingsService.get("tutorial") === "true";
   const sampleData = hasSampleData();
 
@@ -49,6 +57,7 @@ export default function RootLayout({
     <html lang="en" className={`dark ${geistSans.variable} ${geistMono.variable}`}>
       <body className="antialiased">
         <TimezoneInit timezone={timezone} />
+        <BaseCurrencyInit currency={effectiveBaseCurrency} />
         <LazyTour initialTutorial={tutorial} />
         <TooltipProvider>
           <SidebarProvider>
@@ -66,9 +75,9 @@ export default function RootLayout({
                     <Menu className="size-4" />
                     <span className="sr-only">Toggle Sidebar</span>
                   </SidebarTrigger>
-                  {/* Mobile: centered Pinch branding, also opens sidebar */}
+                  {/* Mobile: centered Kinti branding, also opens sidebar */}
                   <SidebarTrigger className="absolute left-1/2 -translate-x-1/2 gap-2 px-0 md:hidden">
-                    <span className="text-base font-bold tracking-tight">Pinch</span>
+                    <span className="text-base font-bold tracking-tight">Kinti</span>
                   </SidebarTrigger>
                 </header>
                 <SampleDataBar show={sampleData} initiallyHidden={tutorial} />

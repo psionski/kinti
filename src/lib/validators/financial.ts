@@ -29,9 +29,9 @@ export const GetPriceSchema = z.object({
     "Provider→symbol mapping (JSON string in query params). Use search_symbol to discover symbols. " +
       "E.g. { coingecko: 'bitcoin' } or { frankfurter: 'USD' }"
   ),
-  currency: CurrencyCodeSchema.optional()
-    .default("EUR")
-    .describe("Target currency for the price. Defaults to EUR."),
+  currency: CurrencyCodeSchema.optional().describe(
+    "Target currency for the price. Defaults to the configured base currency when omitted."
+  ),
   date: DateSchema.describe("Date in YYYY-MM-DD format. Defaults to today."),
 });
 
@@ -52,12 +52,8 @@ export type PriceResultResponse = z.infer<typeof PriceResultSchema>;
 
 export const ConvertCurrencySchema = z.object({
   amount: z.number().describe("Amount to convert (e.g. 15.99)"),
-  from: CurrencyCodeSchema.describe("Source currency code"),
-  to: CurrencyCodeSchema.describe("Target currency code"),
-  symbolMap: QuerySymbolMapSchema.describe(
-    "Provider→symbol mapping for the source currency (JSON string in query params). " +
-      "E.g. { frankfurter: 'USD' } to convert from USD"
-  ),
+  from: CurrencyCodeSchema.describe("Source currency code (ISO 4217)"),
+  to: CurrencyCodeSchema.describe("Target currency code (ISO 4217)"),
   date: DateSchema.describe("Date for the exchange rate. Defaults to today."),
 });
 

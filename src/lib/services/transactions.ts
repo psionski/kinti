@@ -28,6 +28,8 @@ import type {
 } from "@/lib/validators/transactions";
 import type { PaginatedResponse } from "@/lib/validators/common";
 import { isoToday, utcToLocal } from "@/lib/date-ranges";
+import { getBaseCurrency, roundToCurrency } from "@/lib/format";
+import type { FinancialDataService } from "./financial-data";
 
 type Db = BetterSQLite3Database<typeof schema>;
 
@@ -53,18 +55,58 @@ function parseTransaction(row: Transaction): TransactionResponse {
 }
 
 export class TransactionService {
-  constructor(private db: Db) {}
+  constructor(
+    private db: Db,
+    private financialData?: FinancialDataService
+  ) {}
 
-  create(input: CreateTransactionInput): TransactionResponse {
+  /**
+   * Resolve the native amount + currency to a base-currency amount. When the
+   * currency matches the base, the conversion is a no-op (no provider call).
+   * Otherwise, the financial-data service is consulted; on failure the create
+   * is rejected with a clear error so we never store an unconvertible amount.
+   *
+   * `financialData` is optional in the constructor so existing callers (and
+   * tests that don't care about FX) keep working in the base-currency case.
+   * Foreign-currency creates without an injected FinancialDataService throw.
+   */
+  private async resolveAmountBase(amount: number, currency: string, date: string): Promise<number> {
+    const base = getBaseCurrency();
+    if (currency === base) return roundToCurrency(amount, base);
+    if (!this.financialData) {
+      throw new Error(
+        `Cannot create ${currency} transaction without FinancialDataService — ` +
+          `inject one when constructing TransactionService for multi-currency support.`
+      );
+    }
+    // Sign of the input amount must be preserved (transfers are signed).
+    const sign = amount < 0 ? -1 : 1;
+    const result = await this.financialData.convertToBase(Math.abs(amount), currency, date);
+    if (result === null) {
+      throw new Error(
+        `Currency ${currency} isn't supported by any configured FX provider on ${date} — ` +
+          `cannot convert to base ${base}.`
+      );
+    }
+    return sign * result.amountBase;
+  }
+
+  async create(input: CreateTransactionInput): Promise<TransactionResponse> {
+    const date = input.date ?? isoToday();
+    const currency = input.currency ?? getBaseCurrency();
+    const amountBase = await this.resolveAmountBase(input.amount, currency, date);
+
     const [row] = this.db
       .insert(transactions)
       .values({
         amount: input.amount,
+        currency,
+        amountBase,
         type: input.type,
         description: input.description,
         merchant: input.merchant,
         categoryId: input.categoryId,
-        date: input.date ?? isoToday(),
+        date,
         receiptId: input.receiptId,
         recurringId: input.recurringId,
         notes: input.notes,
@@ -75,20 +117,33 @@ export class TransactionService {
     return parseTransaction(row);
   }
 
-  createBatch(input: CreateTransactionsBatchInput): TransactionResponse[] {
-    const values = input.transactions.map((tx) => ({
-      amount: tx.amount,
-      type: tx.type,
-      description: tx.description,
-      merchant: tx.merchant,
-      categoryId: tx.categoryId,
-      date: tx.date ?? isoToday(),
-      receiptId: tx.receiptId ?? input.receiptId,
-      recurringId: tx.recurringId,
-      notes: tx.notes,
-      tags: tx.tags ? JSON.stringify(tx.tags) : null,
-    }));
-    return this.db.insert(transactions).values(values).returning().all().map(parseTransaction);
+  async createBatch(input: CreateTransactionsBatchInput): Promise<TransactionResponse[]> {
+    // Resolve FX for every line item before opening a write transaction so
+    // any failure aborts the whole batch cleanly. Sequential to keep provider
+    // load low — batches are typically small (single receipts).
+    const resolved = await Promise.all(
+      input.transactions.map(async (tx) => {
+        const date = tx.date ?? isoToday();
+        const currency = tx.currency ?? getBaseCurrency();
+        const amountBase = await this.resolveAmountBase(tx.amount, currency, date);
+        return {
+          amount: tx.amount,
+          currency,
+          amountBase,
+          type: tx.type,
+          description: tx.description,
+          merchant: tx.merchant,
+          categoryId: tx.categoryId,
+          date,
+          receiptId: tx.receiptId ?? input.receiptId,
+          recurringId: tx.recurringId,
+          notes: tx.notes,
+          tags: tx.tags ? JSON.stringify(tx.tags) : null,
+        };
+      })
+    );
+
+    return this.db.insert(transactions).values(resolved).returning().all().map(parseTransaction);
   }
 
   getById(id: number): TransactionResponse | null {
@@ -176,11 +231,38 @@ export class TransactionService {
     };
   }
 
-  update(id: number, input: UpdateTransactionInput): TransactionResponse | null {
+  async update(id: number, input: UpdateTransactionInput): Promise<TransactionResponse | null> {
+    // If amount, currency, or date changes, we need to recompute amount_base.
+    // Read the existing row first so we can fall back to its values for any
+    // field the caller didn't touch.
+    const fxFieldsTouched =
+      input.amount !== undefined || input.currency !== undefined || input.date !== undefined;
+
+    let amountBase: number | undefined;
+    if (fxFieldsTouched) {
+      const existing = this.db.select().from(transactions).where(eq(transactions.id, id)).get();
+      if (!existing) return null;
+      const newAmount = input.amount ?? existing.amount;
+      const newCurrency = input.currency ?? existing.currency;
+      const newDate = input.date ?? existing.date;
+      amountBase = await this.resolveAmountBase(newAmount, newCurrency, newDate);
+    }
+
+    return this.applyUpdate(id, input, amountBase);
+  }
+
+  /** Sync update used by both update() and updateBatch() after async FX work. */
+  private applyUpdate(
+    id: number,
+    input: UpdateTransactionInput,
+    amountBase: number | undefined
+  ): TransactionResponse | null {
     const rows = this.db
       .update(transactions)
       .set({
         ...(input.amount !== undefined ? { amount: input.amount } : {}),
+        ...(input.currency !== undefined ? { currency: input.currency } : {}),
+        ...(amountBase !== undefined ? { amountBase } : {}),
         ...(input.type !== undefined ? { type: input.type } : {}),
         ...(input.description !== undefined ? { description: input.description } : {}),
         ...(input.merchant !== undefined ? { merchant: input.merchant } : {}),
@@ -200,10 +282,37 @@ export class TransactionService {
     return rows.length > 0 ? parseTransaction(rows[0]) : null;
   }
 
-  updateBatch(input: UpdateTransactionsBatchInput): TransactionResponse[] {
+  async updateBatch(input: UpdateTransactionsBatchInput): Promise<TransactionResponse[]> {
+    // Pre-compute amount_base for any update that touches amount/currency/date.
+    // This async work happens before the SQLite transaction so the eventual
+    // batch is still atomic (all updates commit together or none do).
+    const resolved: Array<{
+      id: number;
+      fields: UpdateTransactionInput;
+      amountBase?: number;
+    }> = [];
+    for (const { id, ...fields } of input.updates) {
+      const fxFieldsTouched =
+        fields.amount !== undefined || fields.currency !== undefined || fields.date !== undefined;
+      let amountBase: number | undefined;
+      if (fxFieldsTouched) {
+        const existing = this.db.select().from(transactions).where(eq(transactions.id, id)).get();
+        if (!existing) {
+          resolved.push({ id, fields }); // will silently no-op below
+          continue;
+        }
+        amountBase = await this.resolveAmountBase(
+          fields.amount ?? existing.amount,
+          fields.currency ?? existing.currency,
+          fields.date ?? existing.date
+        );
+      }
+      resolved.push({ id, fields, amountBase });
+    }
+
     return this.db.transaction(() =>
-      input.updates.flatMap(({ id, ...fields }) => {
-        const result = this.update(id, fields);
+      resolved.flatMap(({ id, fields, amountBase }) => {
+        const result = this.applyUpdate(id, fields, amountBase);
         return result ? [result] : [];
       })
     );

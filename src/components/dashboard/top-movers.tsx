@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/shared/empty-state";
 import { formatCurrency } from "@/lib/format";
 import type { AssetWithMetrics } from "@/lib/validators/assets";
 
@@ -9,9 +10,10 @@ interface TopMoversProps {
 }
 
 export function TopMovers({ assets }: TopMoversProps): React.ReactElement {
+  // Rank by base-currency P&L so multi-currency portfolios compare apples-to-apples.
   const movers = assets
-    .filter((a): a is AssetWithMetrics & { pnl: number } => a.pnl !== null)
-    .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl))
+    .filter((a): a is AssetWithMetrics & { pnlBase: number } => a.pnlBase !== null)
+    .sort((a, b) => Math.abs(b.pnlBase) - Math.abs(a.pnlBase))
     .slice(0, 3);
 
   return (
@@ -21,11 +23,11 @@ export function TopMovers({ assets }: TopMoversProps): React.ReactElement {
       </CardHeader>
       <CardContent>
         {movers.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No P&amp;L data yet.</p>
+          <EmptyState message="No P&L data yet." />
         ) : (
           <div className="space-y-3">
             {movers.map((asset) => {
-              const positive = asset.pnl >= 0;
+              const positive = asset.pnlBase >= 0;
               return (
                 <div key={asset.id} className="flex items-center justify-between text-sm">
                   <Link
@@ -44,7 +46,7 @@ export function TopMovers({ assets }: TopMoversProps): React.ReactElement {
                       <TrendingDown className="size-3.5" />
                     )}
                     {positive ? "+" : ""}
-                    {formatCurrency(asset.pnl)}
+                    {formatCurrency(asset.pnlBase)}
                   </span>
                 </div>
               );

@@ -62,6 +62,20 @@ export const TrendsSchema = z.object({
 
 export type TrendsInput = z.infer<typeof TrendsSchema>;
 
+// ─── Daily Spend ──────────────────────────────────────────────────────────────
+
+export const DailySpendSchema = z.object({
+  days: z
+    .number()
+    .int()
+    .min(1)
+    .max(730)
+    .default(365)
+    .describe("Number of days to look back, ending today (default 365, max 730)"),
+});
+
+export type DailySpendInput = z.infer<typeof DailySpendSchema>;
+
 // ─── Top Merchants ────────────────────────────────────────────────────────────
 
 export const TopMerchantsSchema = z.object({
@@ -93,6 +107,7 @@ export const NetIncomeResultSchema = z.object({
   totalExpenses: z.number(),
   netIncome: z.number(),
   transactionCount: z.number().int(),
+  currency: z.string().describe("ISO 4217 base currency that all amounts are denominated in"),
 });
 
 export type NetIncomeResult = z.infer<typeof NetIncomeResultSchema>;
@@ -108,6 +123,7 @@ export const CashBalanceResultSchema = z.object({
   totalTransfers: z
     .number()
     .describe("Net cash effect of asset purchases/sales (negative = net outflow to assets)"),
+  currency: z.string().describe("ISO 4217 base currency that all amounts are denominated in"),
 });
 
 export type CashBalanceResult = z.infer<typeof CashBalanceResultSchema>;
@@ -153,6 +169,14 @@ export const TrendPointSchema = z.object({
 
 export type TrendPoint = z.infer<typeof TrendPointSchema>;
 
+export const DailySpendPointSchema = z.object({
+  date: z.string().describe("Calendar date (YYYY-MM-DD)"),
+  total: z.number().describe("Sum of expense amount_base for the day, in base currency"),
+  count: z.number().int().describe("Number of expense transactions on the day"),
+});
+
+export type DailySpendPoint = z.infer<typeof DailySpendPointSchema>;
+
 export const TopMerchantSchema = z.object({
   merchant: z.string(),
   total: z.number(),
@@ -197,9 +221,36 @@ export const SpendingSummaryResultSchema = z.object({
   comparePeriod: PeriodSchema.optional(),
   groups: z.array(SpendingGroupSchema),
   transfers: z.array(TransferGroupSchema).optional(),
+  currency: z.string().describe("ISO 4217 base currency that all totals are denominated in"),
 });
 
 export type SpendingSummaryResult = z.infer<typeof SpendingSummaryResultSchema>;
+
+// ─── Wrapper schemas with currency labels ────────────────────────────────────
+
+export const CategoryStatsResultSchema = z.object({
+  items: z.array(CategorySpendingItemSchema),
+  currency: z.string().describe("ISO 4217 base currency that all totals are denominated in"),
+});
+export type CategoryStatsResult = z.infer<typeof CategoryStatsResultSchema>;
+
+export const TrendsResultSchema = z.object({
+  points: z.array(TrendPointSchema),
+  currency: z.string().describe("ISO 4217 base currency that all totals are denominated in"),
+});
+export type TrendsResult = z.infer<typeof TrendsResultSchema>;
+
+export const DailySpendResultSchema = z.object({
+  points: z.array(DailySpendPointSchema),
+  currency: z.string().describe("ISO 4217 base currency that all totals are denominated in"),
+});
+export type DailySpendResult = z.infer<typeof DailySpendResultSchema>;
+
+export const TopMerchantsResultSchema = z.object({
+  merchants: z.array(TopMerchantSchema),
+  currency: z.string().describe("ISO 4217 base currency that all totals are denominated in"),
+});
+export type TopMerchantsResult = z.infer<typeof TopMerchantsResultSchema>;
 
 // ─── Month-only helper schemas ────────────────────────────────────────────────
 

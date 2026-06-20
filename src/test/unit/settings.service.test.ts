@@ -6,7 +6,9 @@ import { SettingsService } from "@/lib/services/settings";
 let service: SettingsService;
 
 beforeEach(() => {
-  service = new SettingsService(makeTestDb());
+  // Settings tests need a pristine settings table — skip the auto-seeded
+  // base_currency row that other tests rely on.
+  service = new SettingsService(makeTestDb({ seedBaseCurrency: false }));
 });
 
 describe("get", () => {

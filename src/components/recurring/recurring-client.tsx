@@ -127,6 +127,7 @@ export function RecurringClient({
 
       {/* Create dialog */}
       <RecurringFormDialog
+        key={String(showForm)}
         open={showForm}
         onOpenChange={setShowForm}
         categories={categories}

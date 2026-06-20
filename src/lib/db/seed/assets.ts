@@ -1,5 +1,7 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { isoDate } from "./rng";
+import type { FxRateLookup } from "./fx-rates";
+import type { TxInput } from "./transactions";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,6 +22,17 @@ export interface AssetSeed {
     description: string;
     notes?: string;
   }>;
+  /**
+   * Optional "current price" snapshot, recorded as an `asset_prices` row
+   * dated today. For assets whose most recent lot is far in the past
+   * (e.g. Apple Inc. — lots are placed at staggered FX-drift dates), the
+   * lot price is no longer representative of the present value, so the
+   * price-resolver's user-price step would otherwise return a stale lot
+   * price. Setting this field injects a today snapshot so the asset
+   * detail's "Current Value" card shows the actual current quote.
+   * Skipped when undefined.
+   */
+  currentPrice?: number;
 }
 
 export interface MarketPriceSeed {
@@ -91,10 +104,17 @@ interface LotDef {
   notes?: string;
 }
 
-/** Convert lot definitions to concrete lots, filtering out lots past the month's lastDay. */
+/**
+ * Convert lot definitions to concrete lots. The day-of-month is clamped
+ * by `dateAt` to the month's `lastDay` (which for the current month is
+ * `today.day`), so a definition like `{monthIdx: 11, day: 28}` running on
+ * the 9th of the month produces a day-9 lot rather than being silently
+ * dropped. This keeps the lot count stable across seed runs regardless of
+ * which day of the month the seed is regenerated.
+ */
 function buildLots(defs: LotDef[], months: MonthSpec[]): AssetSeed["lots"] {
   return defs
-    .filter((d) => d.monthIdx < months.length && d.day <= months[d.monthIdx].lastDay)
+    .filter((d) => d.monthIdx < months.length)
     .map((d) => ({
       quantity: d.quantity,
       pricePerUnit: d.pricePerUnit,
@@ -322,8 +342,144 @@ export function generateAssets(months: MonthSpec[]): {
     lots: buildLots(etfLots, months),
   };
 
+  // ── Apple Inc. (USD investment) ─────────────────────────────────────────────
+  // Two lots staggered at different FX rates, plus a current price
+  // snapshot well above the lot prices. Together they expose the asset
+  // detail's "≈ €..." subtitle on Cost Basis / Current Value AND the
+  // portfolio performance table's FX Effect column (since the underlying
+  // price gain and the FX drift contribute differently to base-currency
+  // P&L).
+  // Two small lots a few months apart so the FX drift between them is
+  // visible without overcommitting the user's cash buffer (the seed
+  // gates discretionary purchases on the running balance, so a lump-sum
+  // buy bigger than what's in checking gets skipped entirely). Both
+  // are scheduled AFTER salary day (25) so the just-arrived paycheck
+  // funds the purchase — same way most retail investors actually buy.
+  const appleLots: LotDef[] = [
+    {
+      monthIdx: 2, // ~9 months ago
+      day: 28, // post-salary
+      quantity: 5,
+      pricePerUnit: 150, // $150 → ~$750 / ~€710
+      description: "Buy 5 Apple Inc. @ 150.00 USD",
+      notes: "Initial position",
+    },
+    {
+      monthIdx: 7, // ~4 months ago
+      day: 28, // post-salary
+      quantity: 5,
+      pricePerUnit: 165, // $165 → ~$825 / ~€760
+      description: "Buy 5 Apple Inc. @ 165.00 USD",
+      notes: "Adding on earnings beat",
+    },
+  ];
+
+  const apple: AssetSeed = {
+    asset: {
+      name: "Apple Inc.",
+      type: "investment",
+      currency: "USD",
+      symbolMap: JSON.stringify({ "alpha-vantage": "AAPL" }),
+      icon: "🍎",
+      color: "#94a3b8",
+      notes: "USD-denominated equity — demonstrates FX P&L decomposition",
+    },
+    lots: buildLots(appleLots, months),
+    currentPrice: 180, // $180 — well above both lot prices
+  };
+
+  // ── USD Travel Fund (USD deposit) ───────────────────────────────────────────
+  // A single foreign-currency deposit lot. Exists primarily to exercise
+  // the deposit dialog's foreign-currency preview path and to show a
+  // small "FX drag" P&L on the asset detail page (USD has weakened
+  // against EUR since the deposit, so the same 800 USD is worth fewer
+  // EUR today than at deposit time).
+  const travelLots: LotDef[] = [
+    {
+      monthIdx: 7, // ~4 months ago, same date as the second Apple lot
+      day: 10,
+      quantity: 800,
+      pricePerUnit: 1, // deposit invariant: pricePerUnit = 1
+      description: "Initial USD travel funds",
+    },
+  ];
+
+  const travelFund: AssetSeed = {
+    asset: {
+      name: "USD Travel Fund",
+      type: "deposit",
+      currency: "USD",
+      icon: "✈️",
+      color: "#60a5fa",
+      notes: "Foreign-currency cash for upcoming US trip",
+    },
+    lots: buildLots(travelLots, months),
+  };
+
   return {
-    assets: [savings, bitcoin, etf],
+    assets: [savings, bitcoin, etf, apple, travelFund],
     marketPrices: [...btcMarket, ...etfMarket],
   };
+}
+
+// ─── Lot → event conversion ──────────────────────────────────────────────────
+
+/**
+ * Convert every lot in `seeds` into a `TxInput` of type `transfer`,
+ * with currency / amount_base / lotLinkage pre-computed via the FX
+ * lookup. The resulting events are interleaved by `generateEvents` into
+ * the unified chronological stream so the seed's running cash balance
+ * sees them.
+ *
+ * Buys (positive `quantity`) produce a cash-OUT transfer (negative
+ * amount); sells (negative `quantity`) produce a cash-IN transfer.
+ * `pricePerUnitBase` is snapshotted from the FX rate at the lot's
+ * date — exactly what `AssetLotService.buy()` writes via `toBase()` /
+ * `pricePerUnitBase = totalBase / quantity`.
+ *
+ * `LotLinkage.assetName` carries the asset's display name so the
+ * post-insert pass in `seed/index.ts` can resolve it to an `assetId`
+ * once the assets table has been written.
+ */
+export function lotsToEvents(
+  seeds: AssetSeed[],
+  fx: FxRateLookup,
+  baseCurrency: string
+): TxInput[] {
+  const events: TxInput[] = [];
+  for (const seed of seeds) {
+    for (const lot of seed.lots) {
+      const totalNative = Math.round(Math.abs(lot.quantity) * lot.pricePerUnit * 100) / 100;
+      const rate = fx(seed.asset.currency, baseCurrency, lot.date);
+      const totalBase = Math.round(totalNative * rate * 100) / 100;
+      // Sign convention matches AssetLotService.buy/sell:
+      //   buy  (lot.quantity > 0) → cash out → negative amount
+      //   sell (lot.quantity < 0) → cash in  → positive amount
+      const signedNative = lot.quantity >= 0 ? -totalNative : totalNative;
+      const signedBase = lot.quantity >= 0 ? -totalBase : totalBase;
+      events.push({
+        amount: signedNative,
+        currency: seed.asset.currency,
+        amountBase: signedBase,
+        type: "transfer",
+        description: lot.description,
+        categoryId: null,
+        date: lot.date,
+        tags: ["portfolio"],
+        notes: lot.notes,
+        lotLinkage: {
+          assetName: seed.asset.name,
+          quantity: lot.quantity,
+          pricePerUnit: lot.pricePerUnit,
+          // Snapshot at lot creation. For base-currency assets rate=1,
+          // matching lot.pricePerUnit; for foreign-currency assets it's
+          // pricePerUnit × FX rate at the lot date — exactly what
+          // AssetLotService computes via totalBase / quantity.
+          pricePerUnitBase: Math.round(lot.pricePerUnit * rate * 10000) / 10000,
+          notes: lot.notes,
+        },
+      });
+    }
+  }
+  return events;
 }

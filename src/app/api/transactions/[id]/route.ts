@@ -23,9 +23,17 @@ export async function PATCH(req: Request, ctx: RouteContext): Promise<NextRespon
   const input = await parseBody(req, UpdateTransactionSchema);
   if (isErrorResponse(input)) return input;
 
-  const tx = getTransactionService().update(id, input);
-  if (!tx) return errorResponse("Transaction not found", "NOT_FOUND", 404);
-  return NextResponse.json(tx);
+  try {
+    const tx = await getTransactionService().update(id, input);
+    if (!tx) return errorResponse("Transaction not found", "NOT_FOUND", 404);
+    return NextResponse.json(tx);
+  } catch (err) {
+    return errorResponse(
+      err instanceof Error ? err.message : "Failed to update transaction",
+      "INTERNAL_ERROR",
+      500
+    );
+  }
 }
 
 export async function DELETE(_req: Request, ctx: RouteContext): Promise<NextResponse> {

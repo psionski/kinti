@@ -1,4 +1,4 @@
-# Pinch — Personal Finance Tracker
+# Kinti — Personal Finance Tracker
 
 *AI-powered personal finance app. Track spending, scan receipts, manage budgets — with an MCP interface for AI-driven data entry and analysis.*
 
@@ -8,10 +8,10 @@ Web dashboard (Next.js) for viewing and analyzing spending. MCP server embedded 
 
 ## Actors
 
-| Actor | What it is | How it interacts with Pinch |
+| Actor | What it is | How it interacts with Kinti |
 |-------|-----------|----------------------------|
 | **User** | The human (app owner). | Browses the web UI from any device. Sends receipts/commands to the AI assistant via Telegram. |
-| **AI** | An AI assistant (e.g. built on [OpenClaw](https://github.com/openclaw/openclaw)). May run on the same host or a different machine. | Connects to Pinch's MCP endpoint over HTTP. Uses MCP tools for structured operations (transactions, categories, reports, budgets). Uses companion REST endpoint for binary uploads (receipt images). Discovery: MCP server `instructions` field tells clients about the REST upload endpoint. |
+| **AI** | An AI assistant (e.g. built on [OpenClaw](https://github.com/openclaw/openclaw)). May run on the same host or a different machine. | Connects to Kinti's MCP endpoint over HTTP. Uses MCP tools for structured operations (transactions, categories, reports, budgets). Uses companion REST endpoint for binary uploads (receipt images). Discovery: MCP server `instructions` field tells clients about the REST upload endpoint. |
 
 ## Tech Stack
 
@@ -163,7 +163,7 @@ Three cron jobs run in-process via `node-cron`, started from `src/instrumentatio
 | 03:00 | SQLite backup | `.backup` to `data/backups/`, keeps last 7 daily |
 | 04:00 | Market price auto-fetch | For each asset with a `symbolMap`, fetches today's price from the linked provider |
 
-**Why in-process cron:** Pinch is self-hosted (long-lived Node.js process, not serverless). `instrumentation.ts` runs exactly once on server start — perfect for scheduling. A `globalThis` singleton guard prevents duplicate jobs from dev-mode hot-reload.
+**Why in-process cron:** Kinti is self-hosted (long-lived Node.js process, not serverless). `instrumentation.ts` runs exactly once on server start — perfect for scheduling. A `globalThis` singleton guard prevents duplicate jobs from dev-mode hot-reload.
 
 **Recurring engine behavior:**
 1. Templates define amount, description, category, frequency, schedule details, start/end date
@@ -248,13 +248,13 @@ Stored as JSON text arrays on transactions and recurring templates. Filter via `
 
 ## Currency
 
-Default currency is **EUR (€)**. Single-currency for now, but avoid hardcoding EUR assumptions deep in business logic. Assets already support per-asset currencies. Full multi-currency is a future sprint.
+Kinti is **multi-currency**. Each instance picks an immutable **base currency** at onboarding (any ISO 4217 code, default EUR). All reports, budgets, cash balance, and net worth are denominated in the base. Transactions store both their native amount/currency and a denormalized `amount_base` computed at write time via the configured FX provider chain (Frankfurter → fawazahmed0). The base currency cannot be changed after setup — migrating between bases requires a fresh database. See the *Currency Conventions* section in `CLAUDE.md` for service-layer details.
 
 ## Data Storage
 
-- **Database:** `data/pinch.db` (SQLite, gitignored)
+- **Database:** `data/kinti.db` (SQLite, gitignored)
 - **Receipt images:** `data/receipts/YYYY-MM/receipt-{id}.{ext}` (gitignored)
-- **Backups:** `data/backups/pinch-YYYY-MM-DD.db` (daily, last 7 kept)
+- **Backups:** `data/backups/kinti-YYYY-MM-DD.db` (daily, last 7 kept)
 
 ## Project Structure
 
@@ -287,7 +287,7 @@ src/
 │       ├── api/
 │       └── mcp/
 e2e/                             # E2E tests (Playwright) + MCP test prompts
-data/                            # Runtime (gitignored): pinch.db, backups/, receipts/
+data/                            # Runtime (gitignored): kinti.db, backups/, receipts/
 drizzle/                         # Generated migrations
 ```
 
@@ -295,29 +295,7 @@ drizzle/                         # Generated migrations
 
 Each sprint is a self-contained chunk of work. Sprints are organized into two phases: **MVP** and **Full App**.
 
-**Completed sprints (1-22):** Project scaffolding, database schema, validators, service layer (transactions, categories, reports, budgets, recurring), API routes, MCP server, scheduled tasks, app shell + dashboard, transactions page, common MCP read operations, categories page, budgets page, recurring page, reports page, receipts flow, financial data service (exchange rates + market prices), assets & net worth tracking (transfer type, asset lots, price snapshots, portfolio), portfolio reports backend (asset–market price linking via symbolMap, unified price resolver, portfolio report services — net worth history, asset performance, allocation, currency exposure, realized P&L, asset history), portfolio reports UI (reports sidebar with Cash Flow / Portfolio sub-pages, portfolio reports page, enhanced assets page with summary cards and charts, asset detail enhancements, dashboard net worth sparkline / top movers / allocation donut, onboarding tools and interactive tutorial), polish & hardening (dark mode, mobile-responsive fixes, error boundaries, streaming symbol search, more financial data providers, E2E Playwright tests, performance tuning, sample data clear flow, decimal amounts refactor — integer cents → real columns end-to-end).
-
----
-
-### Sprint 23: Packaging & Auto-Updates
-**Goal:** Make Pinch trivial to deploy and maintain for anyone (human or AI agent).
-
-- [ ] Provide simple, robust packaging (e.g., Docker container or single install script)
-- [ ] Build an auto-updater mechanism for easy rolling releases
-
----
-
-### Sprint 25: Documentation & Project Files
-**Goal:** Make this a proper public open-source project.
-
-- [x] README.md — project overview, feature list, screenshots/demo, tech stack, quick start guide, usage instructions
-- [x] LICENSE file — AGPL-3.0-or-later
-- [x] CONTRIBUTING.md — dev setup, how to run tests, coding standards, PR workflow
-- [x] API documentation — REST endpoints (Swagger at `/api-docs`) and MCP tools (`get_started` tool) referenced in README
-- [x] Extend MCP `instructions` field: Added behavioral prompts for categorization, budget alerts, recurring suggestions, data quality
-- [x] Verify .gitignore, .env.example, and any other dotfiles are in order
-
-**Done when:** A developer can clone the repo, read the README, and get running. Project looks professional on GitHub.
+**Completed sprints (1-25, 27):** Project scaffolding, database schema, validators, service layer (transactions, categories, reports, budgets, recurring), API routes, MCP server, scheduled tasks, app shell + dashboard, transactions page, common MCP read operations, categories page, budgets page, recurring page, reports page, receipts flow, financial data service (exchange rates + market prices), assets & net worth tracking (transfer type, asset lots, price snapshots, portfolio), portfolio reports backend (asset–market price linking via symbolMap, unified price resolver, portfolio report services — net worth history, asset performance, allocation, currency exposure, realized P&L, asset history), portfolio reports UI (reports sidebar with Cash Flow / Portfolio sub-pages, portfolio reports page, enhanced assets page with summary cards and charts, asset detail enhancements, dashboard net worth sparkline / top movers / allocation donut, onboarding tools and interactive tutorial), polish & hardening (dark mode, mobile-responsive fixes, error boundaries, streaming symbol search, more financial data providers, E2E Playwright tests, performance tuning, sample data clear flow, decimal amounts refactor — integer cents → real columns end-to-end), npm packaging (`bin/kinti.js` CLI with `kinti start` / `kinti update`, `update-notifier` for background update checks), multi-currency support (immutable base currency, `currency`/`amount_base` columns with async FX conversion at write time, `formatCurrency`, base-currency formatting everywhere, `price_per_unit_base` on lots, `convert_currency` MCP tool, currency picker in transaction form), documentation & open-source setup (README, LICENSE, CONTRIBUTING.md, Swagger API docs, extended MCP `instructions`, dotfiles).
 
 ---
 
@@ -325,79 +303,11 @@ Each sprint is a self-contained chunk of work. Sprints are organized into two ph
 **Goal:** Create a public face for the project.
 
 - [ ] Build a standalone project website (e.g., hosted on GitHub Pages) to serve as the main landing page and documentation hub
-- [ ] Write definitive Quick Start installation instructions hosted on the website, specifically formatted for an AI agent (so a user can just drop the URL to their agent to deploy Pinch)
+- [ ] Write definitive Quick Start installation instructions hosted on the website, specifically formatted for an AI agent (so a user can just drop the URL to their agent to deploy Kinti)
 - [ ] Donation button / MCP instructions ("if user is saving lots of money...")
 
-### Sprint 27: Multi-Currency
-**Goal:** Make foreign currencies a first-class experience across the whole app — assets, transactions, reports — with a base currency chosen at onboarding (and immutable thereafter), and FX effects visible separately from underlying performance.
-
-**Architecture decisions (locked before starting):**
-- **Base currency is immutable.** Set once during onboarding alongside timezone. Displayed grayed-out in settings with a tooltip. Eliminates the entire "what if base currency changes" recomputation problem — a configured Pinch instance is a "EUR database" or a "USD database" for life. Migrating between base currencies would require a fresh DB.
-- **Denormalize base-currency amounts on write.** Each transaction stores `amount` (native), `currency`, and `amount_base` (computed at write time via the price resolver). Reports become O(N) sums with no FX joins. The trade-off — a rate must be available at create time, and corrected rates don't propagate without an opt-in refresh — is a clear win when the base never changes.
-- **Drop the EUR pivot in `market_prices`.** Store FX rates against the configured base directly (`symbol='USD', currency=<base>`). The existing `FrankfurterProvider` already supports arbitrary `from`/`to`, no provider rewrite needed.
-
-**Foundation**
-- [ ] **Base currency setting** — `SettingsService.getBaseCurrency()` / `setBaseCurrency()`. `setBaseCurrency()` throws if already set (immutable). Settings UI shows the current base grayed-out with an explainer tooltip.
-- [ ] **Onboarding gate** — generalize `requireTimezone()` → `requireOnboarding()` (timezone + base currency); update all 9 page callers. Insert a "base currency" step into the settings wizard between timezone and cash. Add `get_base_currency` / `set_base_currency` MCP tools and update `INSTRUCTIONS` so the AI's "new user" detection checks both, asking currency before any opening-balance tools (`set_opening_cash_balance`, `add_opening_asset`).
-- [ ] **`currencySchema` Zod validator** — ISO 4217, used everywhere a currency is accepted. Lives in `src/lib/validators/common.ts`.
-- [ ] **Currency selector component** — search + dropdown using `Intl.supportedValuesOf('currency')` and `Intl.NumberFormat` for symbols/names. Pin popular currencies (USD, EUR, GBP, JPY, CAD, AUD) at top, rest alphabetical. No external NPM package needed.
-- [ ] **Per-currency formatting** — replace `formatCurrency(amount)` with `formatCurrency(amount, currency)` using `Intl.NumberFormat` (handles JPY 0 decimals, BHD 3 decimals). Replace `Math.round(x * 100) / 100` boundary rounding in services with per-currency precision via `resolvedOptions().maximumFractionDigits`.
-
-**Financial data providers**
-- [ ] **De-EUR-ize the price resolver** — remove `BASE_CURRENCY = "EUR"` from `price-resolver.ts`. Deposit identity rule becomes "deposits in *base* currency = 1.00." Audit every place that reads `market_prices` for a hardcoded second-column EUR assumption. Update `CLAUDE.md` and `plan.md` storage convention docs.
-- [ ] **Use Frankfurter with arbitrary base** — call with `from=<source>&to=<base>` instead of pivoting through EUR. Existing provider already supports this; only resolver call sites change. Add a unit test for triangulation direction.
-- [ ] **Add `fawazahmed0/exchange-api` provider** — no key, CC0 license, covers 200+ currencies including crypto and metals. Static JSON files on jsDelivr CDN, no rate limits. Implement as `FinancialDataProvider`, register in `registry.ts`. Use as fallback when Frankfurter has no rate (covers exotic currencies — IDR, NGN, VND, etc., plus EUR/RUB which ECB suspended in 2022).
-- [ ] **Currency support validation at write time** — when a user creates a transaction in a currency no configured provider can resolve, fail the create with a clear error: "Currency XXX isn't supported by any configured FX provider." Never store an unconvertible amount.
-- [ ] **Historical FX backfill** — extend the 04:00 cron to fetch missing rates for any `(date, currency)` pair appearing in `transactions` where the rate isn't cached. Bounded query via `LEFT JOIN market_prices`. Also fetch on-demand at transaction-create time. Weekend/holiday fallback walks back to most recent prior business day (existing 7-day lookback already handles this — document it).
-
-**Transactions**
-- [ ] **Schema migration** — add `currency text NOT NULL` and `amount_base real NOT NULL` to `transactions`. Backfill existing rows: `currency = <base>`, `amount_base = amount`. Same migration for `recurring_transactions` (currency only — generated transactions are normal rows).
-- [ ] **Service layer** — `createTransaction` accepts `{ amount, currency? }`, defaults currency to base. Computes `amount_base` synchronously via the price resolver at write time. If FX lookup fails, the create fails. Read paths return `{ amount, currency, amountBase }` on every transaction.
-- [ ] **Validators + MCP tools** — `create_transaction`, `create_transactions`, `update_transaction`, `batch_update_transactions` accept optional `currency`. All read tools include `amount`, `currency`, `amount_base` in response schemas. Aggregation tools (`get_spending_summary`, `get_category_stats`, `get_trends`, `get_top_merchants`, `get_net_income`, `get_cash_balance`) return base-currency totals plus a top-level `currency: <base>` field so AI consumers know what they're looking at.
-- [ ] **`convert_currency` MCP tool** — drop the `symbolMap` requirement; route through the default FX provider chain so it works for transaction-style conversions, not just asset-coupled ones.
-- [ ] **Transactions UI** — currency field in create/edit forms (using the new selector); transactions table shows native amount with base-currency equivalent in a tooltip when they differ (no secondary line for same-currency rows).
-- [ ] **Recurring transactions** — `currency` field on templates; generated transactions inherit it. The recurring engine calls the same `createTransaction` path so `amount_base` is computed at *generation* time using that day's rate, not template-creation time.
-
-**Budgets**
-- [ ] **Budgets are base-currency only** — single amount field, document that it's in base currency. No schema change, no per-currency budgets.
-- [ ] **`BudgetService.getForMonth()`** — change the spent rollup to sum `amount_base` instead of `amount`. Each foreign-currency transaction contributes its base-currency equivalent computed at the transaction's date (consistent with reports).
-
-**Cash balance & portfolio**
-- [ ] **`reports.cashBalance()`** — sum `amount_base` instead of `amount`. Response gains a `currency: <base>` field. Optionally also return a per-currency breakdown.
-- [ ] **`portfolio.netWorth()`** — `cashBalance + totalAssetValue` is now safe since both are in base currency. Audit `getCashBalance` and `getNetWorth` for residual EUR assumptions.
-
-**Reports**
-- [ ] **All aggregations sum `amount_base`** — spending summaries, category stats, trends, top merchants, net income. No per-query FX joins (the denormalization wins here). Each response includes `currency: <base>` at the top level.
-- [ ] **Asset performance: separate FX vs price P&L** — for assets in non-base currencies, break down total P&L into asset price change (in native currency) and FX gain/loss (currency move applied to cost basis). Cost basis stored in native at lot creation; FX delta computed on read against current rate.
-
-**Assets**
-- [ ] **Symbol search: surface currency** — return native currency in financial-data-provider search results; display it in the symbol search UI.
-- [ ] **Asset creation: auto-fill currency** — pre-fill from search result when one is selected (user can still override — important for cross-listed stocks like SHEL on LSE/NYSE).
-- [ ] **Buy/sell dialog: native + base side-by-side** — display both amounts when they differ.
-
-**Sample data, tests, docs**
-- [ ] **Sample data** — keep EUR-denominated for the most part, but seed one transaction in a non-base currency to demonstrate the feature. Parameterize the seed script on the configured base where it matters.
-- [ ] **Test infrastructure** — `makeTestDb()` defaults to seeding base currency = "EUR" so existing tests don't break. Add `makeTestDb({ baseCurrency: "USD" })` for currency-aware tests. Cover: per-currency formatter precision, FX triangulation direction, `amount_base` computation, budget rollup with mixed currencies, currency-support validation.
-- [ ] **OpenAPI spec** — update `src/lib/api/openapi.ts` for new `currency` parameter on transaction endpoints and new `currency`/`amount_base` response fields.
-- [ ] **Docs** — update `CLAUDE.md` Currency section to remove EUR-only framing and document the immutability rule. Update README screenshots if any show EUR symbols. Update MCP `INSTRUCTIONS` and `get_started` to explain the currency convention.
-
-**Done when:** A user can record a USD coffee purchase or add a USD-denominated asset and clearly see both native and base amounts at every step. All aggregations (transactions, budgets, cash balance, reports) roll up to the immutable base currency. FX effects are visible separately from underlying performance. Adding a transaction in a currency no configured provider can resolve fails with a clear error. The base currency cannot be changed after onboarding.
-
-**Gotchas (working list — keep updated as the sprint runs):**
-1. **Migration backfill assumes EUR.** Existing rows get `currency = "EUR"`, `amount_base = amount`. Correct only if the user has been EUR-only — worth a one-line warning for users who logged non-EUR cash flows against assets.
-2. **`BASE_CURRENCY = "EUR"` is load-bearing in `price-resolver.ts:12`.** EUR deposit identity becomes base-currency deposit identity — branching change, not just a rename.
-3. **Frankfurter triangulation direction.** `rate(X→Y) = rate(P→Y) / rate(P→X)`, NOT the other way. Common bug. Unit test it.
-4. **EUR/RUB suspended at ECB since 2022.** Frankfurter returns nothing for it. fawazahmed0 fallback covers this; surface a specific error if both fail.
-5. **`market_prices` storage key `(symbol, currency, date)` is unique.** Pre-migration FX rows say `currency='EUR'` ("rate to EUR"); post-migration rows say `currency=<base>`. Existing users default to EUR so the old rows remain valid; new users have no pre-existing rows. No re-keying needed.
-6. **JPY/BHD decimals.** `Math.round(x * 100) / 100` is wrong for these. Use `Intl.NumberFormat(...).resolvedOptions().maximumFractionDigits` consistently in service-boundary rounding.
-7. **First write of a new currency blocks on a network call.** Frankfurter lookup at create time. Acceptable; surface a loading state in the UI.
-8. **Stocks listed on multiple exchanges.** SHEL is GBP on LSE and USD on NYSE. Symbol search auto-fill picks one — don't lock the field.
-9. **Stable historical reports become live only if rates are corrected.** With denormalized `amount_base`, reports are stable by default. An opt-in "refresh base amounts" MCP tool / cron lets users recompute if a provider corrects historical data. Out of scope for the initial sprint unless it becomes a real problem.
-
----
-
 ### Sprint 28: UI Translations (i18n)
-**Goal:** Make Pinch translatable with full translator context — translators should understand what each string means and where it appears, not just see a flat key-value file.
+**Goal:** Make Kinti translatable with full translator context — translators should understand what each string means and where it appears, not just see a flat key-value file.
 
 **Library:** next-intl (purpose-built for Next.js App Router, native server/client component support, ICU message format built-in, PO extraction with source file references and descriptions).
 
@@ -424,7 +334,7 @@ Each sprint is a self-contained chunk of work. Sprints are organized into two ph
 **Phase 3 — Translator experience**
 - [ ] **Inline descriptions for ambiguous strings** — audit all extracted strings. For any string where the meaning isn't clear from the key path alone (e.g. "Balance", "Note", "Right", "Net"), add descriptions via `t({ message: '...', description: '...' })`.
 - [ ] **ICU plurals & formatting** — convert plural constructs (e.g. "3 transactions", "1 item") to ICU `{count, plural, ...}` syntax. Use ICU `{amount, number}` for formatted numbers where applicable.
-- [ ] **Crowdin setup** — register Pinch on Crowdin (free OSS plan). Configure Crowdin CLI for CI push/pull. Upload `.po` files. Tag screenshots for key pages (dashboard, transactions, budgets, portfolio, settings).
+- [ ] **Crowdin setup** — register Kinti on Crowdin (free OSS plan). Configure Crowdin CLI for CI push/pull. Upload `.po` files. Tag screenshots for key pages (dashboard, transactions, budgets, portfolio, settings).
 - [ ] **Bulgarian translation** — add `bg.json` as the first non-English locale. Translate all namespaces.
 - [ ] **Contributing guide for translators** — add a section to CONTRIBUTING.md explaining how to contribute translations via Crowdin, what context is available (key paths, descriptions, screenshots), and how to request new languages.
 

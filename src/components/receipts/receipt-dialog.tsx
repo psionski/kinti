@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatCurrency } from "@/lib/format";
 import type { ReceiptResponse } from "@/lib/validators/receipts";
 import type { PaginatedTransactionsResponse } from "@/lib/validators/transactions";
 import { Temporal } from "@js-temporal/polyfill";
@@ -19,10 +20,6 @@ interface ReceiptDialogProps {
   receiptId: number | null;
   onOpenChange: (open: boolean) => void;
   onDeleted?: () => void;
-}
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(amount);
 }
 
 function formatDate(iso: string): string {
@@ -166,7 +163,7 @@ export function ReceiptDialog({
                         {tx.description}
                       </span>
                       <span className={tx.type === "income" ? "text-emerald-600" : ""}>
-                        {formatCurrency(tx.amount)}
+                        {formatCurrency(tx.amount, tx.currency)}
                       </span>
                     </li>
                   ))}

@@ -1,11 +1,11 @@
 export const dynamic = "force-dynamic";
 
-import { requireTimezone } from "@/lib/api/require-timezone";
+import { requireOnboarding } from "@/lib/api/require-timezone";
 import { getAssetService, getPortfolioService } from "@/lib/api/services";
 import { AssetsClient } from "@/components/assets/assets-client";
 
 export default function AssetsPage(): React.ReactElement {
-  requireTimezone();
+  requireOnboarding();
   const assets = getAssetService().list();
   const portfolio = getPortfolioService().getPortfolio();
 

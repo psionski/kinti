@@ -1,17 +1,23 @@
 // @vitest-environment node
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   formatCurrency,
   formatPercent,
   formatMonth,
   formatDate,
   formatFrequency,
+  roundToCurrency,
+  setBaseCurrencyCache,
+  clearBaseCurrencyCache,
 } from "@/lib/format";
 
 // ─── formatCurrency ──────────────────────────────────────────────────────────
 
 describe("formatCurrency", () => {
-  it("formats EUR amounts", () => {
+  beforeEach(() => setBaseCurrencyCache("EUR"));
+  afterEach(() => clearBaseCurrencyCache());
+
+  it("formats EUR amounts (default base)", () => {
     const result = formatCurrency(123.45);
     // de-DE EUR locale: "123,45 €" (may include non-breaking space)
     expect(result).toContain("123,45");
@@ -33,6 +39,48 @@ describe("formatCurrency", () => {
   it("formats large amounts with thousands separator", () => {
     const result = formatCurrency(12345.67);
     expect(result).toContain("12.345,67");
+  });
+
+  it("formats USD with explicit currency", () => {
+    const result = formatCurrency(99.5, "USD");
+    expect(result).toContain("99,50");
+    expect(result).toContain("$");
+  });
+
+  it("formats JPY with zero decimal places (Intl-driven precision)", () => {
+    const result = formatCurrency(1234.56, "JPY");
+    // JPY has zero fraction digits — Intl rounds the input
+    expect(result).toContain("1.235");
+    expect(result).not.toContain(",56");
+  });
+
+  it("formats BHD with three decimal places", () => {
+    const result = formatCurrency(1.2345, "BHD");
+    expect(result).toContain("1,235");
+  });
+
+  it("respects the cached base currency when no currency is passed", () => {
+    setBaseCurrencyCache("USD");
+    const result = formatCurrency(50);
+    expect(result).toContain("$");
+    expect(result).not.toContain("€");
+  });
+});
+
+// ─── roundToCurrency ─────────────────────────────────────────────────────────
+
+describe("roundToCurrency", () => {
+  it("rounds to 2 decimals for EUR/USD", () => {
+    expect(roundToCurrency(1.234, "EUR")).toBe(1.23);
+    expect(roundToCurrency(1.235, "USD")).toBe(1.24);
+  });
+
+  it("rounds to 0 decimals for JPY", () => {
+    expect(roundToCurrency(1234.56, "JPY")).toBe(1235);
+  });
+
+  it("rounds to 3 decimals for BHD", () => {
+    expect(roundToCurrency(1.2345, "BHD")).toBe(1.235);
   });
 });
 

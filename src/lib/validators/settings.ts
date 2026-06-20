@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CurrencySchema } from "./common";
 
 /** Validates an IANA timezone identifier (e.g. "Europe/Amsterdam", "UTC"). */
 export const TimezoneSchema = z.string().refine(
@@ -20,3 +21,11 @@ export const SetTimezoneSchema = z.object({
 });
 
 export type SetTimezoneInput = z.infer<typeof SetTimezoneSchema>;
+
+export const SetBaseCurrencySchema = z.object({
+  currency: CurrencySchema.describe(
+    "ISO 4217 currency code (e.g. 'EUR', 'USD', 'GBP'). Immutable after first set."
+  ),
+});
+
+export type SetBaseCurrencyInput = z.infer<typeof SetBaseCurrencySchema>;

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { isoToday } from "@/lib/date-ranges";
+import { getBaseCurrency } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CategorySelectItems } from "@/components/categories/category-select-items";
+import { CurrencyPicker } from "@/components/settings/currency-picker";
 import type { CategoryWithCountResponse } from "@/lib/validators/categories";
 import type { TransactionResponse } from "@/lib/validators/transactions";
 
@@ -35,6 +37,7 @@ interface TransactionFormProps {
 
 export interface TransactionFormData {
   amount: number;
+  currency: string;
   type: "income" | "expense";
   description: string;
   merchant: string;
@@ -57,6 +60,7 @@ export function TransactionFormDialog({
   const initialType: "income" | "expense" = initialData?.type === "income" ? "income" : "expense";
   const [type, setType] = useState<"income" | "expense">(initialType);
   const [amountStr, setAmountStr] = useState(initialData ? String(initialData.amount) : "");
+  const [currency, setCurrency] = useState<string>(initialData?.currency ?? getBaseCurrency());
   const [description, setDescription] = useState(initialData?.description ?? "");
   const [merchant, setMerchant] = useState(initialData?.merchant ?? "");
   const [categoryId, setCategoryId] = useState<string>(
@@ -92,6 +96,7 @@ export function TransactionFormDialog({
 
     onSubmit({
       amount: amountNum,
+      currency,
       type,
       description: description.trim(),
       merchant: merchant.trim(),
@@ -110,7 +115,7 @@ export function TransactionFormDialog({
           <DialogDescription>
             {isEdit
               ? "Update the transaction details."
-              : "Enter the transaction details. Amount is in EUR."}
+              : "Enter the transaction details. Pick a currency to record a foreign-currency purchase."}
           </DialogDescription>
         </DialogHeader>
 
@@ -138,7 +143,7 @@ export function TransactionFormDialog({
           {/* Amount + Date */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="tx-amount">Amount (EUR)</Label>
+              <Label htmlFor="tx-amount">Amount</Label>
               <Input
                 id="tx-amount"
                 type="number"
@@ -160,6 +165,12 @@ export function TransactionFormDialog({
                 required
               />
             </div>
+          </div>
+
+          {/* Currency */}
+          <div className="space-y-1.5">
+            <Label htmlFor="tx-currency">Currency</Label>
+            <CurrencyPicker id="tx-currency" value={currency} onChange={setCurrency} />
           </div>
 
           {/* Description */}
@@ -228,7 +239,13 @@ export function TransactionFormDialog({
 
           <DialogFooter>
             <Button type="submit" disabled={loading}>
-              {loading ? "Saving..." : isEdit ? "Save Changes" : "Add Transaction"}
+              {loading
+                ? currency !== getBaseCurrency()
+                  ? "Converting..."
+                  : "Saving..."
+                : isEdit
+                  ? "Save Changes"
+                  : "Add Transaction"}
             </Button>
           </DialogFooter>
         </form>

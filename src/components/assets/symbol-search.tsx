@@ -23,6 +23,8 @@ interface SymbolSearchResult {
   symbol: string;
   name: string;
   type?: string;
+  /** ISO 4217 listing currency, when the provider exposes it. */
+  currency?: string;
 }
 
 type SymbolMap = Record<string, string>;
@@ -30,6 +32,8 @@ type SymbolMap = Record<string, string>;
 interface SymbolSearchProps {
   value: SymbolMap;
   onChange: (map: SymbolMap) => void;
+  /** Called when the user picks a result, with the result's listing currency (if any). */
+  onCurrencyHint?: (currency: string) => void;
   disabled?: boolean;
   assetType?: AssetType;
 }
@@ -53,6 +57,8 @@ interface SymbolSearchDialogProps {
   onOpenChange: (open: boolean) => void;
   value: SymbolMap;
   onDone: (map: SymbolMap) => void;
+  /** Called when the user picks a result, with the result's listing currency (if any). */
+  onCurrencyHint?: (currency: string) => void;
   assetType?: AssetType;
 }
 
@@ -61,6 +67,7 @@ export function SymbolSearchDialog({
   onOpenChange,
   value,
   onDone,
+  onCurrencyHint,
   assetType,
 }: SymbolSearchDialogProps): React.ReactElement {
   const [query, setQuery] = useState("");
@@ -160,6 +167,12 @@ export function SymbolSearchDialog({
       delete next[result.provider];
     } else {
       next[result.provider] = result.symbol;
+      // Pre-fill the asset form's currency field on the *first* selection.
+      // Cross-listed instruments (SHEL on LSE in GBP vs NYSE in USD) mean the
+      // user can still override.
+      if (result.currency && onCurrencyHint) {
+        onCurrencyHint(result.currency);
+      }
     }
     setPending(next);
   }
@@ -224,8 +237,16 @@ export function SymbolSearchDialog({
                       {isSelected && <span className="bg-primary size-2 rounded-full" />}
                     </span>
                     <span className="min-w-0 truncate">{item.name}</span>
+                    {item.currency && (
+                      <span className="text-muted-foreground ml-auto shrink-0 text-xs">
+                        {item.currency}
+                      </span>
+                    )}
                     {item.type && (
-                      <Badge variant="secondary" className="ml-auto shrink-0 text-xs">
+                      <Badge
+                        variant="secondary"
+                        className={`shrink-0 text-xs ${item.currency ? "" : "ml-auto"}`}
+                      >
                         {item.type}
                       </Badge>
                     )}
@@ -256,6 +277,7 @@ export function SymbolSearchDialog({
 export function SymbolSearch({
   value,
   onChange,
+  onCurrencyHint,
   disabled,
   assetType,
 }: SymbolSearchProps): React.ReactElement {
@@ -308,6 +330,7 @@ export function SymbolSearch({
         onOpenChange={setDialogOpen}
         value={value}
         onDone={onChange}
+        onCurrencyHint={onCurrencyHint}
         assetType={assetType}
       />
     </div>

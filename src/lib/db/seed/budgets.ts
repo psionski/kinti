@@ -33,7 +33,10 @@ export function generateBudgets(
     childrenOf[child.parentName] = siblings;
   }
 
-  // Sum expense spend per category name per YYYY-MM
+  // Sum expense spend per category name per YYYY-MM. Sums `amountBase`,
+  // not `amount`, so foreign-currency expenses contribute their
+  // base-currency-equivalent value (matches how `BudgetService.getForMonth`
+  // rolls up at runtime).
   const spendByCatMonth = new Map<string, number>();
   for (const tx of allTxs) {
     if (tx.type !== "expense") continue;
@@ -41,7 +44,7 @@ export function generateBudgets(
     const catName = Object.entries(catIds).find(([, id]) => id === tx.categoryId)?.[0];
     if (!catName) continue;
     const key = `${catName}|${month}`;
-    spendByCatMonth.set(key, (spendByCatMonth.get(key) ?? 0) + tx.amount);
+    spendByCatMonth.set(key, (spendByCatMonth.get(key) ?? 0) + tx.amountBase);
   }
 
   // Compute rollup spend: parent includes own + all children

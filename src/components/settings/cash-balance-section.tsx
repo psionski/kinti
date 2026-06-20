@@ -5,7 +5,24 @@ import { Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getBaseCurrency } from "@/lib/format";
 import { Section } from "./settings-section";
+
+/** Currency symbol for the configured base currency, derived via Intl. */
+function baseCurrencySymbol(): string {
+  const currency = getBaseCurrency();
+  try {
+    const fmt = new Intl.NumberFormat("en", {
+      style: "currency",
+      currency,
+      currencyDisplay: "narrowSymbol",
+    });
+    const part = fmt.formatToParts(0).find((p) => p.type === "currency");
+    return part?.value ?? currency;
+  } catch {
+    return currency;
+  }
+}
 
 interface CashBalanceSectionProps {
   isOnboarding: boolean;
@@ -55,7 +72,7 @@ export function CashBalanceSection({
           <Label htmlFor="cash-balance">Current balance</Label>
           <div className="relative">
             <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 text-sm">
-              &euro;
+              {baseCurrencySymbol()}
             </span>
             <Input
               id="cash-balance"

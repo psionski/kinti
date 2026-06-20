@@ -77,6 +77,33 @@ describe("FrankfurterProvider", () => {
     expect(results.map((r) => r.currency).sort()).toEqual(["GBP", "JPY", "USD"]);
     expect(results.every((r) => r.symbol === "EUR")).toBe(true);
   });
+
+  it("supports arbitrary from/to without EUR pivot (USD→GBP direct)", async () => {
+    // Kinti is no longer EUR-only — Frankfurter must accept any base. This
+    // test guards against a regression where call sites accidentally pivot
+    // through EUR (rate(USD→GBP) = rate(EUR→GBP) / rate(EUR→USD)).
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        date: "2026-01-15",
+        base: "USD",
+        rates: { GBP: 0.79 },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.getPrice("USD", "GBP", "2026-01-15");
+
+    expect(result?.price).toBeCloseTo(0.79);
+    expect(result?.symbol).toBe("USD");
+    expect(result?.currency).toBe("GBP");
+
+    // Verify the URL: ?from=USD&to=GBP — not reversed, not pivoting through EUR.
+    const calledUrl = fetchMock.mock.calls[0][0] as string;
+    expect(calledUrl).toContain("from=USD");
+    expect(calledUrl).toContain("to=GBP");
+    expect(calledUrl).not.toContain("EUR");
+  });
 });
 
 // ─── ECB ─────────────────────────────────────────────────────────────────────

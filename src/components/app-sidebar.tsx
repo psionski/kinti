@@ -98,7 +98,7 @@ export function AppSidebar(): React.ReactElement {
     <Sidebar>
       <SidebarHeader className="p-4 pt-5 pb-2">
         <Link href="/" className="flex items-center gap-2.5">
-          <span className="text-foreground text-xl font-bold tracking-tight">Pinch</span>
+          <span className="text-foreground text-xl font-bold tracking-tight">Kinti</span>
         </Link>
       </SidebarHeader>
       <SidebarContent data-tour="sidebar-nav">

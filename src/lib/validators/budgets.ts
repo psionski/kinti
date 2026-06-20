@@ -60,6 +60,9 @@ export type ResetBudgetsInput = z.infer<typeof ResetBudgetsSchema>;
 export const BudgetStatusResponseSchema = z.object({
   items: z.array(BudgetStatusItemSchema),
   inheritedFrom: z.string().nullable(),
+  currency: z
+    .string()
+    .describe("ISO 4217 base currency that all budget amounts are denominated in"),
 });
 
 export type BudgetStatusResponse = z.infer<typeof BudgetStatusResponseSchema>;

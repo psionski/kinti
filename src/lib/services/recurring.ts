@@ -10,6 +10,8 @@ import type {
   RecurringResponse,
 } from "@/lib/validators/recurring";
 import { isoToday, utcToLocal } from "@/lib/date-ranges";
+import { getBaseCurrency, roundToCurrency } from "@/lib/format";
+import type { FinancialDataService } from "./financial-data";
 
 type Db = BetterSQLite3Database<typeof schema>;
 
@@ -124,13 +126,17 @@ function parseRecurring(row: RecurringTransaction, afterDateStr: string): Recurr
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export class RecurringService {
-  constructor(private db: Db) {}
+  constructor(
+    private db: Db,
+    private financialData?: FinancialDataService
+  ) {}
 
-  create(input: CreateRecurringInput): RecurringResponse {
+  async create(input: CreateRecurringInput): Promise<RecurringResponse> {
     const [row] = this.db
       .insert(recurringTransactions)
       .values({
         amount: input.amount,
+        currency: input.currency ?? getBaseCurrency(),
         type: input.type,
         description: input.description,
         merchant: input.merchant,
@@ -147,7 +153,7 @@ export class RecurringService {
       .all();
 
     const today = isoToday();
-    this.generateForTemplate(row, today);
+    await this.generateForTemplate(row, today);
     // Re-read to pick up lastGenerated updated by generateForTemplate
     const fresh = this.db
       .select()
@@ -181,6 +187,7 @@ export class RecurringService {
       .update(recurringTransactions)
       .set({
         ...(input.amount !== undefined ? { amount: input.amount } : {}),
+        ...(input.currency !== undefined ? { currency: input.currency } : {}),
         ...(input.type !== undefined ? { type: input.type } : {}),
         ...(input.description !== undefined ? { description: input.description } : {}),
         ...(input.merchant !== undefined ? { merchant: input.merchant } : {}),
@@ -217,8 +224,12 @@ export class RecurringService {
    * Generate pending transactions for a single recurring template up to `upToDate`.
    * Creates transactions for dates after `lastGenerated` (or `startDate`) up to
    * and including `upToDate`. Returns the number of transactions created.
+   *
+   * Each generated row stores `amount_base` computed at generation time using
+   * the FX rate for that day — so a EUR-base instance generating a USD rent
+   * payment correctly captures the rate fluctuation across months.
    */
-  private generateForTemplate(r: RecurringTransaction, upToDate: string): number {
+  private async generateForTemplate(r: RecurringTransaction, upToDate: string): Promise<number> {
     const fromStr = r.lastGenerated
       ? r.lastGenerated
       : Temporal.PlainDate.from(r.startDate).subtract({ days: 1 }).toString();
@@ -236,22 +247,43 @@ export class RecurringService {
     const dates = occurrencesBetween(r, fromStr, upToDate);
     if (dates.length === 0) return 0;
 
-    this.db
-      .insert(transactions)
-      .values(
-        dates.map((date) => ({
-          amount: r.amount,
-          type: r.type,
-          description: r.description,
-          merchant: r.merchant,
-          categoryId: r.categoryId,
-          date,
-          recurringId: r.id,
-          notes: r.notes,
-          tags: r.tags,
-        }))
-      )
-      .run();
+    const base = getBaseCurrency();
+    const rowsToInsert: Array<typeof transactions.$inferInsert> = [];
+
+    for (const date of dates) {
+      let amountBase = roundToCurrency(r.amount, base);
+      if (r.currency !== base) {
+        if (!this.financialData) {
+          throw new Error(
+            `Recurring template ${r.id} is in ${r.currency} but recurring service has no ` +
+              `FinancialDataService injected — cannot compute amount_base for generated rows.`
+          );
+        }
+        const result = await this.financialData.convertToBase(r.amount, r.currency, date);
+        if (result === null) {
+          throw new Error(
+            `Cannot convert ${r.currency} → ${base} on ${date} for recurring template ${r.id}.`
+          );
+        }
+        amountBase = result.amountBase;
+      }
+
+      rowsToInsert.push({
+        amount: r.amount,
+        currency: r.currency,
+        amountBase,
+        type: r.type,
+        description: r.description,
+        merchant: r.merchant,
+        categoryId: r.categoryId,
+        date,
+        recurringId: r.id,
+        notes: r.notes,
+        tags: r.tags,
+      });
+    }
+
+    this.db.insert(transactions).values(rowsToInsert).run();
 
     this.db
       .update(recurringTransactions)
@@ -269,7 +301,7 @@ export class RecurringService {
    * Generate all pending transactions for active recurring templates up to today.
    * Returns the total number of transactions created.
    */
-  generatePending(upTo?: string): number {
+  async generatePending(upTo?: string): Promise<number> {
     const upToStr = upTo ?? isoToday();
     const active = this.db
       .select()
@@ -279,7 +311,7 @@ export class RecurringService {
 
     let created = 0;
     for (const r of active) {
-      created += this.generateForTemplate(r, upToStr);
+      created += await this.generateForTemplate(r, upToStr);
     }
 
     return created;

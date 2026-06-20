@@ -88,7 +88,7 @@ export function RecurringTable({
                     item.type === "income" ? "text-emerald-600" : "text-foreground"
                   }`}
                 >
-                  {formatCurrency(item.amount)}
+                  {formatCurrency(item.amount, item.currency)}
                 </span>
               </TableCell>
               <TableCell className="hidden md:table-cell">

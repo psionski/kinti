@@ -24,8 +24,19 @@ test.describe.serial("Onboarding wizard", () => {
     await page.getByPlaceholder("Search timezones...").fill("Amsterdam");
     await page.getByText("Europe/Amsterdam").click();
 
-    // Click Save — saves timezone, reveals cash balance section
+    // Click Save — saves timezone, reveals base currency section
     await page.getByRole("button", { name: "Save" }).first().click();
+    await expect(page.locator("#base-currency")).toBeVisible({ timeout: 5000 });
+
+    // Pick EUR as the base currency
+    await page.locator("#base-currency").click();
+    await page.getByPlaceholder("Search currencies...").fill("EUR");
+    await page.getByTestId("currency-option-EUR").click();
+
+    // Click Save — saves base currency, reveals cash balance section.
+    // Two Save buttons are visible at this point (timezone + base currency);
+    // base currency is the last one and disappears after save.
+    await page.getByRole("button", { name: "Save" }).last().click();
     await expect(page.getByText("Checking Account Balance")).toBeVisible({ timeout: 5000 });
 
     // Skip through each onboarding section one by one.
@@ -58,7 +69,7 @@ test.describe.serial("Onboarding wizard", () => {
     // Should NOT have sample data bar
     await expect(page.getByRole("button", { name: "Clear sample data" })).not.toBeVisible();
     // Should NOT have tutorial overlay
-    await expect(page.getByText("Welcome to Pinch!")).not.toBeVisible();
+    await expect(page.getByText("Welcome to Kinti!")).not.toBeVisible();
     // Page should load without errors
     await expect(page.locator('[data-tour="kpi-cards"]')).toBeVisible();
   });

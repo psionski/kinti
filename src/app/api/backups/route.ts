@@ -3,7 +3,7 @@ import { runBackup, listBackups } from "@/lib/services/backup";
 import { handleServiceError } from "@/lib/api/helpers";
 import { apiLogger } from "@/lib/logger";
 
-const DB_PATH = process.env.DATABASE_URL ?? "./data/pinch.db";
+const DB_PATH = process.env.DATABASE_URL ?? "./data/kinti.db";
 
 export function GET(): NextResponse {
   try {

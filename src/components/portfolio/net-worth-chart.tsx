@@ -10,6 +10,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCurrency, formatCurrencyCompact } from "@/lib/format";
 import type { NetWorthPoint } from "@/lib/validators/portfolio-reports";
 import { Temporal } from "@js-temporal/polyfill";
 
@@ -72,15 +73,14 @@ export function NetWorthChart({ data }: NetWorthChartProps): React.ReactElement 
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(value: number) => `\u20AC${value}`}
+                tickFormatter={(value: number) => formatCurrencyCompact(value)}
               />
               <ChartTooltip
                 content={
                   <ChartTooltipContent
                     formatter={(value, name) => {
                       const label = chartConfig[name as keyof typeof chartConfig]?.label ?? name;
-                      const formatted = `\u20AC${(value as number).toLocaleString("de-DE", { minimumFractionDigits: 2 })}`;
-                      return `${label}: ${formatted}`;
+                      return `${label}: ${formatCurrency(value as number)}`;
                     }}
                   />
                 }

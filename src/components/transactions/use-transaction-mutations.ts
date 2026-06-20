@@ -28,6 +28,7 @@ async function deleteJson(url: string, body: unknown): Promise<Response> {
 function buildCreateBody(data: TransactionFormData): Record<string, unknown> {
   const body: Record<string, unknown> = {
     amount: data.amount,
+    currency: data.currency,
     type: data.type,
     description: data.description,
     date: data.date,
@@ -42,6 +43,7 @@ function buildCreateBody(data: TransactionFormData): Record<string, unknown> {
 function buildUpdateBody(data: TransactionFormData): Record<string, unknown> {
   return {
     amount: data.amount,
+    currency: data.currency,
     type: data.type,
     description: data.description,
     date: data.date,

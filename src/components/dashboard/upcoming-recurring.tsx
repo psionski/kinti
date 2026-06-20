@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/shared/empty-state";
 import { formatCurrency, formatDate, formatFrequency } from "@/lib/format";
 import type { RecurringResponse } from "@/lib/validators/recurring";
 
@@ -27,7 +28,7 @@ export function UpcomingRecurring({ items }: UpcomingRecurringProps): React.Reac
                       item.type === "income" ? "text-emerald-600" : "text-foreground"
                     }`}
                   >
-                    {formatCurrency(item.amount)}
+                    {formatCurrency(item.amount, item.currency)}
                   </span>
                   {item.nextOccurrence && (
                     <div className="text-muted-foreground text-xs">
@@ -39,9 +40,7 @@ export function UpcomingRecurring({ items }: UpcomingRecurringProps): React.Reac
             ))}
           </div>
         ) : (
-          <p className="text-muted-foreground py-10 text-center text-sm">
-            No upcoming recurring transactions.
-          </p>
+          <EmptyState message="No upcoming recurring transactions." />
         )}
       </CardContent>
     </Card>

@@ -4,7 +4,24 @@ import { useState } from "react";
 import { Plus, PiggyBank } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getBaseCurrency } from "@/lib/format";
 import { Section } from "./settings-section";
+
+/** Currency symbol for the configured base currency, derived via Intl. */
+function baseCurrencySymbol(): string {
+  const currency = getBaseCurrency();
+  try {
+    const fmt = new Intl.NumberFormat("en", {
+      style: "currency",
+      currency,
+      currencyDisplay: "narrowSymbol",
+    });
+    const part = fmt.formatToParts(0).find((p) => p.type === "currency");
+    return part?.value ?? currency;
+  } catch {
+    return currency;
+  }
+}
 
 interface SavingsEntry {
   name: string;
@@ -23,6 +40,8 @@ export function SavingsSection({
   const [entries, setEntries] = useState<SavingsEntry[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const baseCurrency = getBaseCurrency();
+  const symbol = baseCurrencySymbol();
 
   async function handleSave(): Promise<void> {
     const valid = entries.filter((e) => e.name.trim() && parseFloat(e.balance) > 0);
@@ -38,7 +57,7 @@ export function SavingsSection({
         const assetRes = await fetch("/api/assets", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: entry.name, type: "deposit", currency: "EUR" }),
+          body: JSON.stringify({ name: entry.name, type: "deposit", currency: baseCurrency }),
         });
         if (!assetRes.ok) continue;
         const asset = await assetRes.json();
@@ -76,7 +95,7 @@ export function SavingsSection({
             />
             <div className="relative min-w-[140px]">
               <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 text-sm">
-                &euro;
+                {symbol}
               </span>
               <Input
                 type="number"

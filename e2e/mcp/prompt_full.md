@@ -21,7 +21,7 @@ Each agent evaluates:
 
 | # | Workflow | User prompt (simulated) | Key tools expected |
 |---|----------|------------------------|--------------------|
-| 1 | **New user onboarding** | "I just installed Pinch. I have €5,000 in savings, a €2,000 stock portfolio, and some crypto. Set me up." | Onboarding tools (if discoverable), create_asset, buy_asset, search_symbol, list_categories |
+| 1 | **New user onboarding** | "I just installed Kinti. I have €5,000 in savings, a €2,000 stock portfolio, and some crypto. Set me up." | Onboarding tools (if discoverable), create_asset, buy_asset, search_symbol, list_categories |
 | 2 | **Receipt-based expense entry** | "I just got back from the grocery store. Here's my receipt — total was €47.30 for groceries." | Receipt upload (REST), create_transactions, list_categories, get_receipt |
 | 3 | **Monthly budget check** | "How am I doing on my budgets this month? Am I overspending anywhere?" | get_budget_status, get_category_stats, get_spending_summary, get_trends |
 | 4 | **Investment portfolio management** | "I just bought 5 shares of VWCE at €112.50 each. Also, how's my portfolio doing overall?" | search_symbol, buy_asset, get_portfolio, get_asset_performance, get_allocation |

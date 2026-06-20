@@ -4,7 +4,7 @@ import { getSettingsService } from "@/lib/api/services";
 import { clearTimezoneCache } from "@/lib/date-ranges";
 import { dbLogger } from "@/lib/logger";
 
-const DB_PATH = process.env.DATABASE_URL ?? "./data/pinch.db";
+const DB_PATH = process.env.DATABASE_URL ?? "./data/kinti.db";
 
 /** Returns true if the database is populated with sample/seed data. */
 export function hasSampleData(): boolean {

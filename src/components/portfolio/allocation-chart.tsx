@@ -5,6 +5,7 @@ import { Pie, PieChart, Cell, Tooltip } from "recharts";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { formatCurrency } from "@/lib/format";
 import type { AllocationResult } from "@/lib/validators/portfolio-reports";
 
 const FALLBACK_COLORS = [
@@ -28,13 +29,6 @@ interface AllocationChartProps {
   data: AllocationResult;
 }
 
-function formatEuros(amount: number): string {
-  return new Intl.NumberFormat("en-IE", {
-    style: "currency",
-    currency: "EUR",
-  }).format(amount);
-}
-
 function CustomTooltip({
   active,
   payload,
@@ -48,7 +42,7 @@ function CustomTooltip({
     <div className="bg-background border-border rounded-md border px-3 py-1.5 text-xs shadow-sm">
       <p className="font-medium">{entry.name}</p>
       <p className="text-muted-foreground">
-        {formatEuros(entry.value)} &middot; {entry.pct.toFixed(1)}%
+        {formatCurrency(entry.value)} &middot; {entry.pct.toFixed(1)}%
       </p>
     </div>
   );

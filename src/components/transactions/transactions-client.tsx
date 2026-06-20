@@ -76,9 +76,13 @@ export function TransactionsClient({
   const initialFilters = useMemo((): TransactionFilters => {
     const categoryId = searchParams.get("categoryId");
     const recurringId = searchParams.get("recurringId");
+    const dateFrom = searchParams.get("dateFrom");
+    const dateTo = searchParams.get("dateTo");
     const overrides: Partial<TransactionFilters> = {};
     if (categoryId) overrides.categoryId = categoryId;
     if (recurringId) overrides.recurringId = recurringId;
+    if (dateFrom) overrides.dateFrom = dateFrom;
+    if (dateTo) overrides.dateTo = dateTo;
     return { ...EMPTY_FILTERS, ...overrides };
   }, [searchParams]);
 
@@ -315,6 +319,7 @@ export function TransactionsClient({
 
       {/* Add form dialog */}
       <TransactionFormDialog
+        key={String(showAddForm)}
         open={showAddForm}
         onOpenChange={setShowAddForm}
         categories={categories}

@@ -189,6 +189,7 @@ export function BudgetsClient({
 
       {/* Create dialog */}
       <BudgetFormDialog
+        key={String(showForm)}
         open={showForm}
         onOpenChange={setShowForm}
         categories={categories}

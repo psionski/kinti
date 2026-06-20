@@ -83,6 +83,8 @@ export class FrankfurterProvider implements FinancialDataProvider {
         symbol: code,
         name,
         type: "currency",
+        // For an FX provider the symbol *is* the listing currency.
+        currency: code,
       }));
   }
 

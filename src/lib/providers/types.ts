@@ -4,6 +4,7 @@ import { z } from "zod";
 
 export const ProviderNameSchema = z.enum([
   "frankfurter",
+  "fawazahmed",
   "ecb",
   "coingecko",
   "open-exchange-rates",
@@ -65,4 +66,11 @@ export interface SymbolSearchResult {
   symbol: string;
   name: string;
   type?: string; // "crypto", "stock", "etf", etc.
+  /**
+   * ISO 4217 of the listing's denomination currency, when the provider knows
+   * it. Helps users disambiguate cross-listed instruments (SHEL on LSE in GBP
+   * vs SHEL on NYSE in USD) and lets the asset create form pre-fill the
+   * currency field. Optional because not every provider exposes it.
+   */
+  currency?: string;
 }

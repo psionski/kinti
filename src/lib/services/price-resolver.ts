@@ -4,12 +4,10 @@ import * as schema from "@/lib/db/schema";
 import { assetPrices, assetLots } from "@/lib/db/schema";
 import type { AssetResponse } from "@/lib/validators/assets";
 import { isoToday, offsetDate } from "@/lib/date-ranges";
+import { getBaseCurrency } from "@/lib/format";
 import { findCachedPrice } from "./financial-data";
 
 type Db = BetterSQLite3Database<typeof schema>;
-
-/** Base currency for the app. All portfolio-level valuations are in this currency. */
-const BASE_CURRENCY = "EUR";
 
 export type PriceSource = "user" | "market" | "lot" | "deposit";
 
@@ -26,17 +24,19 @@ export interface ResolvedPrice {
  * it defaults to today, so CRUD and reporting paths behave identically.
  *
  * Resolution order:
- * 1. Deposit identity — EUR deposits: price is always 1, no DB needed
+ * 1. Deposit identity — base-currency deposits: price is always 1, no DB needed
  * 2. User override — asset_prices entry
  * 3. Provider data — for each (provider, symbol) in symbolMap, look up market_prices.
  *    This covers crypto, stocks, AND exchange rates (all stored in one table).
- *    For exchange rates the lookup uses (symbol=currency_code, currency=EUR).
+ *    For exchange rates the lookup uses (symbol=currency_code, currency=<base>).
  * 4. Lot cost basis — most recent lot's price_per_unit
  */
 export function resolvePrice(db: Db, asset: AssetResponse, date?: string): ResolvedPrice | null {
   const effectiveDate = date ?? isoToday();
-  // Step 1: Deposit identity — EUR deposits are always €1/unit, skip SQL
-  if (asset.type === "deposit" && asset.currency === BASE_CURRENCY) {
+  const baseCurrency = getBaseCurrency();
+
+  // Step 1: Deposit identity — base-currency deposits are always 1 unit/unit, skip SQL
+  if (asset.type === "deposit" && asset.currency === baseCurrency) {
     return { price: 1, source: "deposit" };
   }
 
@@ -53,9 +53,9 @@ export function resolvePrice(db: Db, asset: AssetResponse, date?: string): Resol
       const mp = findCachedPrice(db, symbol, asset.currency, effectiveDate);
       if (mp) return { price: mp.price, source: "market" };
 
-      // Try with base currency (exchange rates: symbol=USD, currency=EUR)
-      if (asset.currency !== BASE_CURRENCY) {
-        const xr = findCachedPrice(db, symbol, BASE_CURRENCY, effectiveDate);
+      // Try with base currency (exchange rates: symbol=<currency>, currency=<base>)
+      if (asset.currency !== baseCurrency) {
+        const xr = findCachedPrice(db, symbol, baseCurrency, effectiveDate);
         if (xr) return { price: xr.price, source: "market" };
       }
     }

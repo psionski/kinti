@@ -3,7 +3,7 @@ import { RestoreBackupSchema } from "@/lib/validators/backups";
 import { runBackup, listBackups, restoreBackup } from "@/lib/services/backup";
 import { ok } from "@/lib/mcp/response";
 
-const DB_PATH = process.env.DATABASE_URL ?? "./data/pinch.db";
+const DB_PATH = process.env.DATABASE_URL ?? "./data/kinti.db";
 
 export function registerBackupTools(server: McpServer): void {
   server.registerTool(

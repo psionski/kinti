@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CurrencyPicker } from "@/components/settings/currency-picker";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SymbolSearch } from "./symbol-search";
+import { getBaseCurrency } from "@/lib/format";
 import type { AssetType, AssetWithMetrics, SymbolMap } from "@/lib/validators/assets";
 
 interface AssetFormDialogProps {
@@ -56,12 +58,26 @@ export function AssetFormDialog({
   loading,
 }: AssetFormDialogProps): React.ReactElement {
   const isEdit = !!initialData;
+  const baseCurrency = getBaseCurrency();
   const [name, setName] = useState(initialData?.name ?? "");
   const [type, setType] = useState<string>(initialData?.type ?? "deposit");
-  const [currency, setCurrency] = useState(initialData?.currency ?? "EUR");
+  const [currency, setCurrency] = useState(initialData?.currency ?? baseCurrency);
+  const [currencyDirty, setCurrencyDirty] = useState(false);
   const [symbolMap, setSymbolMap] = useState<SymbolMap>(initSymbolMap(initialData));
   const [icon, setIcon] = useState(initialData?.icon ?? "");
   const [error, setError] = useState("");
+
+  /**
+   * Auto-fill the currency field from a symbol search result, but only if the
+   * user hasn't manually typed in the field yet. Cross-listed instruments
+   * (SHEL on LSE in GBP vs NYSE in USD) keep the field editable so the user
+   * can override.
+   */
+  function handleCurrencyHint(hinted: string): void {
+    if (!isEdit && !currencyDirty) {
+      setCurrency(hinted.toUpperCase());
+    }
+  }
 
   function handleSubmit(e: React.FormEvent): void {
     e.preventDefault();
@@ -119,17 +135,21 @@ export function AssetFormDialog({
             </Select>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="asset-currency">Base currency</Label>
-            <Input
+            <Label htmlFor="asset-currency">Currency</Label>
+            <CurrencyPicker
               id="asset-currency"
               value={currency}
-              onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-              placeholder="EUR"
-              maxLength={10}
+              onChange={(code) => {
+                setCurrency(code);
+                setCurrencyDirty(true);
+              }}
               disabled={loading}
             />
           </div>
-          {(type !== "deposit" || currency !== "EUR") && (
+          {/* Base-currency deposits are pure cash and need no price tracking.
+              Anything else (foreign-currency deposit, investment, crypto)
+              benefits from a price/FX feed. */}
+          {(type !== "deposit" || currency !== baseCurrency) && (
             <div className="space-y-1">
               <Label>
                 {type === "deposit"
@@ -139,6 +159,7 @@ export function AssetFormDialog({
               <SymbolSearch
                 value={symbolMap}
                 onChange={setSymbolMap}
+                onCurrencyHint={handleCurrencyHint}
                 disabled={loading}
                 assetType={type as AssetType}
               />

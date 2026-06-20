@@ -3,7 +3,8 @@
 import { useState, useMemo, useCallback } from "react";
 import { Pie, PieChart, Cell, Label } from "recharts";
 import { ArrowLeft } from "lucide-react";
-import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
+import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
+import { formatCurrency } from "@/lib/format";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { CategorySpendingItem } from "@/lib/validators/reports";
 
@@ -138,6 +139,20 @@ export function CategoryDonutChart({
           <div className="mx-auto w-full max-w-xs">
             <ChartContainer config={chartConfig} className="h-[200px] w-full">
               <PieChart accessibilityLayer key={currentParentId ?? "root"}>
+                <ChartTooltip
+                  content={({ payload }) => {
+                    const item = payload?.[0];
+                    if (!item) return null;
+                    return (
+                      <div className="border-border/50 bg-background rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
+                        <div className="text-foreground font-medium">{item.name}</div>
+                        <div className="text-muted-foreground font-mono">
+                          {formatCurrency(item.value as number)}
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
                 <Pie
                   data={chartData}
                   dataKey="value"

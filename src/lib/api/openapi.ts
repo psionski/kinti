@@ -17,11 +17,12 @@ export function generateOpenApiDocument(): ReturnType<typeof createDocument> {
   return createDocument({
     openapi: "3.1.0",
     info: {
-      title: "Pinch API",
+      title: "Kinti API",
       version: "1.0.0",
       description:
         "Personal finance tracker API. " +
-        "Transfer transaction amounts are signed: negative = cash out (asset purchase), positive = cash in (asset sale).",
+        "Income and expense transactions use positive amounts. " +
+        "For account-linked cash movements, use the asset buy/sell endpoints rather than creating transfers directly.",
     },
     tags: [
       { name: "Transactions", description: "Transaction CRUD and listing" },

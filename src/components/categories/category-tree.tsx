@@ -176,7 +176,7 @@ function CategoryRow({
         </TableCell>
 
         {/* Actions */}
-        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+        <TableCell className="pr-3 text-right" onClick={(e) => e.stopPropagation()}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

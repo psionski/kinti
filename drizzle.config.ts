@@ -5,6 +5,6 @@ export default defineConfig({
   schema: "./src/lib/db/schema.ts",
   dialect: "sqlite",
   dbCredentials: {
-    url: "./data/pinch.db",
+    url: "./data/kinti.db",
   },
 });

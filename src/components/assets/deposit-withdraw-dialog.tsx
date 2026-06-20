@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, getBaseCurrency } from "@/lib/format";
 import type { AssetWithMetrics } from "@/lib/validators/assets";
 
 interface DepositWithdrawDialogProps {
@@ -31,26 +31,6 @@ interface DepositWithdrawDialogProps {
   loading?: boolean;
 }
 
-async function fetchExchangeRate(
-  symbolMap: Record<string, string>,
-  currency: string,
-  date: string
-): Promise<number | null> {
-  try {
-    const params = new URLSearchParams({
-      symbolMap: JSON.stringify(symbolMap),
-      currency,
-      date,
-    });
-    const res = await fetch(`/api/financial/price?${params}`);
-    if (!res.ok) return null;
-    const data = (await res.json()) as { price: number };
-    return data.price;
-  } catch {
-    return null;
-  }
-}
-
 export function DepositWithdrawDialog({
   open,
   onOpenChange,
@@ -60,44 +40,61 @@ export function DepositWithdrawDialog({
   loading,
 }: DepositWithdrawDialogProps): React.ReactElement {
   const today = isoToday();
-  const isEur = asset.currency === "EUR";
+  const baseCurrency = getBaseCurrency();
+  // Base-currency deposits are pure cash and need no FX preview. Foreign-
+  // currency deposits show a read-only base-currency equivalent fetched from
+  // the same FX provider chain that the server uses at write time.
+  const isForeign = asset.currency !== baseCurrency;
 
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(today);
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
 
-  // For non-EUR deposits, exchange rate is shown if symbolMap is available.
-  const willFetchRate = !isEur && !!asset.symbolMap;
-  const [nonEurRate, setNonEurRate] = useState("");
-  const [fetchingNonEurRate, setFetchingNonEurRate] = useState(willFetchRate);
-  const [rateFetchFailed, setRateFetchFailed] = useState(false);
+  // Read-only base-currency preview, refreshed whenever amount or date
+  // changes. Uses /api/financial/convert (same default FX chain as
+  // AssetLotService.toBase) so the user sees exactly the rate that will be
+  // applied at write time — no drift between preview and persisted value.
+  const [basePreview, setBasePreview] = useState<{ base: number; rate: number } | null>(null);
+  const [fetchingPreview, setFetchingPreview] = useState(false);
 
-  // Fetch exchange rate for non-EUR deposits on open
   useEffect(() => {
-    if (!open || isEur || !asset.symbolMap) return;
+    if (!open || !isForeign) {
+      setBasePreview(null);
+      return;
+    }
+    const amt = parseFloat(amount);
+    if (Number.isNaN(amt) || amt <= 0) {
+      setBasePreview(null);
+      return;
+    }
     let cancelled = false;
+    setFetchingPreview(true);
     void (async () => {
-      setFetchingNonEurRate(true);
-      setRateFetchFailed(false);
-      const rate = await fetchExchangeRate(asset.symbolMap!, "EUR", date);
-      if (!cancelled) {
-        if (rate !== null) {
-          setNonEurRate(rate.toFixed(4));
-        } else {
-          setRateFetchFailed(true);
+      const params = new URLSearchParams({
+        amount: String(amt),
+        from: asset.currency,
+        to: baseCurrency,
+        date,
+      });
+      try {
+        const res = await fetch(`/api/financial/convert?${params}`);
+        if (!cancelled && res.ok) {
+          const data = (await res.json()) as { converted: number; rate: number };
+          setBasePreview({ base: data.converted, rate: data.rate });
+        } else if (!cancelled) {
+          setBasePreview(null);
         }
-        setFetchingNonEurRate(false);
+      } catch {
+        if (!cancelled) setBasePreview(null);
+      } finally {
+        if (!cancelled) setFetchingPreview(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [open, isEur, asset.symbolMap, date]);
-
-  // Computed EUR cost for non-EUR deposits
-  const computedEurCost =
-    !isEur && amount && nonEurRate ? parseFloat(amount) * parseFloat(nonEurRate) : null;
+  }, [open, isForeign, amount, date, asset.currency, baseCurrency]);
 
   function handleSubmit(e: React.FormEvent): void {
     e.preventDefault();
@@ -109,26 +106,16 @@ export function DepositWithdrawDialog({
       return;
     }
 
-    if (isEur) {
-      onSubmit({
-        quantity: amt,
-        pricePerUnit: 1,
-        date,
-        description: description.trim() || undefined,
-      });
-    } else {
-      const rate = parseFloat(nonEurRate);
-      if (Number.isNaN(rate) || rate <= 0) {
-        setError("Exchange rate must be a positive number.");
-        return;
-      }
-      onSubmit({
-        quantity: amt,
-        pricePerUnit: rate,
-        date,
-        description: description.trim() || undefined,
-      });
-    }
+    // Deposit assets ALWAYS have pricePerUnit = 1, regardless of currency
+    // (see AssetLotService.assertDepositPrice and BuyAssetSchema). The
+    // foreign-currency conversion happens server-side via toBase(), which
+    // walks the same FX provider chain as our preview above.
+    onSubmit({
+      quantity: amt,
+      pricePerUnit: 1,
+      date,
+      description: description.trim() || undefined,
+    });
   }
 
   const actionLabel = mode === "deposit" ? "Deposit" : "Withdraw";
@@ -160,37 +147,6 @@ export function DepositWithdrawDialog({
             />
           </div>
 
-          {!isEur && (
-            <>
-              <div className="space-y-1">
-                <Label htmlFor="dep-rate">Exchange rate (EUR per 1 {asset.currency})</Label>
-                <div className="relative">
-                  <Input
-                    id="dep-rate"
-                    type="number"
-                    step="any"
-                    min="0"
-                    value={nonEurRate}
-                    onChange={(e) => setNonEurRate(e.target.value)}
-                    placeholder={asset.symbolMap ? "Auto-fetched" : "Enter manually"}
-                    disabled={loading}
-                  />
-                  {fetchingNonEurRate && (
-                    <Loader2 className="text-muted-foreground absolute top-2.5 right-3 size-4 animate-spin" />
-                  )}
-                </div>
-                {rateFetchFailed && (
-                  <p className="text-destructive text-xs">Could not fetch rate. Enter manually.</p>
-                )}
-              </div>
-              {computedEurCost !== null && !Number.isNaN(computedEurCost) && (
-                <p className="text-muted-foreground text-sm">
-                  Cost: {formatCurrency(computedEurCost)}
-                </p>
-              )}
-            </>
-          )}
-
           <div className="space-y-1">
             <Label htmlFor="dep-date">Date</Label>
             <Input
@@ -212,6 +168,33 @@ export function DepositWithdrawDialog({
               disabled={loading}
             />
           </div>
+
+          {isForeign && basePreview && (
+            <div
+              data-testid="deposit-base-preview"
+              className="bg-muted/50 text-muted-foreground rounded-md px-3 py-2 text-xs"
+            >
+              <div className="flex justify-between">
+                <span>Total ({asset.currency})</span>
+                <span className="font-mono">
+                  {formatCurrency(parseFloat(amount), asset.currency)}
+                </span>
+              </div>
+              <div className="text-foreground flex justify-between font-medium">
+                <span>≈ {baseCurrency}</span>
+                <span className="font-mono">{formatCurrency(basePreview.base)}</span>
+              </div>
+              <div className="mt-1 text-[11px] opacity-70">
+                Rate: 1 {asset.currency} = {basePreview.rate.toFixed(4)} {baseCurrency}
+              </div>
+            </div>
+          )}
+          {isForeign && fetchingPreview && !basePreview && (
+            <div className="text-muted-foreground flex items-center gap-2 text-xs">
+              <Loader2 className="size-3 animate-spin" />
+              Fetching exchange rate…
+            </div>
+          )}
 
           {error && <p className="text-destructive text-sm">{error}</p>}
           <DialogFooter>

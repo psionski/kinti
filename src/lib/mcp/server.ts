@@ -3,7 +3,7 @@ import { INSTRUCTIONS } from "./instructions";
 
 export function createMcpServer(): McpServer {
   return new McpServer(
-    { name: "pinch", version: process.env.npm_package_version ?? "0.0.0" },
+    { name: "kinti", version: process.env.npm_package_version ?? "0.0.0" },
     { instructions: INSTRUCTIONS }
   );
 }

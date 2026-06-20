@@ -26,8 +26,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmptyState } from "@/components/shared/empty-state";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, getBaseCurrency } from "@/lib/format";
 import type { TransactionResponse } from "@/lib/validators/transactions";
 import type { CategoryWithCountResponse } from "@/lib/validators/categories";
 
@@ -193,9 +194,22 @@ export function TransactionTable({
                 {category ? category.name : "—"}
               </TableCell>
               <TableCell className="text-right text-sm tabular-nums">
-                <span className={tx.type === "income" ? "text-emerald-600" : "text-foreground"}>
-                  {formatCurrency(tx.amount)}
-                </span>
+                {tx.currency !== getBaseCurrency() ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span
+                        className={tx.type === "income" ? "text-emerald-600" : "text-foreground"}
+                      >
+                        {formatCurrency(tx.amount, tx.currency)}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>≈ {formatCurrency(tx.amountBase)} (base)</TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <span className={tx.type === "income" ? "text-emerald-600" : "text-foreground"}>
+                    {formatCurrency(tx.amount, tx.currency)}
+                  </span>
+                )}
               </TableCell>
               <TableCell onClick={(e) => e.stopPropagation()}>
                 <DropdownMenu>

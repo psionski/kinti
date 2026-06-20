@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/shared/empty-state";
 import { formatCurrency } from "@/lib/format";
 import type { CurrencyExposureItem } from "@/lib/validators/portfolio-reports";
 
@@ -24,7 +25,7 @@ export function CurrencyExposure({ data }: CurrencyExposureProps): React.ReactEl
           <CardTitle>Currency Exposure</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground text-sm">No currency exposure data available.</p>
+          <EmptyState message="No currency exposure data available." />
         </CardContent>
       </Card>
     );

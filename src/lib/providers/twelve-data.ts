@@ -129,6 +129,7 @@ export class TwelveDataProvider implements FinancialDataProvider {
       symbol: item.symbol,
       name: `${item.instrument_name} (${item.symbol})`,
       type: mapInstrumentType(item.instrument_type),
+      currency: item.currency?.toUpperCase(),
     }));
   }
 

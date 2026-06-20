@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { requireTimezone } from "@/lib/api/require-timezone";
+import { requireOnboarding } from "@/lib/api/require-timezone";
 import { getPortfolioService, getPortfolioReportService } from "@/lib/api/services";
 import {
   PortfolioReportsClient,
@@ -10,7 +10,7 @@ import {
 const DEFAULT_WINDOW = "6m" as const;
 
 export default function PortfolioReportsPage(): React.ReactElement {
-  requireTimezone();
+  requireOnboarding();
   const reportService = getPortfolioReportService();
   const portfolio = getPortfolioService().getPortfolio();
   const netWorth = reportService.getNetWorthTimeSeries(DEFAULT_WINDOW, "monthly");

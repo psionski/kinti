@@ -16,42 +16,41 @@ export function registerTransactionTools(server: McpServer): void {
     "create_transaction",
     {
       description:
-        "Add a single transaction. Use list_categories to find valid categoryId values. " +
-        "When someone pays FROM a specific account/wallet (e.g. 'paid from Revolut'): " +
-        "create the expense transaction, then call sell_asset on that asset to reduce its balance. " +
-        "When someone receives money INTO a specific account (e.g. 'Alice sent me 50 EUR to Revolut'): " +
-        "create the income transaction, then call buy_asset on that asset to increase its balance. " +
-        "Transfer amounts are signed: negative = cash out (asset purchase), positive = cash in (asset sale).",
+        "Add a single income or expense transaction. Use list_categories to find valid categoryId values. " +
+        "Optional currency field accepts any ISO 4217 code; defaults to the configured base currency. " +
+        "If the user pays FROM or receives money INTO a specific account/wallet, also call sell_asset/buy_asset " +
+        "on that account so its balance stays accurate (see get_started for the full flow).",
       inputSchema: CreateTransactionSchema,
     },
-    (input) => ok(getTransactionService().create(input))
+    async (input) => ok(await getTransactionService().create(input))
   );
 
   server.registerTool(
     "create_transactions",
     {
       description:
-        "Batch-add multiple transactions in one call. " +
+        "Batch-add multiple income/expense transactions in one call (e.g. line items from a receipt). " +
         "Use list_categories to find valid categoryId values. " +
         "Optionally link all to an uploaded receipt via receiptId. " +
-        "For account-linked transactions (paying from or receiving into a specific account), " +
-        "use create_transaction + buy_asset/sell_asset instead — buy_asset and sell_asset create " +
-        "the transfer transaction automatically and also update the account's holdings.",
+        "Each line item can specify its own currency; defaults to the configured base currency. " +
+        "For transactions tied to a specific account/wallet, use create_transaction + buy_asset/sell_asset " +
+        "instead so the account balance updates too.",
       inputSchema: CreateTransactionsBatchSchema,
     },
-    (input) => ok(getTransactionService().createBatch(input))
+    async (input) => ok(await getTransactionService().createBatch(input))
   );
 
   server.registerTool(
     "update_transaction",
     {
       description:
-        "Update fields on an existing transaction by ID. Only supplied fields are changed.",
+        "Update fields on an existing transaction by ID. Only supplied fields are changed. " +
+        "Updating amount, currency, or date triggers a fresh FX lookup to recompute amount_base.",
       inputSchema: IdSchema.merge(UpdateTransactionSchema),
     },
-    ({ id, ...updates }) => {
+    async ({ id, ...updates }) => {
       const svc = getTransactionService();
-      const result = svc.update(id, updates);
+      const result = await svc.update(id, updates);
       if (!result) throw new Error(`Transaction ${id} not found`);
       return ok(result);
     }
@@ -116,7 +115,7 @@ export function registerTransactionTools(server: McpServer): void {
         "Silently skips IDs that don't exist. Returns the updated transactions.",
       inputSchema: UpdateTransactionsBatchSchema,
     },
-    (input) => ok(getTransactionService().updateBatch(input))
+    async (input) => ok(await getTransactionService().updateBatch(input))
   );
 
   server.registerTool(

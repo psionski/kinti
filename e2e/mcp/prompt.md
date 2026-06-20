@@ -35,7 +35,7 @@ Each agent evaluates:
 ## Execution
 
 1. Launch agents **sequentially** (one at a time), since they share a live database and concurrent mutations could interfere
-2. Each agent **uses the live Pinch MCP tools** — they're installed and available. No need to read source files.
+2. Each agent **uses the live Kinti MCP tools** — they're installed and available. No need to read source files.
 3. Each agent walks through the workflow step by step, noting friction, confusion, or gaps as they go
 4. Each agent cleans up any test data it created (delete transactions, assets, etc.) before finishing
 5. Each agent returns structured notes: discoverability issues, description problems, missing guidance, suggestions

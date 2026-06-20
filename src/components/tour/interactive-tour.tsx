@@ -42,7 +42,7 @@ function buildSteps(router: ReturnType<typeof useRouter>): Step[] {
     {
       target: "body",
       placement: "center",
-      title: "Welcome to Pinch!",
+      title: "Welcome to Kinti!",
       content:
         "Let\u2019s take a quick tour of your personal finance dashboard. " +
         "You can skip this tour at any time.",
@@ -143,7 +143,7 @@ function buildSteps(router: ReturnType<typeof useRouter>): Step[] {
       placement: "top",
       title: "Your Assets",
       content:
-        "Each card represents an asset. Pinch fetches market prices automatically " +
+        "Each card represents an asset. Kinti fetches market prices automatically " +
         "for linked symbols \u2014 click into any asset to see lots, price history, and performance.",
       targetWaitTimeout: 3000,
     },
@@ -164,7 +164,7 @@ function McpHintContent({ origin }: { origin: string }): React.ReactElement {
   const mcpUrl = `${origin}/api/mcp`;
 
   function handleCopy(): void {
-    void navigator.clipboard.writeText(`Connect to the Pinch MCP at ${mcpUrl}`);
+    void navigator.clipboard.writeText(`Connect to the Kinti MCP at ${mcpUrl}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -172,7 +172,7 @@ function McpHintContent({ origin }: { origin: string }): React.ReactElement {
   return (
     <div style={{ textAlign: "left" }}>
       <p style={{ marginBottom: 12 }}>
-        Pinch has a built-in MCP server that lets AI assistants manage your finances — create
+        Kinti has a built-in MCP server that lets AI assistants manage your finances — create
         transactions, scan receipts, query reports, manage budgets, and more.
       </p>
       <p style={{ marginBottom: 8, fontSize: 12, color: "#a3a3a3" }}>
@@ -197,7 +197,7 @@ function McpHintContent({ origin }: { origin: string }): React.ReactElement {
         }}
         title="Click to copy"
       >
-        <span>Connect to the Pinch MCP at {mcpUrl}</span>
+        <span>Connect to the Kinti MCP at {mcpUrl}</span>
         {copied ? (
           <svg
             width="14"

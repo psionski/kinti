@@ -6,18 +6,18 @@ import {
   TrendsSchema,
   TopMerchantsSchema,
   SpendingSummaryResultSchema,
-  CategorySpendingItemSchema,
+  CategoryStatsResultSchema,
   BudgetStatsItemSchema,
-  TrendPointSchema,
-  TopMerchantSchema,
+  TrendsResultSchema,
+  TopMerchantsResultSchema,
 } from "@/lib/validators/reports";
 import { op } from "./helpers";
 
 const SummaryResult = SpendingSummaryResultSchema.meta({ id: "SpendingSummaryResult" });
-const CategorySpendingItem = CategorySpendingItemSchema.meta({ id: "CategorySpendingItem" });
+const CategoryStatsResult = CategoryStatsResultSchema.meta({ id: "CategoryStatsResult" });
 const BudgetStatsItem = BudgetStatsItemSchema.meta({ id: "BudgetStatsItem" });
-const Trend = TrendPointSchema.meta({ id: "TrendPoint" });
-const Merchant = TopMerchantSchema.meta({ id: "TopMerchant" });
+const TrendsResult = TrendsResultSchema.meta({ id: "TrendsResult" });
+const TopMerchantsResult = TopMerchantsResultSchema.meta({ id: "TopMerchantsResult" });
 
 export const reportPaths = {
   "/api/reports/summary": {
@@ -36,7 +36,7 @@ export const reportPaths = {
       summary: "Per-category spending stats with rollups and category metadata",
       tags: ["Reports"],
       query: CategoryStatsSchema,
-      response: z.array(CategorySpendingItem),
+      response: CategoryStatsResult,
       errors: [400, 500],
     }),
   },
@@ -46,7 +46,11 @@ export const reportPaths = {
       summary: "Per-category spending stats augmented with budget amounts for a month",
       tags: ["Reports"],
       query: BudgetStatsSchema,
-      response: z.array(BudgetStatsItem),
+      response: z.object({
+        items: z.array(BudgetStatsItem),
+        inheritedFrom: z.string().nullable(),
+        currency: z.string(),
+      }),
       errors: [400, 500],
     }),
   },
@@ -56,7 +60,7 @@ export const reportPaths = {
       summary: "Month-over-month spending trends",
       tags: ["Reports"],
       query: TrendsSchema,
-      response: z.array(Trend),
+      response: TrendsResult,
       errors: [400, 500],
     }),
   },
@@ -66,7 +70,7 @@ export const reportPaths = {
       summary: "Top merchants by spend",
       tags: ["Reports"],
       query: TopMerchantsSchema,
-      response: z.array(Merchant),
+      response: TopMerchantsResult,
       errors: [400, 500],
     }),
   },

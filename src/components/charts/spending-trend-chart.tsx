@@ -8,7 +8,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatMonth } from "@/lib/format";
+import { formatCurrency, formatCurrencyCompact, formatMonth } from "@/lib/format";
 import type { TrendPoint } from "@/lib/validators/reports";
 
 const chartConfig = {
@@ -42,14 +42,14 @@ export function SpendingTrendChart({ data }: SpendingTrendChartProps): React.Rea
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(value: number) => `€${value}`}
+                tickFormatter={(value: number) => formatCurrencyCompact(value)}
               />
               <ChartTooltip
                 content={
                   <ChartTooltipContent
                     formatter={(value, name) => {
                       const label = chartConfig[name as keyof typeof chartConfig]?.label ?? name;
-                      return `${label}: €${(value as number).toLocaleString("de-DE", { minimumFractionDigits: 2 })}`;
+                      return `${label}: ${formatCurrency(value as number)}`;
                     }}
                   />
                 }

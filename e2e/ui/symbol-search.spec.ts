@@ -44,8 +44,9 @@ test.describe.serial("Symbol Search — provider filtering", () => {
     await waitForPageReady(page);
     await page.getByRole("button", { name: "Add Asset" }).click();
     await page.locator("#asset-name").fill("USD Savings");
-    await page.locator("#asset-currency").clear();
-    await page.locator("#asset-currency").fill("USD");
+    await page.locator("#asset-currency").click();
+    await page.getByPlaceholder("Search currencies...").fill("USD");
+    await page.getByTestId("currency-option-USD").click();
 
     await openSymbolSearchDialog(page);
     await page.getByPlaceholder("Search by name or symbol").fill("USD");
@@ -91,8 +92,9 @@ test.describe("Symbol Search — SSE parsing (mocked)", () => {
     );
 
     await openAssetDialogWithType(page, "Other");
-    await page.locator("#asset-currency").clear();
-    await page.locator("#asset-currency").fill("USD");
+    await page.locator("#asset-currency").click();
+    await page.getByPlaceholder("Search currencies...").fill("USD");
+    await page.getByTestId("currency-option-USD").click();
 
     await openSymbolSearchDialog(page);
     await page.getByPlaceholder("Search by name or symbol").fill("test query");

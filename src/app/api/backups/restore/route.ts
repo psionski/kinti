@@ -4,7 +4,7 @@ import { parseBody, isErrorResponse, handleServiceError } from "@/lib/api/helper
 import { RestoreBackupSchema } from "@/lib/validators/backups";
 import { apiLogger } from "@/lib/logger";
 
-const DB_PATH = process.env.DATABASE_URL ?? "./data/pinch.db";
+const DB_PATH = process.env.DATABASE_URL ?? "./data/kinti.db";
 
 export async function POST(req: Request): Promise<NextResponse> {
   const input = await parseBody(req, RestoreBackupSchema);

@@ -23,7 +23,7 @@ export async function POST(req: Request, ctx: RouteContext): Promise<NextRespons
   if (isErrorResponse(input)) return input;
 
   try {
-    const lot = getAssetLotService().createOpeningLot(id, input);
+    const lot = await getAssetLotService().createOpeningLot(id, input);
     return NextResponse.json(lot, { status: 201 });
   } catch (err) {
     return handleServiceError(err, `Asset ${id} not found`);

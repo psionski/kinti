@@ -12,6 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { AssetHistoryResult } from "@/lib/validators/portfolio-reports";
 import { Temporal } from "@js-temporal/polyfill";
+import { formatCurrency, formatCurrencyCompact } from "@/lib/format";
 
 const chartConfig = {
   value: {
@@ -37,14 +38,6 @@ interface ChartPoint {
 
 function formatShortMonth(date: string): string {
   return Temporal.PlainDate.from(date.slice(0, 10)).toLocaleString("en-US", { month: "short" });
-}
-
-function formatCurrency(amount: number, currency: string): string {
-  return amount.toLocaleString("de-DE", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-  });
 }
 
 export function ValueChart({ data, currency }: ValueChartProps): React.ReactElement {
@@ -89,7 +82,7 @@ export function ValueChart({ data, currency }: ValueChartProps): React.ReactElem
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(v: number) => `${currency === "EUR" ? "\u20AC" : currency}${v}`}
+                tickFormatter={(v: number) => formatCurrencyCompact(v, currency)}
               />
               <ChartTooltip
                 content={

@@ -25,8 +25,12 @@ export function registerAssetTools(server: McpServer): void {
     {
       description:
         "Create a new asset to track in your portfolio. " +
-        "To enable automatic price tracking, call search_symbol first, then pass the result as symbolMap. " +
-        "For EUR deposits, each unit represents €1 — use buy_asset with quantity = EUR amount and pricePerUnit = 1.",
+        "The `currency` field is always an ISO 4217 fiat code (USD, EUR, …) — the currency the asset is " +
+        "denominated/priced in — never a crypto ticker or stock symbol. " +
+        "Deposits (bank/savings/wallets): set currency to the account's currency; no symbolMap needed. " +
+        "Investments: set currency to the listing currency; call search_symbol first and pass the result as symbolMap. " +
+        "Crypto: ASK the user which fiat currency to denominate the holding in (default to the base currency); " +
+        "the crypto ticker goes in symbolMap, never in currency.",
       inputSchema: CreateAssetSchema,
     },
     (input) => {
@@ -43,7 +47,7 @@ export function registerAssetTools(server: McpServer): void {
     {
       description:
         "List all assets with current holdings, cost basis, current value, and P&L. " +
-        "currentValue is null if no price has been recorded (except EUR deposits which assume €1/unit). " +
+        "currentValue is null if no price has been recorded (deposits assume 1 unit = 1 unit of the asset's currency). " +
         "pnl = currentValue - costBasis.",
       inputSchema: z.object({}),
     },
@@ -102,16 +106,16 @@ export function registerAssetTools(server: McpServer): void {
     "buy_asset",
     {
       description:
-        "Record an asset purchase or deposit. Creates a negative-amount transfer transaction (cash out) and adds to holdings. " +
-        "For EUR deposits: pricePerUnit = 1, quantity = EUR amount. " +
-        "For foreign currency deposits: pricePerUnit = EUR exchange rate " +
-        "(use get_price with symbol='USD', currency='EUR' to find the rate).",
+        "Record an asset purchase, or a deposit/contribution into a 'deposit' asset (e.g. money received into a savings account). " +
+        "Kinti handles the cash-side bookkeeping automatically. " +
+        "For ANY 'deposit' asset, regardless of currency: pricePerUnit=1 and quantity=the amount in the asset's currency. " +
+        "For investments/crypto/other: pricePerUnit is the per-unit price in the asset's native currency, quantity is the number of units bought.",
       inputSchema: IdSchema.merge(BuyAssetSchema),
     },
-    (input) => {
+    async (input) => {
       const { id, ...rest } = input;
       try {
-        return ok(getAssetLotService().buy(id, rest));
+        return ok(await getAssetLotService().buy(id, rest));
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Buy failed";
         return err(msg);
@@ -123,15 +127,17 @@ export function registerAssetTools(server: McpServer): void {
     "sell_asset",
     {
       description:
-        "Record an asset sale or withdrawal. Creates a positive-amount transfer transaction (cash in) and reduces holdings. " +
-        "Returns error if quantity exceeds current holdings. " +
-        "For EUR withdrawals: pricePerUnit = 1. For foreign currency: use EUR exchange rate.",
+        "Record an asset sale, or a withdrawal from a 'deposit' asset (e.g. money paid out of a savings account). " +
+        "Kinti handles the cash-side bookkeeping automatically. " +
+        "Errors if quantity exceeds current holdings. " +
+        "Same conventions as buy_asset: deposits use pricePerUnit=1 with quantity=the amount; " +
+        "investments/crypto use the per-unit price in the asset's native currency.",
       inputSchema: IdSchema.merge(SellAssetSchema),
     },
-    (input) => {
+    async (input) => {
       const { id, ...rest } = input;
       try {
-        return ok(getAssetLotService().sell(id, rest));
+        return ok(await getAssetLotService().sell(id, rest));
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Sell failed";
         return err(msg);
@@ -177,7 +183,7 @@ export function registerAssetTools(server: McpServer): void {
     {
       description:
         "List all buy/sell events (lots) for an asset, ordered newest first. " +
-        "Positive quantity = buy/deposit, negative = sell/withdrawal.",
+        "Positive quantity = buy or deposit, negative quantity = sell or withdrawal.",
       inputSchema: IdSchema,
     },
     (input) => {

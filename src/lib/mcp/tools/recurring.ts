@@ -16,7 +16,7 @@ export function registerRecurringTools(server: McpServer): void {
         "Use list_categories to find valid categoryId values.",
       inputSchema: CreateRecurringSchema,
     },
-    (input) => ok(getRecurringService().create(input))
+    async (input) => ok(await getRecurringService().create(input))
   );
 
   server.registerTool(
@@ -78,8 +78,8 @@ export function registerRecurringTools(server: McpServer): void {
         "Idempotent — will not create duplicates. Returns the number of transactions created.",
       inputSchema: z.object({}),
     },
-    () => {
-      const count = getRecurringService().generatePending();
+    async () => {
+      const count = await getRecurringService().generatePending();
       return ok({ generated: count });
     }
   );

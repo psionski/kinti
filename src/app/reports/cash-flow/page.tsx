@@ -1,12 +1,12 @@
 export const dynamic = "force-dynamic";
 
-import { requireTimezone } from "@/lib/api/require-timezone";
+import { requireOnboarding } from "@/lib/api/require-timezone";
 import { getReportService, getCategoryService } from "@/lib/api/services";
 import { ReportsClient, type ReportsData } from "@/components/reports/reports-client";
 import { DEFAULT_PRESET, computePresetRange, computeCompareRange } from "@/lib/date-ranges";
 
 export default function ReportsPage(): React.ReactElement {
-  requireTimezone();
+  requireOnboarding();
   const reportService = getReportService();
   const categoryService = getCategoryService();
 

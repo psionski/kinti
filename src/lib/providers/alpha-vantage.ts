@@ -135,11 +135,15 @@ export class AlphaVantageProvider implements FinancialDataProvider {
     const data = (await res.json()) as AlphaVantageSearchResponse;
     if (!data.bestMatches?.length) return [];
 
+    // Alpha Vantage SYMBOL_SEARCH responses include "8. currency" with the
+    // listing's denomination currency — surface it so the asset form can
+    // pre-fill the field.
     return data.bestMatches.slice(0, 10).map((m) => ({
       provider: this.name,
       symbol: m["1. symbol"],
       name: `${m["2. name"]} (${m["1. symbol"]})`,
       type: m["3. type"]?.toLowerCase() ?? "stock",
+      currency: m["8. currency"]?.toUpperCase(),
     }));
   }
 

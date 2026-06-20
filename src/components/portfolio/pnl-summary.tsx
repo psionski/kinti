@@ -10,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EmptyState } from "@/components/shared/empty-state";
 import { formatCurrency } from "@/lib/format";
 import type { RealizedPnlResult } from "@/lib/validators/portfolio-reports";
 
@@ -43,10 +44,10 @@ export function PnlSummary({ realizedPnl, unrealizedPnl }: PnlSummaryProps): Rea
           <CardTitle>Profit &amp; Loss</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground text-sm">
-            No profit or loss data available yet. P&amp;L will appear once you have asset
-            transactions with price history.
-          </p>
+          <EmptyState
+            message="No profit or loss data available yet."
+            description="P&L will appear once you have asset transactions with price history."
+          />
         </CardContent>
       </Card>
     );

@@ -4,7 +4,7 @@ export const RestoreBackupSchema = z.object({
   filename: z
     .string()
     .min(1)
-    .regex(/^pinch-backup-.+\.db$/, "Invalid backup filename format")
+    .regex(/^kinti-backup-.+\.db$/, "Invalid backup filename format")
     .describe("Backup filename from list_backups"),
 });
 

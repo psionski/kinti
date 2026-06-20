@@ -5,7 +5,24 @@ import { Plus, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getBaseCurrency } from "@/lib/format";
 import { Section } from "./settings-section";
+
+/** Currency symbol for the configured base currency, derived via Intl. */
+function baseCurrencySymbol(): string {
+  const currency = getBaseCurrency();
+  try {
+    const fmt = new Intl.NumberFormat("en", {
+      style: "currency",
+      currency,
+      currencyDisplay: "narrowSymbol",
+    });
+    const part = fmt.formatToParts(0).find((p) => p.type === "currency");
+    return part?.value ?? currency;
+  } catch {
+    return currency;
+  }
+}
 
 interface InvestmentEntry {
   name: string;
@@ -26,6 +43,8 @@ export function InvestmentsSection({
   const [entries, setEntries] = useState<InvestmentEntry[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const baseCurrency = getBaseCurrency();
+  const symbol = baseCurrencySymbol();
 
   async function handleSave(): Promise<void> {
     const valid = entries.filter((e) => e.name.trim() && parseFloat(e.quantity) > 0);
@@ -39,12 +58,12 @@ export function InvestmentsSection({
       for (const entry of valid) {
         const quantity = parseFloat(entry.quantity);
         const costBasis = entry.costBasis.trim() ? parseFloat(entry.costBasis) : 0;
-        const pricePerUnit = costBasis > 0 ? Math.round(costBasis / quantity) : 0;
+        const pricePerUnit = costBasis > 0 ? costBasis / quantity : 0;
 
         const assetRes = await fetch("/api/assets", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: entry.name, type: entry.type, currency: "EUR" }),
+          body: JSON.stringify({ name: entry.name, type: entry.type, currency: baseCurrency }),
         });
         if (!assetRes.ok) continue;
         const asset = await assetRes.json();
@@ -126,7 +145,7 @@ export function InvestmentsSection({
                 <Label className="text-xs">Total cost basis</Label>
                 <div className="relative">
                   <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 text-sm">
-                    &euro;
+                    {symbol}
                   </span>
                   <Input
                     type="number"

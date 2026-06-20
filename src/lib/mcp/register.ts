@@ -51,7 +51,7 @@ export function registerTools(server: McpServer): void {
     "get_started",
     {
       description:
-        "IMPORTANT: Call this tool first to learn what Pinch is, how to use it, " +
+        "IMPORTANT: Call this tool first to learn what Kinti is, how to use it, " +
         "and the conventions all other tools follow (currency format, date handling, onboarding flow).",
       inputSchema: {},
     },

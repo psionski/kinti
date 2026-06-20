@@ -58,10 +58,19 @@ export function PortfolioReportsClient({
             pnlRes.json() as Promise<RealizedPnlResult>,
           ]);
 
-        // Compute unrealized P&L from performance data
-        const totalCostBasis = performance.reduce((s, p) => s + p.costBasis, 0);
-        const totalCurrentValue = performance.reduce((s, p) => s + p.currentValue, 0);
-        const unrealizedPnl = totalCurrentValue - totalCostBasis;
+        // Compute unrealized P&L from performance data using base-currency
+        // numbers so cross-currency assets aggregate correctly. Assets that
+        // don't yet have a current FX rate (currentValueBase === null) are
+        // skipped — partial total beats wrong-unit total.
+        let totalCostBasisBase = 0;
+        let totalCurrentValueBase = 0;
+        for (const p of performance) {
+          if (p.currentValueBase !== null) {
+            totalCostBasisBase += p.costBasisBase;
+            totalCurrentValueBase += p.currentValueBase;
+          }
+        }
+        const unrealizedPnl = totalCurrentValueBase - totalCostBasisBase;
 
         setData({
           netWorth,

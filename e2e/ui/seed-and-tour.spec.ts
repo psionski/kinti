@@ -13,14 +13,14 @@ test.describe.serial("Seed data & interactive tour", () => {
     await page.goto("/");
     await waitForPageReady(page);
     // Joyride overlay should appear within a reasonable time (500ms delay + render)
-    await expect(page.getByText("Welcome to Pinch!")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("Welcome to Kinti!")).toBeVisible({ timeout: 5000 });
   });
 
   test("tutorial can navigate and be skipped", async ({ page }) => {
     await page.goto("/");
     await waitForPageReady(page);
     // Wait for the tour to start
-    await expect(page.getByText("Welcome to Pinch!")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("Welcome to Kinti!")).toBeVisible({ timeout: 5000 });
 
     // Click Next through a few steps (use testid to avoid conflict with Next.js Dev Tools button)
     await page.getByTestId("button-primary").click();
@@ -41,7 +41,7 @@ test.describe.serial("Seed data & interactive tour", () => {
     await settingsSaved;
 
     // Tour should disappear — the overlay/tooltip should be gone
-    await expect(page.getByText("Welcome to Pinch!")).not.toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("Welcome to Kinti!")).not.toBeVisible({ timeout: 5000 });
     // Should be back on dashboard
     await expect(page).toHaveURL("/");
   });

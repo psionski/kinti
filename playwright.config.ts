@@ -37,6 +37,7 @@ export default defineConfig({
         "budgets.spec.ts",
         "recurring.spec.ts",
         "assets.spec.ts",
+        "multi-currency.spec.ts",
         "symbol-search.spec.ts",
         "reports.spec.ts",
         "navigation.spec.ts",

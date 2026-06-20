@@ -107,7 +107,7 @@ describe("MCP infrastructure", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect((body as { result?: { serverInfo?: { name: string } } }).result?.serverInfo?.name).toBe(
-      "pinch"
+      "kinti"
     );
   });
 
@@ -217,7 +217,7 @@ describe("delete_transaction tool", () => {
 
   it("deletes a single transaction by ID", async () => {
     const svc = new TransactionService(db);
-    const tx = svc.create({
+    const tx = await svc.create({
       amount: 1,
       description: "Single",
       date: "2025-06-01",
@@ -233,8 +233,18 @@ describe("delete_transaction tool", () => {
 
   it("deletes multiple transactions when given an array", async () => {
     const svc = new TransactionService(db);
-    const tx1 = svc.create({ amount: 1, description: "A", date: "2025-06-01", type: "expense" });
-    const tx2 = svc.create({ amount: 2, description: "B", date: "2025-06-01", type: "expense" });
+    const tx1 = await svc.create({
+      amount: 1,
+      description: "A",
+      date: "2025-06-01",
+      type: "expense",
+    });
+    const tx2 = await svc.create({
+      amount: 2,
+      description: "B",
+      date: "2025-06-01",
+      type: "expense",
+    });
 
     const res = await POST(toolCallRequest("delete_transaction", { id: [tx1.id, tx2.id] }));
     expect(res.status).toBe(200);

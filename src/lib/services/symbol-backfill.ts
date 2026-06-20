@@ -6,6 +6,7 @@ import type { FinancialDataService } from "./financial-data";
 import type { AssetResponse } from "@/lib/validators/assets";
 import { financialLogger } from "@/lib/logger";
 import { isoToday } from "@/lib/date-ranges";
+import { getBaseCurrency } from "@/lib/format";
 
 type Db = BetterSQLite3Database<typeof schema>;
 
@@ -13,7 +14,7 @@ type Db = BetterSQLite3Database<typeof schema>;
  * Trigger price history backfill for an asset with market symbols.
  * Call this fire-and-forget after creating/updating an asset with a symbolMap.
  * Populates market_prices from the asset's earliest lot date through today,
- * plus exchange rates to EUR for non-EUR deposits.
+ * plus exchange rates to the base currency for non-base-currency deposits.
  */
 export function triggerSymbolBackfill(
   db: Db,
@@ -24,6 +25,7 @@ export function triggerSymbolBackfill(
   if (!symbolMap) return;
 
   const today = isoToday();
+  const baseCurrency = getBaseCurrency();
 
   // Find earliest lot date for this asset
   const earliestLot = db
@@ -40,12 +42,12 @@ export function triggerSymbolBackfill(
   // targets only the providers specified in the asset's configuration.
   void (async () => {
     try {
-      // Backfill symbol priced in asset's own currency (stocks, crypto, EUR deposits)
+      // Backfill symbol priced in asset's own currency (stocks, crypto, base-currency deposits)
       await financialDataService.ensurePriceHistory(symbolMap, asset.currency, from, today);
 
-      // Non-EUR deposits need the exchange rate to EUR (e.g. USD→EUR)
-      if (asset.type === "deposit" && asset.currency !== "EUR") {
-        await financialDataService.ensurePriceHistory(symbolMap, "EUR", from, today);
+      // Foreign-currency deposits need the exchange rate to the base currency
+      if (asset.type === "deposit" && asset.currency !== baseCurrency) {
+        await financialDataService.ensurePriceHistory(symbolMap, baseCurrency, from, today);
       }
     } catch (err) {
       financialLogger.warn({ assetId: asset.id, err }, "Symbol backfill failed");

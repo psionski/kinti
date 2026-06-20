@@ -18,7 +18,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   if (isErrorResponse(input)) return input;
 
   try {
-    const tx = getTransactionService().create(input);
+    const tx = await getTransactionService().create(input);
     return NextResponse.json(tx, { status: 201 });
   } catch (err) {
     return handleServiceError(err, "Referenced category or receipt not found");
@@ -30,7 +30,7 @@ export async function PATCH(req: Request): Promise<NextResponse> {
   if (isErrorResponse(input)) return input;
 
   try {
-    const results = getTransactionService().updateBatch(input);
+    const results = await getTransactionService().updateBatch(input);
     return NextResponse.json(results);
   } catch (err) {
     return handleServiceError(err, "Referenced category not found");

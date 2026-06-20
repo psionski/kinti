@@ -25,12 +25,16 @@ export class PortfolioService {
     let pnlTotal = 0;
     let hasSomePnl = false;
 
+    // Sum the base-currency equivalents — `cashBalance` is already in base, so
+    // mixing native asset values into the total would corrupt the unit. Assets
+    // whose currentValueBase is null (no FX rate cached) are silently skipped:
+    // a partial total is more useful than a wrong one.
     for (const a of allAssets) {
-      if (a.currentValue !== null) {
-        totalAssetValue += a.currentValue;
+      if (a.currentValueBase !== null) {
+        totalAssetValue += a.currentValueBase;
       }
-      if (a.pnl !== null) {
-        pnlTotal += a.pnl;
+      if (a.pnlBase !== null) {
+        pnlTotal += a.pnlBase;
         hasSomePnl = true;
       }
     }
@@ -39,15 +43,17 @@ export class PortfolioService {
     // Show partial P&L from assets that have a known price; null if none do (incl. no assets).
     const pnl = hasSomePnl ? pnlTotal : null;
 
-    // Allocation percentages
+    // Allocation percentages — also in base, so cross-currency assets compare apples-to-apples.
     const allocation = allAssets
-      .filter((a) => a.currentValue !== null && a.currentValue > 0)
+      .filter((a) => a.currentValueBase !== null && a.currentValueBase > 0)
       .map((a) => ({
         assetId: a.id,
         name: a.name,
-        currentValue: a.currentValue!,
+        currentValue: a.currentValueBase!,
         pct:
-          totalAssetValue > 0 ? Math.round((a.currentValue! / totalAssetValue) * 10000) / 100 : 0,
+          totalAssetValue > 0
+            ? Math.round((a.currentValueBase! / totalAssetValue) * 10000) / 100
+            : 0,
       }));
 
     return {

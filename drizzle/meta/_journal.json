@@ -57,6 +57,20 @@
       "when": 1775600000000,
       "tag": "0007_decimal_amounts",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1775598148312,
+      "tag": "0008_eager_blue_blade",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1775604097219,
+      "tag": "0009_nosy_serpent_society",
+      "breakpoints": true
     }
   ]
 }

@@ -133,6 +133,7 @@ export class ExchangeRateApiProvider implements FinancialDataProvider {
         symbol: code,
         name,
         type: "currency",
+        currency: code,
       }));
   }
 

@@ -10,6 +10,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCurrency } from "@/lib/format";
 import type { TransferSummaryItem } from "@/lib/validators/portfolio-reports";
 
 const chartConfig = {
@@ -48,15 +49,11 @@ export function TransferFlow({ data }: TransferFlowProps): React.ReactElement {
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(value: number) => `€${value}`}
+                tickFormatter={(value: number) => formatCurrency(value)}
               />
               <ChartTooltip
                 content={
-                  <ChartTooltipContent
-                    formatter={(value) =>
-                      `€${(value as number).toLocaleString("de-DE", { minimumFractionDigits: 2 })}`
-                    }
-                  />
+                  <ChartTooltipContent formatter={(value) => formatCurrency(value as number)} />
                 }
               />
               <ChartLegend content={<ChartLegendContent />} />

@@ -1,8 +1,8 @@
 import { Temporal } from "@js-temporal/polyfill";
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "@/lib/db/schema";
-import { marketPrices } from "@/lib/db/schema";
+import { assets, marketPrices, transactions } from "@/lib/db/schema";
 import type {
   FinancialDataProvider,
   PriceResult,
@@ -14,6 +14,7 @@ import type { SettingsService } from "./settings";
 import { getProvider, getProvidersByAssetType } from "@/lib/providers/registry";
 import { financialLogger } from "@/lib/logger";
 import { isoToday, daysBetween, normalizeUtc, offsetDate } from "@/lib/date-ranges";
+import { getBaseCurrency, roundToCurrency } from "@/lib/format";
 
 type Db = BetterSQLite3Database<typeof schema>;
 
@@ -37,6 +38,18 @@ export interface ConvertResult {
 
 /** Factory type for instantiating providers by name. Used for DI in tests. */
 export type ProviderFactory = (name: ProviderName) => FinancialDataProvider | null;
+
+/**
+ * Default FX provider chain for generic currency lookups (no asset involved).
+ * Frankfurter first (clean ECB data), fawazahmed0 as a free fallback covering
+ * exotic currencies and pairs Frankfurter dropped (e.g. EUR/RUB post-2022).
+ */
+function defaultFxSymbolMap(symbol: string): SymbolMap {
+  return {
+    frankfurter: symbol,
+    fawazahmed: symbol,
+  };
+}
 
 // ─── Shared Cache Helpers ─────────────────────────────────────────────────────
 
@@ -191,14 +204,16 @@ export class FinancialDataService {
   }
 
   /**
-   * Convert an amount from one currency to another.
-   * The symbolMap maps providers to the symbol for the source currency.
+   * Convert an amount from one currency to another. The symbolMap is now
+   * optional — when omitted, the default FX provider chain is used
+   * (Frankfurter → fawazahmed0). Pass an explicit symbolMap only for asset-
+   * coupled lookups (e.g. crypto/stocks).
    */
   async convert(
     amount: number,
     from: string,
     to: string,
-    symbolMap: SymbolMap,
+    symbolMap?: SymbolMap,
     date?: string
   ): Promise<ConvertResult | null> {
     if (from === to) {
@@ -211,16 +226,165 @@ export class FinancialDataService {
       };
     }
 
-    const rateResult = await this.getPrice(symbolMap, to, date);
+    const rateResult = await this.getPrice(symbolMap ?? defaultFxSymbolMap(from), to, date);
     if (!rateResult) return null;
 
     return {
-      converted: Math.round(amount * rateResult.price * 100) / 100,
+      converted: roundToCurrency(amount * rateResult.price, to),
       rate: rateResult.price,
       date: rateResult.date,
       provider: rateResult.provider,
       stale: rateResult.stale,
     };
+  }
+
+  // ─── Base Currency Conversion ──────────────────────────────────────────────
+
+  /**
+   * Convert an amount in `from` currency to the base currency on `date` using
+   * the default FX provider chain (Frankfurter → fawazahmed0). Returns the
+   * converted amount or null if no provider can resolve the rate.
+   *
+   * Used by transaction-create paths to compute `amount_base` synchronously
+   * at write time. The denormalized base amount means reports never need
+   * FX joins, at the cost of failing the write when no rate is available
+   * (which is the desired behaviour — never store an unconvertible amount).
+   */
+  async convertToBase(
+    amount: number,
+    from: string,
+    date?: string
+  ): Promise<{ amountBase: number; rate: number; date: string } | null> {
+    const base = getBaseCurrency();
+    const effectiveDate = date ?? isoToday();
+    if (from === base) {
+      return { amountBase: roundToCurrency(amount, base), rate: 1, date: effectiveDate };
+    }
+    const result = await this.getPrice(defaultFxSymbolMap(from), base, effectiveDate);
+    if (!result) return null;
+    return {
+      amountBase: roundToCurrency(amount * result.price, base),
+      rate: result.price,
+      date: result.date,
+    };
+  }
+
+  /**
+   * Verify that a rate from `currency` to the base currency is resolvable
+   * for the given date. Used at transaction-create time to fail fast with a
+   * clear error when a user picks a currency no provider supports.
+   *
+   * Returns null on success or an error message on failure.
+   */
+  async assertCurrencySupported(currency: string, date?: string): Promise<string | null> {
+    const base = getBaseCurrency();
+    if (currency === base) return null;
+    const result = await this.convertToBase(1, currency, date);
+    if (result === null) {
+      return `Currency ${currency} isn't supported by any configured FX provider — cannot convert to base ${base}.`;
+    }
+    return null;
+  }
+
+  /**
+   * Backfill missing FX rates for all currencies that appear in transactions
+   * over a date range. Bounded by the actual (date, currency) pairs in use,
+   * so this is cheap even on large databases.
+   *
+   * Called nightly from the 04:00 cron to keep historical aggregations
+   * accurate as new providers fill gaps over time. Also safe to call
+   * on-demand from a UI button or MCP tool.
+   */
+  async backfillTransactionRates(): Promise<{ pairs: number; fetched: number }> {
+    const base = getBaseCurrency();
+    // Find every (date, currency) pair that has a transaction in a non-base
+    // currency and no cached rate yet. The transactions table won't have a
+    // currency column on day 1 of the migration — guard the schema check.
+    const hasCurrencyCol = tableHasColumn(this.db, "transactions", "currency");
+    if (!hasCurrencyCol) {
+      return { pairs: 0, fetched: 0 };
+    }
+
+    const rows = this.db
+      .all<{ date: string; currency: string }>(
+        sql`SELECT DISTINCT t.date, t.currency
+            FROM ${transactions} t
+            LEFT JOIN ${marketPrices} mp
+              ON mp.symbol = t.currency
+             AND mp.currency = ${base}
+             AND mp.date = t.date
+            WHERE t.currency != ${base}
+              AND mp.id IS NULL`
+      )
+      .filter((r) => r.date && r.currency);
+
+    let fetched = 0;
+    for (const { date, currency } of rows) {
+      try {
+        const result = await this.getPrice(defaultFxSymbolMap(currency), base, date);
+        if (result) fetched++;
+      } catch (err) {
+        financialLogger.warn(
+          { currency, date, err },
+          "FX backfill: failed to fetch rate for transaction date"
+        );
+      }
+    }
+
+    if (rows.length > 0) {
+      financialLogger.info(
+        { base, pairs: rows.length, fetched },
+        "Transaction FX rate backfill complete"
+      );
+    }
+
+    return { pairs: rows.length, fetched };
+  }
+
+  /**
+   * Ensure today's FX rate is cached for every foreign-currency asset in the
+   * portfolio. This is the asset-side counterpart to `backfillTransactionRates`
+   * — opening lots created via `createOpeningLot` don't generate a transaction,
+   * so the transaction-table walk wouldn't pick them up. Without a fresh rate
+   * the synchronous read paths (attachMetrics, allocation, currency exposure,
+   * net worth) silently drop foreign assets from cross-currency totals.
+   *
+   * Called nightly from the 04:00 cron alongside `backfillTransactionRates`.
+   * Also safe to call on-demand from a UI button or MCP tool.
+   */
+  async backfillAssetCurrencyRates(): Promise<{ currencies: number; fetched: number }> {
+    const base = getBaseCurrency();
+    const today = isoToday();
+
+    // Distinct asset currencies that aren't the base. Cheap query — usually
+    // a handful of rows.
+    const rows = this.db
+      .selectDistinct({ currency: assets.currency })
+      .from(assets)
+      .all()
+      .filter((r) => r.currency && r.currency !== base);
+
+    let fetched = 0;
+    for (const { currency } of rows) {
+      try {
+        const result = await this.getPrice(defaultFxSymbolMap(currency), base, today);
+        if (result) fetched++;
+      } catch (err) {
+        financialLogger.warn(
+          { currency, date: today, err },
+          "Asset FX backfill: failed to fetch today's rate"
+        );
+      }
+    }
+
+    if (rows.length > 0) {
+      financialLogger.info(
+        { base, currencies: rows.length, fetched },
+        "Asset FX rate backfill complete"
+      );
+    }
+
+    return { currencies: rows.length, fetched };
   }
 
   // ─── Range Backfill ────────────────────────────────────────────────────────
@@ -406,3 +570,17 @@ function symbolMapEntries(symbolMap: SymbolMap): Array<[ProviderName, string]> {
 
 // Re-export for convenience
 export type { PriceResult };
+
+/**
+ * Returns true if `table` has a column named `column`. Used to keep code
+ * forward-compatible with migrations that haven't run yet (e.g. the cron
+ * job runs before the user has migrated to schemas with the column).
+ */
+function tableHasColumn(db: Db, table: string, column: string): boolean {
+  try {
+    const rows = db.all<{ name: string }>(sql.raw(`PRAGMA table_info(${table})`));
+    return rows.some((r) => r.name === column);
+  } catch {
+    return false;
+  }
+}

@@ -1,13 +1,104 @@
 import { Temporal } from "@js-temporal/polyfill";
 
-const currencyFormatter = new Intl.NumberFormat("de-DE", {
-  style: "currency",
-  currency: "EUR",
-});
+// ─── Base Currency Cache ──────────────────────────────────────────────────────
 
-/** Format EUR amount as display string, e.g. 123.45 → "123,45 €" */
-export function formatCurrency(amount: number): string {
-  return currencyFormatter.format(amount);
+// Stored on globalThis so the value survives Next.js re-bundling across
+// server components, API routes, and instrumentation — same pattern as the
+// timezone cache in date-ranges.ts.
+const g = globalThis as unknown as { __kintiBaseCurrency?: string };
+
+const FALLBACK_BASE_CURRENCY = "EUR";
+
+/**
+ * Returns the cached base currency. Defaults to EUR until
+ * setBaseCurrencyCache() is called by instrumentation or the client init.
+ * Kinti is base-currency-immutable per database, so this value never changes
+ * during a process lifetime once set.
+ */
+export function getBaseCurrency(): string {
+  return g.__kintiBaseCurrency ?? FALLBACK_BASE_CURRENCY;
+}
+
+/** Set the cached base currency. Called at server startup from settings DB. */
+export function setBaseCurrencyCache(currency: string): void {
+  g.__kintiBaseCurrency = currency;
+}
+
+/** Clear the cached base currency. Used by tests. */
+export function clearBaseCurrencyCache(): void {
+  g.__kintiBaseCurrency = undefined;
+}
+
+// ─── Currency Formatting (per-currency) ───────────────────────────────────────
+
+/**
+ * Display locale used for currency formatting. Independent of the user's
+ * system locale — keeps screenshots and tests reproducible. The currency
+ * itself decides the symbol and the number of decimals.
+ */
+const DISPLAY_LOCALE = "de-DE";
+
+const formatterCache = new Map<string, Intl.NumberFormat>();
+
+function getFormatter(currency: string): Intl.NumberFormat {
+  let f = formatterCache.get(currency);
+  if (!f) {
+    f = new Intl.NumberFormat(DISPLAY_LOCALE, { style: "currency", currency });
+    formatterCache.set(currency, f);
+  }
+  return f;
+}
+
+const compactFormatterCache = new Map<string, Intl.NumberFormat>();
+
+function getCompactFormatter(currency: string): Intl.NumberFormat {
+  let f = compactFormatterCache.get(currency);
+  if (!f) {
+    f = new Intl.NumberFormat(DISPLAY_LOCALE, {
+      style: "currency",
+      currency,
+      notation: "compact",
+      maximumFractionDigits: 1,
+    });
+    compactFormatterCache.set(currency, f);
+  }
+  return f;
+}
+
+/**
+ * Format a monetary amount. Decimal precision is determined by the currency
+ * itself via Intl (JPY = 0, USD/EUR = 2, BHD = 3, etc.) — never assume 2.
+ *
+ * Defaults to the configured base currency, which is correct for any value
+ * that came out of a base-currency aggregation (reports, budgets, net worth,
+ * cash balance). Pass an explicit `currency` for native amounts (per-asset,
+ * per-transaction).
+ */
+export function formatCurrency(amount: number, currency: string = getBaseCurrency()): string {
+  return getFormatter(currency).format(amount);
+}
+
+/**
+ * Compact currency formatter for chart axes and tight UI labels.
+ * Produces e.g. "1,2 Tsd. €" / "1.2K €" — suitable for Y-axis ticks where
+ * the full `formatCurrency` output is too wide.
+ */
+export function formatCurrencyCompact(
+  amount: number,
+  currency: string = getBaseCurrency()
+): string {
+  return getCompactFormatter(currency).format(amount);
+}
+
+/**
+ * Round an amount to its currency's natural precision. Use at service
+ * boundaries where decimal noise from float math needs to be cleaned up.
+ * Replaces the old hardcoded `Math.round(x * 100) / 100`.
+ */
+export function roundToCurrency(amount: number, currency: string = getBaseCurrency()): number {
+  const fractionDigits = getFormatter(currency).resolvedOptions().maximumFractionDigits ?? 2;
+  const factor = 10 ** fractionDigits;
+  return Math.round(amount * factor) / factor;
 }
 
 /**

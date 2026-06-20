@@ -1,6 +1,7 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { and, eq, gte, lte, sql, type SQL } from "drizzle-orm";
-import { getCurrentMonth } from "@/lib/date-ranges";
+import { getCurrentMonth, isoToday } from "@/lib/date-ranges";
+import { getBaseCurrency } from "@/lib/format";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "@/lib/db/schema";
 import { transactions, categories, assetLots, assets } from "@/lib/db/schema";
@@ -11,14 +12,20 @@ import {
   type CategoryStatsInput,
   type BudgetStatsInput,
   type TrendsInput,
+  type DailySpendInput,
   type TopMerchantsInput,
   type NetIncomeInput,
   type SpendingGroup,
   type CategorySpendingItem,
   type BudgetStatsItem,
   type TrendPoint,
+  type DailySpendPoint,
   type TopMerchant,
   type SpendingSummaryResult,
+  type CategoryStatsResult,
+  type TrendsResult,
+  type DailySpendResult,
+  type TopMerchantsResult,
   type NetIncomeResult,
   type CashBalanceResult,
   type TransferGroup,
@@ -42,7 +49,7 @@ function periodTotal(db: Db, dateFrom: string, dateTo: string, type: "income" | 
 
   const [row] = db
     .select({
-      total: sql<number>`coalesce(sum(${transactions.amount}), 0)`.mapWith(Number),
+      total: sql<number>`coalesce(sum(${transactions.amountBase}), 0)`.mapWith(Number),
       count: sql<number>`count(*)`.mapWith(Number),
     })
     .from(transactions)
@@ -102,14 +109,14 @@ export class ReportService {
         .select({
           categoryId: transactions.categoryId,
           categoryName: categories.name,
-          total: sql<number>`coalesce(sum(${transactions.amount}), 0)`.mapWith(Number),
+          total: sql<number>`coalesce(sum(${transactions.amountBase}), 0)`.mapWith(Number),
           count: sql<number>`count(*)`.mapWith(Number),
         })
         .from(transactions)
         .leftJoin(categories, eq(transactions.categoryId, categories.id))
         .where(where)
         .groupBy(transactions.categoryId)
-        .orderBy(sql`sum(${transactions.amount}) DESC`)
+        .orderBy(sql`sum(${transactions.amountBase}) DESC`)
         .all();
 
       const compareMap = new Map<number | null, number>();
@@ -119,7 +126,7 @@ export class ReportService {
         const cRows = this.db
           .select({
             categoryId: transactions.categoryId,
-            total: sql<number>`coalesce(sum(${transactions.amount}), 0)`.mapWith(Number),
+            total: sql<number>`coalesce(sum(${transactions.amountBase}), 0)`.mapWith(Number),
           })
           .from(transactions)
           .where(and(...cFilters))
@@ -139,7 +146,7 @@ export class ReportService {
       const rows = this.db
         .select({
           month: sql<string>`strftime('%Y-%m', ${transactions.date})`.mapWith(String),
-          total: sql<number>`coalesce(sum(${transactions.amount}), 0)`.mapWith(Number),
+          total: sql<number>`coalesce(sum(${transactions.amountBase}), 0)`.mapWith(Number),
           count: sql<number>`count(*)`.mapWith(Number),
         })
         .from(transactions)
@@ -155,7 +162,7 @@ export class ReportService {
         const cRows = this.db
           .select({
             month: sql<string>`strftime('%Y-%m', ${transactions.date})`.mapWith(String),
-            total: sql<number>`coalesce(sum(${transactions.amount}), 0)`.mapWith(Number),
+            total: sql<number>`coalesce(sum(${transactions.amountBase}), 0)`.mapWith(Number),
           })
           .from(transactions)
           .where(and(...cFilters))
@@ -177,13 +184,13 @@ export class ReportService {
           merchant: sql<string>`coalesce(${transactions.merchant}, '(no merchant)')`.mapWith(
             String
           ),
-          total: sql<number>`coalesce(sum(${transactions.amount}), 0)`.mapWith(Number),
+          total: sql<number>`coalesce(sum(${transactions.amountBase}), 0)`.mapWith(Number),
           count: sql<number>`count(*)`.mapWith(Number),
         })
         .from(transactions)
         .where(where)
         .groupBy(transactions.merchant)
-        .orderBy(sql`sum(${transactions.amount}) DESC`)
+        .orderBy(sql`sum(${transactions.amountBase}) DESC`)
         .all();
 
       const compareMap = new Map<string, number>();
@@ -195,7 +202,7 @@ export class ReportService {
             merchant: sql<string>`coalesce(${transactions.merchant}, '(no merchant)')`.mapWith(
               String
             ),
-            total: sql<number>`coalesce(sum(${transactions.amount}), 0)`.mapWith(Number),
+            total: sql<number>`coalesce(sum(${transactions.amountBase}), 0)`.mapWith(Number),
           })
           .from(transactions)
           .where(and(...cFilters))
@@ -221,7 +228,8 @@ export class ReportService {
           assetName: assets.name,
           assetType: assets.type,
           quantity: assetLots.quantity,
-          amount: transactions.amount,
+          // Use base-currency equivalent so cross-currency lots aggregate correctly.
+          amount: transactions.amountBase,
         })
         .from(assetLots)
         .innerJoin(assets, eq(assetLots.assetId, assets.id))
@@ -260,10 +268,11 @@ export class ReportService {
       comparePeriod,
       groups,
       transfers,
+      currency: getBaseCurrency(),
     };
   }
 
-  getCategoryStats(input: CategoryStatsInput): CategorySpendingItem[] {
+  getCategoryStats(input: CategoryStatsInput): CategoryStatsResult {
     // Normalize date range
     let dateFrom: string;
     let dateTo: string;
@@ -286,7 +295,7 @@ export class ReportService {
     const spendRows = this.db
       .select({
         categoryId: transactions.categoryId,
-        total: sql<number>`coalesce(sum(${transactions.amount}), 0)`.mapWith(Number),
+        total: sql<number>`coalesce(sum(${transactions.amountBase}), 0)`.mapWith(Number),
         count: sql<number>`count(*)`.mapWith(Number),
       })
       .from(transactions)
@@ -377,12 +386,13 @@ export class ReportService {
     }
 
     items.sort((a, b) => b.rollupTotal - a.rollupTotal);
-    return items;
+    return { items, currency: getBaseCurrency() };
   }
 
   getBudgetStats(input: BudgetStatsInput): {
     items: BudgetStatsItem[];
     inheritedFrom: string | null;
+    currency: string;
   } {
     const stats = this.getCategoryStats({
       month: input.month,
@@ -393,15 +403,15 @@ export class ReportService {
 
     const { budgets: budgetMap, inheritedFrom } = getEffectiveBudgets(this.db, input.month);
 
-    const items = stats.map((s) => ({
+    const items = stats.items.map((s) => ({
       ...s,
       budgetAmount: s.categoryId !== null ? (budgetMap.get(s.categoryId) ?? null) : null,
     }));
 
-    return { items, inheritedFrom };
+    return { items, inheritedFrom, currency: stats.currency };
   }
 
-  trends(input: TrendsInput): TrendPoint[] {
+  trends(input: TrendsInput): TrendsResult {
     const currentMonth = getCurrentMonth();
     // Build month series with start/end dates so the LEFT JOIN uses
     // range comparisons (t.date >= … AND t.date < …) instead of
@@ -423,7 +433,7 @@ export class ReportService {
         )
         SELECT
           months.m AS month,
-          coalesce(sum(t.amount), 0) AS total,
+          coalesce(sum(t.amount_base), 0) AS total,
           coalesce(count(t.id), 0) AS count
         FROM months
         LEFT JOIN transactions t
@@ -435,11 +445,54 @@ export class ReportService {
       `
     );
 
-    return rows.map((r) => ({
+    const points: TrendPoint[] = rows.map((r) => ({
       month: r.month,
       total: Number(r.total),
       count: Number(r.count),
     }));
+    return { points, currency: getBaseCurrency() };
+  }
+
+  /**
+   * Daily expense totals over the last N days, ending today (in the user's
+   * timezone). Every day in the range gets a row, including days with zero
+   * spend — used by the dashboard heatmap which needs a fully-filled grid.
+   * Excludes income and transfers, matching the SpendingTrendChart convention.
+   */
+  dailySpend(input: DailySpendInput): DailySpendResult {
+    const today = isoToday();
+    const startDate = Temporal.PlainDate.from(today)
+      .subtract({ days: input.days - 1 })
+      .toString();
+
+    const rows = this.db.all<{ date: string; total: number; count: number }>(
+      sql`
+        WITH RECURSIVE days(d) AS (
+          SELECT ${startDate}
+          UNION ALL
+          SELECT date(d, '+1 day')
+          FROM days
+          WHERE d < ${today}
+        )
+        SELECT
+          days.d AS date,
+          coalesce(sum(t.amount_base), 0) AS total,
+          coalesce(count(t.id), 0) AS count
+        FROM days
+        LEFT JOIN transactions t
+          ON t.date = days.d
+          AND t.type = 'expense'
+        GROUP BY days.d
+        ORDER BY days.d ASC
+      `
+    );
+
+    const points: DailySpendPoint[] = rows.map((r) => ({
+      date: r.date,
+      total: Number(r.total),
+      count: Number(r.count),
+    }));
+    return { points, currency: getBaseCurrency() };
   }
 
   netIncome(input: NetIncomeInput): NetIncomeResult {
@@ -451,11 +504,11 @@ export class ReportService {
     const [row] = this.db
       .select({
         totalIncome:
-          sql<number>`coalesce(sum(case when ${transactions.type} = 'income' then ${transactions.amount} else 0 end), 0)`.mapWith(
+          sql<number>`coalesce(sum(case when ${transactions.type} = 'income' then ${transactions.amountBase} else 0 end), 0)`.mapWith(
             Number
           ),
         totalExpenses:
-          sql<number>`coalesce(sum(case when ${transactions.type} = 'expense' then ${transactions.amount} else 0 end), 0)`.mapWith(
+          sql<number>`coalesce(sum(case when ${transactions.type} = 'expense' then ${transactions.amountBase} else 0 end), 0)`.mapWith(
             Number
           ),
         count: sql<number>`count(*)`.mapWith(Number),
@@ -472,6 +525,7 @@ export class ReportService {
       totalExpenses: expenses,
       netIncome: income - expenses,
       transactionCount: row?.count ?? 0,
+      currency: getBaseCurrency(),
     };
   }
 
@@ -479,15 +533,15 @@ export class ReportService {
     const [row] = this.db
       .select({
         income:
-          sql<number>`coalesce(sum(case when ${transactions.type} = 'income' then ${transactions.amount} else 0 end), 0)`.mapWith(
+          sql<number>`coalesce(sum(case when ${transactions.type} = 'income' then ${transactions.amountBase} else 0 end), 0)`.mapWith(
             Number
           ),
         expenses:
-          sql<number>`coalesce(sum(case when ${transactions.type} = 'expense' then ${transactions.amount} else 0 end), 0)`.mapWith(
+          sql<number>`coalesce(sum(case when ${transactions.type} = 'expense' then ${transactions.amountBase} else 0 end), 0)`.mapWith(
             Number
           ),
         transfers:
-          sql<number>`coalesce(sum(case when ${transactions.type} = 'transfer' then ${transactions.amount} else 0 end), 0)`.mapWith(
+          sql<number>`coalesce(sum(case when ${transactions.type} = 'transfer' then ${transactions.amountBase} else 0 end), 0)`.mapWith(
             Number
           ),
       })
@@ -503,10 +557,11 @@ export class ReportService {
       totalIncome: income,
       totalExpenses: expenses,
       totalTransfers: transfers,
+      currency: getBaseCurrency(),
     };
   }
 
-  topMerchants(input: TopMerchantsInput): TopMerchant[] {
+  topMerchants(input: TopMerchantsInput): TopMerchantsResult {
     const filters: SQL[] = [];
     if (input.dateFrom) filters.push(gte(transactions.date, input.dateFrom));
     if (input.dateTo) filters.push(lte(transactions.date, input.dateTo));
@@ -518,22 +573,23 @@ export class ReportService {
     const rows = this.db
       .select({
         merchant: transactions.merchant,
-        total: sql<number>`coalesce(sum(${transactions.amount}), 0)`.mapWith(Number),
+        total: sql<number>`coalesce(sum(${transactions.amountBase}), 0)`.mapWith(Number),
         count: sql<number>`count(*)`.mapWith(Number),
-        avgAmount: sql<number>`coalesce(avg(${transactions.amount}), 0)`.mapWith(Number),
+        avgAmount: sql<number>`coalesce(avg(${transactions.amountBase}), 0)`.mapWith(Number),
       })
       .from(transactions)
       .where(and(...filters))
       .groupBy(transactions.merchant)
-      .orderBy(sql`sum(${transactions.amount}) DESC`)
+      .orderBy(sql`sum(${transactions.amountBase}) DESC`)
       .limit(input.limit)
       .all();
 
-    return rows.map((r) => ({
+    const merchants: TopMerchant[] = rows.map((r) => ({
       merchant: r.merchant!,
       total: r.total,
       count: r.count,
       avgAmount: Math.round(r.avgAmount * 100) / 100,
     }));
+    return { merchants, currency: getBaseCurrency() };
   }
 }

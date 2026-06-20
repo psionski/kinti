@@ -10,19 +10,19 @@ import { CategoryChangesCard } from "./category-changes-card";
 import { MerchantTable } from "./merchant-table";
 import type {
   NetIncomeResult,
-  TrendPoint,
+  TrendsResult,
   SpendingSummaryResult,
-  TopMerchant,
+  TopMerchantsResult,
 } from "@/lib/validators/reports";
 import type { CategoryWithCountResponse } from "@/lib/validators/categories";
 
 export interface ReportsData {
   balance: NetIncomeResult;
-  incomeTrend: TrendPoint[];
-  expenseTrend: TrendPoint[];
-  spendingTrend: TrendPoint[];
+  incomeTrend: TrendsResult;
+  expenseTrend: TrendsResult;
+  spendingTrend: TrendsResult;
   summary: SpendingSummaryResult;
-  topMerchants: TopMerchant[];
+  topMerchants: TopMerchantsResult;
 }
 
 interface ReportsClientProps {
@@ -80,10 +80,10 @@ export function ReportsClient({
       ) {
         const [balance, incomeTrend, expenseTrend, summary, topMerchants] = await Promise.all([
           balanceRes.json() as Promise<NetIncomeResult>,
-          incomeTrendRes.json() as Promise<TrendPoint[]>,
-          expenseTrendRes.json() as Promise<TrendPoint[]>,
+          incomeTrendRes.json() as Promise<TrendsResult>,
+          expenseTrendRes.json() as Promise<TrendsResult>,
           summaryRes.json() as Promise<SpendingSummaryResult>,
-          merchantsRes.json() as Promise<TopMerchant[]>,
+          merchantsRes.json() as Promise<TopMerchantsResult>,
         ]);
         setData({
           balance,
@@ -118,12 +118,15 @@ export function ReportsClient({
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
               <IncomeExpensesCard
                 balance={data.balance}
-                incomeTrend={data.incomeTrend}
-                expenseTrend={data.expenseTrend}
+                incomeTrend={data.incomeTrend.points}
+                expenseTrend={data.expenseTrend.points}
               />
-              <SavingsRateChart incomeTrend={data.incomeTrend} expenseTrend={data.expenseTrend} />
+              <SavingsRateChart
+                incomeTrend={data.incomeTrend.points}
+                expenseTrend={data.expenseTrend.points}
+              />
               <TrendsChart
-                data={data.spendingTrend}
+                data={data.spendingTrend.points}
                 categories={categories}
                 months={range.months}
               />
@@ -132,15 +135,15 @@ export function ReportsClient({
             <>
               <IncomeExpensesCard
                 balance={data.balance}
-                incomeTrend={data.incomeTrend}
-                expenseTrend={data.expenseTrend}
+                incomeTrend={data.incomeTrend.points}
+                expenseTrend={data.expenseTrend.points}
                 showChart={false}
               />
               <CategoryChangesCard groups={data.summary.groups} />
             </>
           )}
 
-          <MerchantTable data={data.topMerchants} />
+          <MerchantTable data={data.topMerchants.merchants} />
         </div>
       </div>
     </div>

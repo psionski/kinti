@@ -1,11 +1,12 @@
 import { z } from "zod";
-import { IsoDateSchema, TransactionTypeSchema, FrequencySchema } from "./common";
+import { IsoDateSchema, TransactionTypeSchema, FrequencySchema, CurrencySchema } from "./common";
 
 // ─── Response ────────────────────────────────────────────────────────────────
 
 export const RecurringResponseSchema = z.object({
   id: z.number().int(),
-  amount: z.number(),
+  amount: z.number().describe("Native amount in the template's currency"),
+  currency: z.string().describe("ISO 4217 currency. Generated transactions inherit this."),
   type: z.enum(["income", "expense"]),
   description: z.string(),
   merchant: z.string().nullable(),
@@ -29,7 +30,14 @@ export type RecurringResponse = z.infer<typeof RecurringResponseSchema>;
 // ─── Create ───────────────────────────────────────────────────────────────────
 
 export const CreateRecurringSchema = z.object({
-  amount: z.number().positive("Amount must be positive").describe("Amount in EUR (e.g. 12.10)"),
+  amount: z
+    .number()
+    .positive("Amount must be positive")
+    .describe("Amount in the template's currency (e.g. 12.10)"),
+  currency: CurrencySchema.optional().describe(
+    "ISO 4217 currency for the template. Defaults to the configured base currency. " +
+      "Generated transactions inherit this currency."
+  ),
   type: TransactionTypeSchema.default("expense").describe("Defaults to 'expense'"),
   description: z
     .string()
@@ -75,7 +83,8 @@ export type CreateRecurringInput = z.infer<typeof CreateRecurringSchema>;
 // ─── Update ───────────────────────────────────────────────────────────────────
 
 export const UpdateRecurringSchema = z.object({
-  amount: z.number().positive().optional().describe("Amount in EUR (e.g. 12.10)"),
+  amount: z.number().positive().optional().describe("Amount in the template's currency"),
+  currency: CurrencySchema.optional().describe("ISO 4217 currency"),
   type: TransactionTypeSchema.optional(),
   description: z.string().min(1).max(500).optional(),
   merchant: z.string().max(255).nullable().optional(),

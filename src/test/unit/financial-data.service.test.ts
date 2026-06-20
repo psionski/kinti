@@ -704,3 +704,138 @@ describe("setApiKey / getApiKey", () => {
     expect(service.getApiKey("alpha-vantage")).toBeNull();
   });
 });
+
+// ─── FX Backfill ──────────────────────────────────────────────────────────────
+
+describe("backfillTransactionRates", () => {
+  it("fetches rates only for non-base transaction (date, currency) pairs missing from cache", async () => {
+    const db = makeTestDb({ baseCurrency: "EUR" });
+    const provider = makeRateProvider("frankfurter", 0.92);
+    const svc = new FinancialDataService(
+      db,
+      new SettingsService(db),
+      mockFactory(provider, makeRateProvider("fawazahmed", null))
+    );
+
+    // Two USD transactions on dates >7 days apart so the second can't
+    // benefit from the first's cached rate (the cache lookup window is
+    // 7 days). One EUR transaction is dropped because it's the base.
+    db.insert(schema.transactions)
+      .values([
+        {
+          amount: 10,
+          currency: "USD",
+          amountBase: 9.2,
+          type: "expense",
+          description: "USD a",
+          date: "2026-01-15",
+        },
+        {
+          amount: 20,
+          currency: "USD",
+          amountBase: 18.4,
+          type: "expense",
+          description: "USD b",
+          date: "2026-03-15",
+        },
+        {
+          amount: 50,
+          currency: "EUR",
+          amountBase: 50,
+          type: "expense",
+          description: "EUR base",
+          date: "2026-03-03",
+        },
+      ])
+      .run();
+
+    const result = await svc.backfillTransactionRates();
+    expect(result.pairs).toBe(2);
+    expect(result.fetched).toBe(2);
+    expect(provider.getPrice).toHaveBeenCalledTimes(2);
+  });
+
+  it("regression: skips base-currency transactions entirely", async () => {
+    // Pre-fix this could fall through to a no-op fetch loop on every cron
+    // run; verify the SQL filter excludes them up front.
+    const db = makeTestDb({ baseCurrency: "EUR" });
+    const provider = makeRateProvider("frankfurter", 0.92);
+    const svc = new FinancialDataService(
+      db,
+      new SettingsService(db),
+      mockFactory(provider, makeRateProvider("fawazahmed", null))
+    );
+
+    db.insert(schema.transactions)
+      .values({
+        amount: 100,
+        currency: "EUR",
+        amountBase: 100,
+        type: "expense",
+        description: "EUR only",
+        date: "2026-03-01",
+      })
+      .run();
+
+    const result = await svc.backfillTransactionRates();
+    expect(result.pairs).toBe(0);
+    expect(result.fetched).toBe(0);
+    expect(provider.getPrice).not.toHaveBeenCalled();
+  });
+});
+
+describe("backfillAssetCurrencyRates", () => {
+  it("regression: refreshes today's rate for every distinct foreign-currency asset", async () => {
+    // Catches the gap where opening lots create assets without transactions —
+    // backfillTransactionRates wouldn't see them, and once their lot-date
+    // rate aged out of the 7-day window the read paths silently dropped
+    // them from net-worth/allocation/exposure totals.
+    const db = makeTestDb({ baseCurrency: "EUR" });
+    const provider = makeRateProvider("frankfurter", 1.1);
+    const svc = new FinancialDataService(
+      db,
+      new SettingsService(db),
+      mockFactory(provider, makeRateProvider("fawazahmed", null))
+    );
+
+    // One EUR asset (skipped — base currency), two USD assets (one currency
+    // bucket — distinct), one GBP asset (second bucket).
+    db.insert(schema.assets)
+      .values([
+        { name: "EUR Cash", type: "deposit", currency: "EUR" },
+        { name: "US Stock A", type: "investment", currency: "USD" },
+        { name: "US Stock B", type: "investment", currency: "USD" },
+        { name: "UK Stock", type: "investment", currency: "GBP" },
+      ])
+      .run();
+
+    const result = await svc.backfillAssetCurrencyRates();
+    // 2 distinct foreign currencies: USD and GBP. EUR (the base) is skipped.
+    expect(result.currencies).toBe(2);
+    expect(result.fetched).toBe(2);
+    expect(provider.getPrice).toHaveBeenCalledTimes(2);
+
+    const calls = provider.getPrice.mock.calls.map((c) => c[0]);
+    expect(calls).toContain("USD");
+    expect(calls).toContain("GBP");
+  });
+
+  it("returns 0 when there are no foreign-currency assets", async () => {
+    const db = makeTestDb({ baseCurrency: "EUR" });
+    const provider = makeRateProvider("frankfurter", 1.1);
+    const svc = new FinancialDataService(
+      db,
+      new SettingsService(db),
+      mockFactory(provider, makeRateProvider("fawazahmed", null))
+    );
+
+    db.insert(schema.assets)
+      .values([{ name: "EUR Cash", type: "deposit", currency: "EUR" }])
+      .run();
+
+    const result = await svc.backfillAssetCurrencyRates();
+    expect(result.currencies).toBe(0);
+    expect(result.fetched).toBe(0);
+    expect(provider.getPrice).not.toHaveBeenCalled();
+  });
+});

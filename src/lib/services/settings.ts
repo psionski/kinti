@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "@/lib/db/schema";
 import { settings } from "@/lib/db/schema";
+import { CurrencySchema } from "@/lib/validators/common";
 
 type Db = BetterSQLite3Database<typeof schema>;
 
@@ -53,5 +54,30 @@ export class SettingsService {
       throw new Error(`Invalid IANA timezone: ${tz}`);
     }
     this.set("timezone", tz);
+  }
+
+  /**
+   * Get the configured base currency (ISO 4217). Returns null if not yet
+   * configured. All portfolio-level valuations and report aggregations are
+   * denominated in this currency.
+   */
+  getBaseCurrency(): string | null {
+    return this.get("base_currency");
+  }
+
+  /**
+   * Set the base currency. Throws if already set — base currency is immutable
+   * once configured. Migrating between base currencies requires a fresh DB.
+   */
+  setBaseCurrency(currency: string): void {
+    const parsed = CurrencySchema.parse(currency);
+    const existing = this.getBaseCurrency();
+    if (existing !== null && existing !== parsed) {
+      throw new Error(
+        `Base currency is immutable: already set to ${existing}. ` +
+          `Migrating between base currencies requires a fresh database.`
+      );
+    }
+    this.set("base_currency", parsed);
   }
 }

@@ -8,7 +8,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   if (isErrorResponse(input)) return input;
 
   try {
-    const results = getTransactionService().createBatch(input);
+    const results = await getTransactionService().createBatch(input);
     return NextResponse.json(results, { status: 201 });
   } catch (err) {
     return handleServiceError(err, "Referenced category or receipt not found");

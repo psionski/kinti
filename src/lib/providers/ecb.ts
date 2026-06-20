@@ -94,6 +94,7 @@ export class EcbProvider implements FinancialDataProvider {
         symbol: code,
         name,
         type: "currency",
+        currency: code,
       }));
   }
 

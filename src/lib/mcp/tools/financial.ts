@@ -8,6 +8,7 @@ import {
 
 import { getFinancialDataService, getSettingsService } from "@/lib/api/services";
 import { getProviderStatuses, getUnconfiguredProviders } from "@/lib/providers/registry";
+import { getBaseCurrency } from "@/lib/format";
 import { ok, err } from "@/lib/mcp/response";
 
 function unconfiguredProviderHint(): string | null {
@@ -21,9 +22,9 @@ export function registerFinancialTools(server: McpServer): void {
     "convert_currency",
     {
       description:
-        "Convert an amount between currencies using live exchange rates. " +
-        "Requires a symbolMap specifying which providers to use (e.g. { frankfurter: 'USD' }). " +
-        "Use search_symbol to find the correct provider→symbol mapping.",
+        "Convert an amount between two ISO 4217 currencies using live exchange rates. " +
+        "Routes through the default FX provider chain (Frankfurter then fawazahmed0) — no " +
+        "symbolMap needed for transaction-style currency conversions.",
       inputSchema: ConvertCurrencySchema,
     },
     async (input) => {
@@ -31,7 +32,7 @@ export function registerFinancialTools(server: McpServer): void {
         input.amount,
         input.from,
         input.to,
-        input.symbolMap,
+        undefined,
         input.date
       );
       if (!result) return err(`No exchange rate available for ${input.from}→${input.to}`);
@@ -51,10 +52,13 @@ export function registerFinancialTools(server: McpServer): void {
     },
     async (input) => {
       const svc = getFinancialDataService();
-      const result = await svc.getPrice(input.symbolMap, input.currency, input.date);
+      // Default to the configured base currency when the AI omits currency.
+      // Done at the boundary because Zod can't default to a runtime value.
+      const targetCurrency = input.currency ?? getBaseCurrency();
+      const result = await svc.getPrice(input.symbolMap, targetCurrency, input.date);
       if (!result) {
         const symbols = Object.values(input.symbolMap).filter(Boolean).join(", ");
-        const msg = `No price available for ${symbols}/${input.currency}`;
+        const msg = `No price available for ${symbols}/${targetCurrency}`;
         const hint = unconfiguredProviderHint();
         return err(hint ? `${msg}. ${hint}` : msg);
       }
@@ -82,7 +86,13 @@ export function registerFinancialTools(server: McpServer): void {
       description:
         "Search for a market symbol by name. Use before creating/updating an asset or calling get_price. " +
         "Pass the best match as symbolMap: { [result.provider]: result.symbol } to create_asset or update_asset " +
-        "for automatic price tracking. For exchange rates, search the currency code (e.g. 'USD'). " +
+        "for automatic price tracking. " +
+        "Stock/ETF results often include a `currency` field — that's the listing currency, use it to fill " +
+        "the asset's `currency` field directly. " +
+        "Crypto results never include a currency: cryptocurrencies aren't denominated in any single fiat — " +
+        "the same coin can be quoted against any currency the user chooses. ASK the user which fiat to track " +
+        "the holding in (the base currency is usually the right default), then put that in the asset's `currency` field. " +
+        "For exchange rates, search the currency code (e.g. 'USD'). " +
         "If no results, you can still create the asset without symbolMap and use record_price manually.",
       inputSchema: SearchSymbolQuerySchema,
     },

@@ -9,6 +9,8 @@ import {
 import { and, asc, eq, gte, lte } from "drizzle-orm";
 import { assets, assetLots, transactions } from "@/lib/db/schema";
 import { resolvePrice } from "./price-resolver";
+import { findCachedFxRate } from "./fx-cache";
+import { getBaseCurrency, roundToCurrency } from "@/lib/format";
 import {
   type Db,
   parseAssetRow,
@@ -16,6 +18,29 @@ import {
   getCostBasisAtDate,
   consumeFifo,
 } from "./portfolio-helpers";
+
+/**
+ * Memoized FX-rate lookup keyed by `(currency, date)`. Net-worth time series
+ * touches the same `(currency, date)` pair once per asset per date point, so
+ * caching avoids hammering `findCachedPrice`'s 7-day-window query.
+ *
+ * Returns 1 for the base-currency case and `null` when no rate is cached
+ * within the window — callers must skip the asset rather than mix units.
+ */
+function makeFxLookup(
+  db: Db,
+  baseCurrency: string
+): (currency: string, date: string) => number | null {
+  const cache = new Map<string, number | null>();
+  return (currency: string, date: string): number | null => {
+    if (currency === baseCurrency) return 1;
+    const key = `${currency}|${date}`;
+    if (cache.has(key)) return cache.get(key)!;
+    const rate = findCachedFxRate(db, currency, baseCurrency, date);
+    cache.set(key, rate);
+    return rate;
+  };
+}
 import type {
   Window,
   Interval,
@@ -62,14 +87,19 @@ export class PortfolioReportService {
     const datePoints = generateDatePoints(dateRange.from, dateRange.to, interval);
     if (datePoints.length === 0) return [];
 
+    const baseCurrency = getBaseCurrency();
+    const fx = makeFxLookup(this.db, baseCurrency);
     const allAssets = this.db.select().from(assets).all().map(parseAssetRow);
 
     // ── Batch cash: fetch all transactions once, compute running totals ──
+    // Sum amount_base so cross-currency transactions roll up correctly. The
+    // sign of `amount_base` mirrors `amount` (signed for transfers), so the
+    // same accumulation logic works for income/expense/transfer.
     const txRows = this.db
       .select({
         date: transactions.date,
         type: transactions.type,
-        amount: transactions.amount,
+        amountBase: transactions.amountBase,
       })
       .from(transactions)
       .where(lte(transactions.date, datePoints[datePoints.length - 1]))
@@ -83,12 +113,12 @@ export class PortfolioReportService {
     for (const dp of datePoints) {
       while (txIdx < txRows.length && txRows[txIdx].date <= dp) {
         const row = txRows[txIdx];
-        if (row.type === "income") runningCash += row.amount;
-        else if (row.type === "expense") runningCash -= row.amount;
-        else if (row.type === "transfer") runningCash += row.amount;
+        if (row.type === "income") runningCash += row.amountBase;
+        else if (row.type === "expense") runningCash -= row.amountBase;
+        else if (row.type === "transfer") runningCash += row.amountBase;
         txIdx++;
       }
-      cashAtDate.set(dp, runningCash);
+      cashAtDate.set(dp, roundToCurrency(runningCash, baseCurrency));
     }
 
     // ── Batch holdings: fetch all lots per asset once, compute running qty ──
@@ -120,6 +150,10 @@ export class PortfolioReportService {
     }
 
     // ── Build result ────────────────────────────────────────────────────────
+    // Asset values are converted to base via the per-(currency, date) FX
+    // lookup. Foreign assets without a cached rate at the target date are
+    // skipped — partial total beats wrong-unit total. The fxLookup memoizes
+    // per (currency, date), so the cost is one query per distinct pair.
     return datePoints.map((date) => {
       const cash = cashAtDate.get(date) ?? 0;
 
@@ -129,16 +163,18 @@ export class PortfolioReportService {
         if (holdings <= 0) continue;
 
         const resolved = resolvePrice(this.db, asset, date);
-        if (resolved) {
-          assetTotal += Math.round(holdings * resolved.price * 100) / 100;
-        }
+        if (!resolved) continue;
+        const rate = fx(asset.currency, date);
+        if (rate === null) continue;
+        assetTotal += holdings * resolved.price * rate;
       }
+      const assetTotalRounded = roundToCurrency(assetTotal, baseCurrency);
 
       return {
         date,
         cash,
-        assets: assetTotal,
-        total: cash + assetTotal,
+        assets: assetTotalRounded,
+        total: roundToCurrency(cash + assetTotalRounded, baseCurrency),
       };
     });
   }
@@ -149,19 +185,59 @@ export class PortfolioReportService {
     const allAssets = this.db.select().from(assets).all().map(parseAssetRow);
     const today = isoToday();
     const evalDate = to ?? today;
+    const baseCurrency = getBaseCurrency();
 
     return allAssets
       .map((asset) => {
         const holdings = getHoldingsAtDate(this.db, asset.id, evalDate);
-        const { costBasis, earliestDate } = getCostBasisAtDate(this.db, asset.id, evalDate);
+        const { costBasis, costBasisBase, earliestDate } = getCostBasisAtDate(
+          this.db,
+          asset.id,
+          evalDate,
+          asset.currency
+        );
 
         if (costBasis === 0 && holdings <= 0) return null;
 
         const resolved = resolvePrice(this.db, asset, evalDate);
         if (!resolved) return null;
-        const currentValue = Math.round(holdings * resolved.price * 100) / 100;
-        const pnl = Math.round((currentValue - costBasis) * 100) / 100;
+        const currentValue = roundToCurrency(holdings * resolved.price, asset.currency);
+        const pnl = roundToCurrency(currentValue - costBasis, asset.currency);
         const pnlPct = costBasis > 0 ? Math.round((pnl / costBasis) * 10000) / 100 : 0;
+
+        // Convert current value to base currency. For base-currency assets the
+        // FX rate is 1 and there's no decomposition to do. For foreign assets
+        // we look up the most recent cached rate; if missing, base-side numbers
+        // become null but the native-side numbers still render.
+        let currentValueBase: number | null;
+        let pnlBase: number | null;
+        let pricePnlBase: number | null;
+        let fxPnlBase: number | null;
+
+        if (asset.currency === baseCurrency) {
+          currentValueBase = currentValue;
+          pnlBase = pnl;
+          pricePnlBase = pnl;
+          fxPnlBase = 0;
+        } else {
+          const currentRate = findCachedFxRate(this.db, asset.currency, baseCurrency, evalDate);
+          if (currentRate === null) {
+            currentValueBase = null;
+            pnlBase = null;
+            pricePnlBase = null;
+            fxPnlBase = null;
+          } else {
+            currentValueBase = roundToCurrency(currentValue * currentRate, baseCurrency);
+            pnlBase = roundToCurrency(currentValueBase - costBasisBase, baseCurrency);
+            // Decompose total base P&L into "asset price moved" vs "FX moved":
+            //   pricePnlBase = (currentNative − costNative) × currentRate
+            //   fxPnlBase    = pnlBase − pricePnlBase
+            //                = costNative × (currentRate − historicalAvgRate)
+            // where historicalAvgRate is implicit in costBasisBase / costBasis.
+            pricePnlBase = roundToCurrency((currentValue - costBasis) * currentRate, baseCurrency);
+            fxPnlBase = roundToCurrency(pnlBase - pricePnlBase, baseCurrency);
+          }
+        }
 
         const daysHeld = earliestDate ? Math.max(1, daysBetween(earliestDate, evalDate)) : 0;
 
@@ -177,8 +253,13 @@ export class PortfolioReportService {
           type: asset.type as string,
           currency: asset.currency,
           costBasis,
+          costBasisBase,
           currentValue,
+          currentValueBase,
           pnl,
+          pnlBase,
+          pricePnlBase,
+          fxPnlBase,
           pnlPct,
           annualizedReturn,
           daysHeld,
@@ -193,26 +274,34 @@ export class PortfolioReportService {
   getAllocation(): AllocationResult {
     const allAssets = this.db.select().from(assets).all().map(parseAssetRow);
     const today = isoToday();
+    const baseCurrency = getBaseCurrency();
+    const fx = makeFxLookup(this.db, baseCurrency);
 
     const items: AllocationItem[] = [];
     let totalValue = 0;
 
+    // Allocation only makes sense in a single unit. Convert each asset's
+    // current value to base via the cached FX rate; foreign assets without a
+    // rate are silently dropped (consistent with attachMetrics) so the total
+    // we ratio against is itself in base.
     for (const asset of allAssets) {
       const holdings = getHoldingsAtDate(this.db, asset.id, today);
       if (holdings <= 0) continue;
 
       const resolved = resolvePrice(this.db, asset, today);
       if (!resolved) continue;
+      const rate = fx(asset.currency, today);
+      if (rate === null) continue;
 
-      const currentValue = Math.round(holdings * resolved.price * 100) / 100;
-      if (currentValue <= 0) continue;
+      const currentValueBase = roundToCurrency(holdings * resolved.price * rate, baseCurrency);
+      if (currentValueBase <= 0) continue;
 
-      totalValue += currentValue;
+      totalValue += currentValueBase;
       items.push({
         assetId: asset.id,
         name: asset.name,
         type: asset.type,
-        currentValue,
+        currentValue: currentValueBase,
         pct: 0,
       });
     }
@@ -229,12 +318,12 @@ export class PortfolioReportService {
     const byType: AllocationByType[] = Array.from(typeMap.entries())
       .map(([type, currentValue]) => ({
         type,
-        currentValue,
+        currentValue: roundToCurrency(currentValue, baseCurrency),
         pct: totalValue > 0 ? Math.round((currentValue / totalValue) * 10000) / 100 : 0,
       }))
       .sort((a, b) => b.currentValue - a.currentValue);
 
-    return { byAsset: items, byType };
+    return { byAsset: items, byType, currency: baseCurrency };
   }
 
   // ─── Currency Exposure ────────────────────────────────────────────────────
@@ -242,7 +331,13 @@ export class PortfolioReportService {
   getCurrencyExposure(): CurrencyExposureItem[] {
     const allAssets = this.db.select().from(assets).all().map(parseAssetRow);
     const today = isoToday();
+    const baseCurrency = getBaseCurrency();
+    const fx = makeFxLookup(this.db, baseCurrency);
 
+    // Bucket key is the asset's *native* currency; bucket value is in base so
+    // cross-bucket pcts compare apples-to-apples. Without the conversion, a
+    // ¥100 000 yen asset (~€600) would dominate the chart over a $5 000 dollar
+    // asset (~€4 600) just because the magnitude of the integer is larger.
     const currencyMap = new Map<string, number>();
     let totalValue = 0;
 
@@ -252,18 +347,20 @@ export class PortfolioReportService {
 
       const resolved = resolvePrice(this.db, asset, today);
       if (!resolved) continue;
+      const rate = fx(asset.currency, today);
+      if (rate === null) continue;
 
-      const currentValue = Math.round(holdings * resolved.price * 100) / 100;
-      if (currentValue <= 0) continue;
+      const currentValueBase = holdings * resolved.price * rate;
+      if (currentValueBase <= 0) continue;
 
-      currencyMap.set(asset.currency, (currencyMap.get(asset.currency) ?? 0) + currentValue);
-      totalValue += currentValue;
+      currencyMap.set(asset.currency, (currencyMap.get(asset.currency) ?? 0) + currentValueBase);
+      totalValue += currentValueBase;
     }
 
     return Array.from(currencyMap.entries())
       .map(([currency, value]) => ({
         currency,
-        value,
+        value: roundToCurrency(value, baseCurrency),
         pct: totalValue > 0 ? Math.round((value / totalValue) * 10000) / 100 : 0,
       }))
       .sort((a, b) => b.value - a.value);
@@ -273,15 +370,17 @@ export class PortfolioReportService {
 
   getRealizedPnL(from?: string, to?: string): RealizedPnlResult {
     const allAssets = this.db.select().from(assets).all().map(parseAssetRow);
+    const baseCurrency = getBaseCurrency();
     const items: RealizedPnlItem[] = [];
-    let totalProceeds = 0;
-    let totalCostBasis = 0;
+    let totalProceedsBase = 0;
+    let totalCostBasisBase = 0;
 
     for (const asset of allAssets) {
       const lots = this.db
         .select({
           quantity: assetLots.quantity,
           pricePerUnit: assetLots.pricePerUnit,
+          pricePerUnitBase: assetLots.pricePerUnitBase,
           date: assetLots.date,
         })
         .from(assetLots)
@@ -289,10 +388,17 @@ export class PortfolioReportService {
         .orderBy(asc(assetLots.date), asc(assetLots.id))
         .all();
 
-      const buyQueue: Array<{ qty: number; price: number }> = [];
+      const buyQueue: Array<{
+        qty: number;
+        price: number;
+        priceBase: number;
+        currency: string;
+      }> = [];
       let totalSold = 0;
       let proceeds = 0;
+      let proceedsBase = 0;
       let costOfSold = 0;
+      let costOfSoldBase = 0;
 
       for (const lot of lots) {
         if (lot.quantity < 0) {
@@ -305,36 +411,60 @@ export class PortfolioReportService {
         }
 
         if (lot.quantity > 0) {
-          buyQueue.push({ qty: lot.quantity, price: lot.pricePerUnit });
+          buyQueue.push({
+            qty: lot.quantity,
+            price: lot.pricePerUnit,
+            priceBase: lot.pricePerUnitBase,
+            currency: asset.currency,
+          });
         } else {
           const toConsume = -lot.quantity;
-          proceeds += Math.round(toConsume * lot.pricePerUnit * 100) / 100;
+          // The sell lot's pricePerUnitBase was snapshotted at sell time, so
+          // proceedsBase reflects the FX rate at the moment of sale. Cost
+          // basis comes from consumeFifo, which uses each buy lot's
+          // historical FX rate.
+          proceeds += toConsume * lot.pricePerUnit;
+          proceedsBase += toConsume * lot.pricePerUnitBase;
           totalSold += toConsume;
-          costOfSold += consumeFifo(buyQueue, toConsume);
+          const consumed = consumeFifo(buyQueue, toConsume);
+          costOfSold += consumed.cost;
+          costOfSoldBase += consumed.costBase;
         }
       }
 
       if (totalSold > 0) {
+        const proceedsRounded = roundToCurrency(proceeds, asset.currency);
+        const costBasisRounded = roundToCurrency(costOfSold, asset.currency);
+        const proceedsBaseRounded = roundToCurrency(proceedsBase, baseCurrency);
+        const costBasisBaseRounded = roundToCurrency(costOfSoldBase, baseCurrency);
         items.push({
           assetId: asset.id,
           name: asset.name,
+          currency: asset.currency,
           totalSold,
-          proceeds,
-          costBasis: costOfSold,
-          realizedPnl: proceeds - costOfSold,
+          proceeds: proceedsRounded,
+          costBasis: costBasisRounded,
+          realizedPnl: roundToCurrency(proceedsRounded - costBasisRounded, asset.currency),
+          proceedsBase: proceedsBaseRounded,
+          costBasisBase: costBasisBaseRounded,
+          realizedPnlBase: roundToCurrency(
+            proceedsBaseRounded - costBasisBaseRounded,
+            baseCurrency
+          ),
         });
-        totalProceeds += proceeds;
-        totalCostBasis += costOfSold;
+        totalProceedsBase += proceedsBaseRounded;
+        totalCostBasisBase += costBasisBaseRounded;
       }
     }
 
-    items.sort((a, b) => b.realizedPnl - a.realizedPnl);
+    items.sort((a, b) => b.realizedPnlBase - a.realizedPnlBase);
 
     return {
       items,
-      totalProceeds,
-      totalCostBasis,
-      totalRealizedPnl: totalProceeds - totalCostBasis,
+      totalProceeds: roundToCurrency(totalProceedsBase, baseCurrency),
+      totalCostBasis: roundToCurrency(totalCostBasisBase, baseCurrency),
+      totalRealizedPnl: roundToCurrency(totalProceedsBase - totalCostBasisBase, baseCurrency),
+      currency: baseCurrency,
     };
   }
 
@@ -411,7 +541,9 @@ export class PortfolioReportService {
       const qty = parseFloat(cumulativeQty.toFixed(8));
       const resolved = resolvePrice(this.db, asset, date);
       const price = resolved?.price ?? null;
-      const value = price !== null ? Math.round(qty * price * 100) / 100 : null;
+      // Single-asset history is always rendered in the asset's native currency,
+      // so per-currency rounding is correct here even for non-base assets.
+      const value = price !== null ? roundToCurrency(qty * price, asset.currency) : null;
       return { date, price, quantity: qty, value };
     });
 
@@ -425,14 +557,18 @@ export class PortfolioReportService {
     const [y, m] = month.split("-").map(Number);
     const lastDay = Temporal.PlainYearMonth.from({ year: y, month: m }).daysInMonth;
     const dateTo = `${month}-${String(lastDay).padStart(2, "0")}`;
+    const baseCurrency = getBaseCurrency();
 
+    // Sum amount_base so cross-currency lots aggregate to a comparable total.
+    // Each transfer transaction was denormalized to base at write time, so the
+    // sum is unit-consistent across assets in different currencies.
     const rows = this.db
       .select({
         assetId: assets.id,
         assetName: assets.name,
         assetType: assets.type,
         quantity: assetLots.quantity,
-        amount: transactions.amount,
+        amountBase: transactions.amountBase,
       })
       .from(assetLots)
       .innerJoin(assets, eq(assetLots.assetId, assets.id))
@@ -454,9 +590,9 @@ export class PortfolioReportService {
       };
 
       if (row.quantity > 0) {
-        existing.purchases += Math.abs(row.amount);
+        existing.purchases += Math.abs(row.amountBase);
       } else {
-        existing.sales += Math.abs(row.amount);
+        existing.sales += Math.abs(row.amountBase);
       }
 
       assetMap.set(row.assetId, existing);
@@ -466,9 +602,9 @@ export class PortfolioReportService {
       assetId,
       assetName: data.name,
       assetType: data.type,
-      purchases: data.purchases,
-      sales: data.sales,
-      net: data.purchases - data.sales,
+      purchases: roundToCurrency(data.purchases, baseCurrency),
+      sales: roundToCurrency(data.sales, baseCurrency),
+      net: roundToCurrency(data.purchases - data.sales, baseCurrency),
     }));
   }
 }

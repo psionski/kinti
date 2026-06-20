@@ -107,6 +107,7 @@ export class OpenExchangeRatesProvider implements FinancialDataProvider {
         symbol: code,
         name,
         type: "currency",
+        currency: code,
       }));
   }
 

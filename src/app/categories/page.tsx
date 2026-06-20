@@ -1,12 +1,12 @@
 export const dynamic = "force-dynamic";
 
-import { requireTimezone } from "@/lib/api/require-timezone";
+import { requireOnboarding } from "@/lib/api/require-timezone";
 import { getCategoryService, getReportService } from "@/lib/api/services";
 import { CategoriesClient } from "@/components/categories/categories-client";
 import { getCurrentMonth } from "@/lib/date-ranges";
 
 export default function CategoriesPage(): React.ReactElement {
-  requireTimezone();
+  requireOnboarding();
   const categoryService = getCategoryService();
   const reportService = getReportService();
   const categories = categoryService.getAll();

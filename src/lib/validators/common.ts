@@ -8,6 +8,35 @@ export const IsoDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format");
 
+/**
+ * ISO 4217 currency code (3 uppercase letters), validated against the runtime's
+ * known currency list when available. Falls back to a strict format check on
+ * older runtimes that don't expose `Intl.supportedValuesOf`.
+ */
+export const CurrencySchema = z
+  .string()
+  .trim()
+  .transform((s) => s.toUpperCase())
+  .pipe(
+    z
+      .string()
+      .regex(/^[A-Z]{3}$/, "Currency must be a 3-letter ISO 4217 code")
+      .refine(isKnownCurrency, "Unknown ISO 4217 currency code")
+  );
+
+const knownCurrencies = (() => {
+  try {
+    return new Set(Intl.supportedValuesOf("currency"));
+  } catch {
+    return null;
+  }
+})();
+
+function isKnownCurrency(code: string): boolean {
+  if (knownCurrencies === null) return true;
+  return knownCurrencies.has(code);
+}
+
 /** ISO date that must not be in the future (user's configured timezone). */
 export const PastOrTodayDateSchema = IsoDateSchema.refine(
   (d) => d <= isoToday(),

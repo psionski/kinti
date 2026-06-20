@@ -1,4 +1,4 @@
-import { requireTimezone } from "@/lib/api/require-timezone";
+import { requireOnboarding } from "@/lib/api/require-timezone";
 import { notFound } from "next/navigation";
 import { getAssetService, getAssetLotService, getPortfolioReportService } from "@/lib/api/services";
 import { AssetDetailClient } from "@/components/assets/asset-detail-client";
@@ -8,7 +8,7 @@ interface PageProps {
 }
 
 export default async function AssetDetailPage({ params }: PageProps): Promise<React.ReactElement> {
-  requireTimezone();
+  requireOnboarding();
   const { id: rawId } = await params;
   const id = Number(rawId);
   if (!Number.isInteger(id) || id <= 0) notFound();

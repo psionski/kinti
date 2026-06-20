@@ -1,3 +1,4 @@
+import { EmptyState } from "@/components/shared/empty-state";
 import { formatCurrency, formatPrice } from "@/lib/format";
 import type { AssetLotResponse } from "@/lib/validators/assets";
 
@@ -13,7 +14,7 @@ export function LotHistoryTable({
   assetType,
 }: LotHistoryTableProps): React.ReactElement {
   if (lots.length === 0) {
-    return <p className="text-muted-foreground text-sm">No transactions recorded yet.</p>;
+    return <EmptyState message="No transactions recorded yet." />;
   }
 
   return (

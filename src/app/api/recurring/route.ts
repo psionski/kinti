@@ -8,7 +8,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   if (isErrorResponse(input)) return input;
 
   try {
-    const recurring = getRecurringService().create(input);
+    const recurring = await getRecurringService().create(input);
     return NextResponse.json(recurring, { status: 201 });
   } catch (err) {
     return handleServiceError(err, "Category not found");
