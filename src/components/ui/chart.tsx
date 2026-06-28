@@ -110,6 +110,7 @@ function ChartTooltipContent({
   color,
   nameKey,
   labelKey,
+  reverse = false,
 }: React.ComponentProps<typeof RechartsPrimitive.Tooltip> &
   React.ComponentProps<"div"> & {
     hideLabel?: boolean;
@@ -117,6 +118,7 @@ function ChartTooltipContent({
     indicator?: "line" | "dot" | "dashed";
     nameKey?: string;
     labelKey?: string;
+    reverse?: boolean;
   }) {
   const { config } = useChart();
 
@@ -161,7 +163,7 @@ function ChartTooltipContent({
     >
       {!nestLabel ? tooltipLabel : null}
       <div className="grid gap-1.5">
-        {payload
+        {(reverse ? [...payload].reverse() : payload)
           .filter((item) => item.type !== "none")
           .map((item, index) => {
             const key = `${nameKey || item.name || item.dataKey || "value"}`;
