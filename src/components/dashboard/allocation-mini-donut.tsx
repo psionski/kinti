@@ -4,14 +4,7 @@ import { Pie, PieChart, Cell } from "recharts";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
-
-const FALLBACK_COLORS = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-];
+import { fallbackColor } from "@/lib/chart-colors";
 
 const MAX_LEGEND_ITEMS = 4;
 
@@ -25,12 +18,12 @@ interface AllocationMiniDonutProps {
   data: AllocationItem[];
 }
 
-function buildChartConfig(data: AllocationItem[]): ChartConfig {
+function buildChartConfig(data: AllocationItem[], colors: string[]): ChartConfig {
   const config: ChartConfig = {};
   for (let i = 0; i < data.length; i++) {
     config[data[i].name] = {
       label: data[i].name,
-      color: FALLBACK_COLORS[i % FALLBACK_COLORS.length],
+      color: colors[i],
     };
   }
   return config;
@@ -55,7 +48,8 @@ export function AllocationMiniDonut({ data }: AllocationMiniDonutProps): React.R
     );
   }
 
-  const chartConfig = buildChartConfig(data);
+  const colors = data.map((_, i) => fallbackColor(i, data.length));
+  const chartConfig = buildChartConfig(data, colors);
   const visibleItems = data.slice(0, MAX_LEGEND_ITEMS);
   const remainingCount = data.length - MAX_LEGEND_ITEMS;
 
@@ -76,7 +70,7 @@ export function AllocationMiniDonut({ data }: AllocationMiniDonutProps): React.R
               strokeWidth={1}
             >
               {data.map((entry, index) => (
-                <Cell key={entry.name} fill={FALLBACK_COLORS[index % FALLBACK_COLORS.length]} />
+                <Cell key={entry.name} fill={colors[index]} />
               ))}
             </Pie>
           </PieChart>
@@ -88,7 +82,7 @@ export function AllocationMiniDonut({ data }: AllocationMiniDonutProps): React.R
               <span
                 className="inline-block size-2 rounded-full"
                 style={{
-                  backgroundColor: FALLBACK_COLORS[index % FALLBACK_COLORS.length],
+                  backgroundColor: colors[index],
                 }}
               />
               <span className="text-muted-foreground">{truncateName(item.name)}</span>

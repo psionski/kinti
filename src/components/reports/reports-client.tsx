@@ -5,12 +5,14 @@ import { DateRangeFilter } from "./date-range-filter";
 import { computeCompareRange, type ComputedRange, type DateRange } from "@/lib/date-ranges";
 import { IncomeExpensesCard } from "./income-expenses-card";
 import { SavingsRateChart } from "@/components/charts/savings-rate-chart";
-import { TrendsChart } from "@/components/charts/trends-chart";
+import { AverageSpendPills } from "./average-spend-pills";
+import { CategoryTrendsChart } from "@/components/charts/category-trends-chart";
 import { CategoryChangesCard } from "./category-changes-card";
 import { MerchantTable } from "./merchant-table";
 import type {
   NetIncomeResult,
   TrendsResult,
+  CategoryTrendsResult,
   SpendingSummaryResult,
   TopMerchantsResult,
 } from "@/lib/validators/reports";
@@ -20,7 +22,7 @@ export interface ReportsData {
   balance: NetIncomeResult;
   incomeTrend: TrendsResult;
   expenseTrend: TrendsResult;
-  spendingTrend: TrendsResult;
+  categoryTrends: CategoryTrendsResult;
   summary: SpendingSummaryResult;
   topMerchants: TopMerchantsResult;
 }
@@ -47,49 +49,65 @@ export function ReportsClient({
       const params = (extra: Record<string, string>): string =>
         new URLSearchParams(extra).toString();
 
-      const [balanceRes, incomeTrendRes, expenseTrendRes, summaryRes, merchantsRes] =
-        await Promise.all([
-          fetch(`/api/reports/income?${params({ dateFrom: r.dateFrom, dateTo: r.dateTo })}`),
-          fetch(`/api/reports/trends?${params({ months: String(r.months), type: "income" })}`),
-          fetch(`/api/reports/trends?${params({ months: String(r.months), type: "expense" })}`),
-          fetch(
-            `/api/reports/summary?${params({
-              dateFrom: r.dateFrom,
-              dateTo: r.dateTo,
-              groupBy: "category",
-              type: "expense",
-              compareDateFrom: r.compareDateFrom,
-              compareDateTo: r.compareDateTo,
-            })}`
-          ),
-          fetch(
-            `/api/reports/top-merchants?${params({
-              dateFrom: r.dateFrom,
-              dateTo: r.dateTo,
-              type: "expense",
-            })}`
-          ),
-        ]);
+      const [
+        balanceRes,
+        incomeTrendRes,
+        expenseTrendRes,
+        categoryTrendsRes,
+        summaryRes,
+        merchantsRes,
+      ] = await Promise.all([
+        fetch(`/api/reports/income?${params({ dateFrom: r.dateFrom, dateTo: r.dateTo })}`),
+        fetch(`/api/reports/trends?${params({ months: String(r.months), type: "income" })}`),
+        fetch(`/api/reports/trends?${params({ months: String(r.months), type: "expense" })}`),
+        fetch(
+          `/api/reports/category-trends?${params({
+            dateFrom: r.dateFrom,
+            dateTo: r.dateTo,
+            type: "expense",
+          })}`
+        ),
+        fetch(
+          `/api/reports/summary?${params({
+            dateFrom: r.dateFrom,
+            dateTo: r.dateTo,
+            groupBy: "category",
+            type: "expense",
+            compareDateFrom: r.compareDateFrom,
+            compareDateTo: r.compareDateTo,
+          })}`
+        ),
+        fetch(
+          `/api/reports/top-merchants?${params({
+            dateFrom: r.dateFrom,
+            dateTo: r.dateTo,
+            type: "expense",
+          })}`
+        ),
+      ]);
 
       if (
         balanceRes.ok &&
         incomeTrendRes.ok &&
         expenseTrendRes.ok &&
+        categoryTrendsRes.ok &&
         summaryRes.ok &&
         merchantsRes.ok
       ) {
-        const [balance, incomeTrend, expenseTrend, summary, topMerchants] = await Promise.all([
-          balanceRes.json() as Promise<NetIncomeResult>,
-          incomeTrendRes.json() as Promise<TrendsResult>,
-          expenseTrendRes.json() as Promise<TrendsResult>,
-          summaryRes.json() as Promise<SpendingSummaryResult>,
-          merchantsRes.json() as Promise<TopMerchantsResult>,
-        ]);
+        const [balance, incomeTrend, expenseTrend, categoryTrends, summary, topMerchants] =
+          await Promise.all([
+            balanceRes.json() as Promise<NetIncomeResult>,
+            incomeTrendRes.json() as Promise<TrendsResult>,
+            expenseTrendRes.json() as Promise<TrendsResult>,
+            categoryTrendsRes.json() as Promise<CategoryTrendsResult>,
+            summaryRes.json() as Promise<SpendingSummaryResult>,
+            merchantsRes.json() as Promise<TopMerchantsResult>,
+          ]);
         setData({
           balance,
           incomeTrend,
           expenseTrend,
-          spendingTrend: expenseTrend,
+          categoryTrends,
           summary,
           topMerchants,
         });
@@ -115,22 +133,25 @@ export function ReportsClient({
       <div className={loading ? "pointer-events-none opacity-60" : ""}>
         <div className="space-y-6">
           {isLongRange ? (
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-              <IncomeExpensesCard
-                balance={data.balance}
-                incomeTrend={data.incomeTrend.points}
-                expenseTrend={data.expenseTrend.points}
-              />
-              <SavingsRateChart
-                incomeTrend={data.incomeTrend.points}
-                expenseTrend={data.expenseTrend.points}
-              />
-              <TrendsChart
-                data={data.spendingTrend.points}
-                categories={categories}
-                months={range.months}
-              />
-            </div>
+            <>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                <IncomeExpensesCard
+                  balance={data.balance}
+                  incomeTrend={data.incomeTrend.points}
+                  expenseTrend={data.expenseTrend.points}
+                />
+                <SavingsRateChart
+                  incomeTrend={data.incomeTrend.points}
+                  expenseTrend={data.expenseTrend.points}
+                />
+                <AverageSpendPills
+                  groups={data.summary.groups}
+                  months={range.months}
+                  categories={categories}
+                />
+              </div>
+              <CategoryTrendsChart data={data.categoryTrends} />
+            </>
           ) : (
             <>
               <IncomeExpensesCard

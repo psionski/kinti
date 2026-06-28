@@ -6,15 +6,8 @@ import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/format";
+import { fallbackColor } from "@/lib/chart-colors";
 import type { AllocationResult } from "@/lib/validators/portfolio-reports";
-
-const FALLBACK_COLORS = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-];
 
 type ViewMode = "asset" | "type";
 
@@ -57,13 +50,11 @@ export function AllocationChart({ data }: AllocationChartProps): React.ReactElem
         ? data.byAsset.map((a) => ({ name: a.name, value: a.currentValue, pct: a.pct }))
         : data.byType.map((t) => ({ name: t.type, value: t.currentValue, pct: t.pct }));
 
-    return items
-      .filter((item) => item.value > 0)
-      .sort((a, b) => b.value - a.value)
-      .map((item, i) => ({
-        ...item,
-        color: FALLBACK_COLORS[i % FALLBACK_COLORS.length],
-      }));
+    const visible = items.filter((item) => item.value > 0).sort((a, b) => b.value - a.value);
+    return visible.map((item, i) => ({
+      ...item,
+      color: fallbackColor(i, visible.length),
+    }));
   }, [data, view]);
 
   const chartConfig = useMemo(

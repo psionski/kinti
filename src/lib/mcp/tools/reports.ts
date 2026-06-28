@@ -4,6 +4,7 @@ import {
   SpendingSummarySchema,
   CategoryStatsSchema,
   TrendsSchema,
+  CategoryTrendsSchema,
   TopMerchantsSchema,
   NetIncomeSchema,
 } from "@/lib/validators/reports";
@@ -45,6 +46,19 @@ export function registerReportTools(server: McpServer): void {
       inputSchema: TrendsSchema,
     },
     (input) => ok(getReportService().trends(input))
+  );
+
+  server.registerTool(
+    "get_category_trends",
+    {
+      description:
+        "Monthly spend broken down by top-level category over a date range, for a stacked " +
+        "time series. Spend is bucketed by calendar month and each transaction is rolled up " +
+        "into its root category. Series are ordered by variance ascending (most stable " +
+        "categories first), each with the per-month values aligned to the returned months array.",
+      inputSchema: CategoryTrendsSchema,
+    },
+    (input) => ok(getReportService().categoryTrends(input))
   );
 
   server.registerTool(

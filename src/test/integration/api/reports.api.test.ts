@@ -7,6 +7,7 @@ describe("Report API Routes", () => {
   let GET_SUMMARY: (req: Request) => Promise<Response>;
   let GET_CATEGORY_STATS: (req: Request) => Promise<Response>;
   let GET_TRENDS: (req: Request) => Promise<Response>;
+  let GET_CATEGORY_TRENDS: (req: Request) => Promise<Response>;
   let GET_TOP_MERCHANTS: (req: Request) => Promise<Response>;
   let GET_INCOME: (req: Request) => Promise<Response>;
   let POST_TX: (req: Request) => Promise<Response>;
@@ -16,6 +17,7 @@ describe("Report API Routes", () => {
     const summary = await import("@/app/api/reports/summary/route");
     const categoryStats = await import("@/app/api/reports/category-stats/route");
     const trends = await import("@/app/api/reports/trends/route");
+    const categoryTrends = await import("@/app/api/reports/category-trends/route");
     const topMerchants = await import("@/app/api/reports/top-merchants/route");
     const income = await import("@/app/api/reports/income/route");
     const txs = await import("@/app/api/transactions/route");
@@ -23,6 +25,7 @@ describe("Report API Routes", () => {
     GET_SUMMARY = summary.GET;
     GET_CATEGORY_STATS = categoryStats.GET;
     GET_TRENDS = trends.GET;
+    GET_CATEGORY_TRENDS = categoryTrends.GET;
     GET_TOP_MERCHANTS = topMerchants.GET;
     GET_INCOME = income.GET;
     POST_TX = txs.POST;
@@ -122,6 +125,35 @@ describe("Report API Routes", () => {
 
     expect(Array.isArray(body)).toBe(false);
     expect(body).toMatchObject({ points: expect.any(Array), currency: "EUR" });
+  });
+
+  it("GET /category-trends returns months/series/currency envelope for the range", async () => {
+    await seedData();
+    const res = await GET_CATEGORY_TRENDS(
+      makeGet("/api/reports/category-trends", {
+        dateFrom: "2025-01-01",
+        dateTo: "2025-03-31",
+        type: "expense",
+      })
+    );
+    expect(res.status).toBe(200);
+    const body = await json<{
+      months: string[];
+      series: Array<{ key: string; values: number[] }>;
+      currency: string;
+    }>(res);
+    expect(body.months).toEqual(["2025-01", "2025-02", "2025-03"]);
+    expect(body.currency).toBe("EUR");
+    // Seeded Food spend (20 + 30) lands in the first month of the range.
+    const food = body.series.find((s) => s.values[0] === 50);
+    expect(food).toBeDefined();
+  });
+
+  it("GET /category-trends rejects a missing date range", async () => {
+    const res = await GET_CATEGORY_TRENDS(
+      makeGet("/api/reports/category-trends", { dateTo: "2025-03-31" })
+    );
+    expect(res.status).toBe(400);
   });
 
   it("GET /top-merchants returns top merchants", async () => {

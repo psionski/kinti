@@ -3,15 +3,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { formatCurrency } from "@/lib/format";
+import { fallbackColor } from "@/lib/chart-colors";
 import type { CurrencyExposureItem } from "@/lib/validators/portfolio-reports";
-
-const COLORS = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-];
 
 interface CurrencyExposureProps {
   data: CurrencyExposureItem[];
@@ -31,6 +24,8 @@ export function CurrencyExposure({ data }: CurrencyExposureProps): React.ReactEl
     );
   }
 
+  const colors = data.map((_, i) => fallbackColor(i, data.length));
+
   return (
     <Card>
       <CardHeader>
@@ -44,7 +39,7 @@ export function CurrencyExposure({ data }: CurrencyExposureProps): React.ReactEl
               key={item.currency}
               style={{
                 width: `${item.pct}%`,
-                backgroundColor: COLORS[i % COLORS.length],
+                backgroundColor: colors[i],
               }}
               title={`${item.currency}: ${item.pct.toFixed(1)}%`}
             />
@@ -57,7 +52,7 @@ export function CurrencyExposure({ data }: CurrencyExposureProps): React.ReactEl
             <div key={item.currency} className="flex items-center gap-1.5 text-sm">
               <span
                 className="inline-block size-3 rounded-sm"
-                style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                style={{ backgroundColor: colors[i] }}
               />
               <span className="font-medium">{item.currency}</span>
               <span className="text-muted-foreground">

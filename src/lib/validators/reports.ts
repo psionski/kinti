@@ -62,6 +62,23 @@ export const TrendsSchema = z.object({
 
 export type TrendsInput = z.infer<typeof TrendsSchema>;
 
+// ─── Category Trends ────────────────────────────────────────────────────────────
+
+export const CategoryTrendsSchema = z.object({
+  dateFrom: IsoDateSchema.describe(
+    "Start of date range (YYYY-MM-DD). Spend is bucketed by calendar month from this month through dateTo, inclusive."
+  ),
+  dateTo: IsoDateSchema.describe("End of date range (YYYY-MM-DD)"),
+  type: z
+    .enum(["income", "expense", "all"])
+    .default("expense")
+    .describe(
+      "Transaction type to break down. Defaults to 'expense'; 'all' combines income and expense."
+    ),
+});
+
+export type CategoryTrendsInput = z.infer<typeof CategoryTrendsSchema>;
+
 // ─── Daily Spend ──────────────────────────────────────────────────────────────
 
 export const DailySpendSchema = z.object({
@@ -239,6 +256,24 @@ export const TrendsResultSchema = z.object({
   currency: z.string().describe("ISO 4217 base currency that all totals are denominated in"),
 });
 export type TrendsResult = z.infer<typeof TrendsResultSchema>;
+
+export const CategoryTrendSeriesSchema = z.object({
+  key: z.string().describe("Stable series key: 'c{rootCategoryId}' or 'uncategorized'"),
+  name: z.string().describe("Top-level category display name"),
+  color: z.string().nullable().describe("Category color, null to fall back to the chart palette"),
+  variance: z.number().describe("Population variance of monthly spend across the range"),
+  values: z.array(z.number()).describe("Monthly totals aligned to the months[] array"),
+});
+export type CategoryTrendSeries = z.infer<typeof CategoryTrendSeriesSchema>;
+
+export const CategoryTrendsResultSchema = z.object({
+  months: z.array(z.string()).describe("Ordered YYYY-MM labels"),
+  series: z
+    .array(CategoryTrendSeriesSchema)
+    .describe("Ordered by variance ascending — most stable first (bottom of the stack)"),
+  currency: z.string().describe("ISO 4217 base currency that all totals are denominated in"),
+});
+export type CategoryTrendsResult = z.infer<typeof CategoryTrendsResultSchema>;
 
 export const DailySpendResultSchema = z.object({
   points: z.array(DailySpendPointSchema),

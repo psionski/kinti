@@ -11,6 +11,7 @@ import {
   CategoryStatsSchema,
   BudgetStatsSchema,
   TrendsSchema,
+  CategoryTrendsSchema,
   DailySpendSchema,
   TopMerchantsSchema,
 } from "@/lib/validators/reports";
@@ -442,6 +443,94 @@ describe("trends", async () => {
     const { points } = reports.trends(TrendsSchema.parse({ months: 4 }));
     const months = points.map((r) => r.month);
     expect(months).toEqual([...months].sort());
+  });
+});
+
+// ─── categoryTrends ────────────────────────────────────────────────────────────
+
+describe("categoryTrends", async () => {
+  it("returns the months spanning the range in ascending order plus the base currency", async () => {
+    const { months, currency } = reports.categoryTrends(
+      CategoryTrendsSchema.parse({ dateFrom: "2026-01-01", dateTo: "2026-03-31" })
+    );
+    expect(months).toEqual(["2026-01", "2026-02", "2026-03"]);
+    expect(currency).toBe("EUR");
+  });
+
+  it("honors the requested range instead of anchoring to the current month", async () => {
+    const food = catService.create({ name: "Food" });
+    await txService.create(tx({ amount: 9, categoryId: food.id, date: "2025-11-15" }));
+
+    // Range ends well before the pinned 'today' (March 2026).
+    const { months, series } = reports.categoryTrends(
+      CategoryTrendsSchema.parse({ dateFrom: "2025-10-01", dateTo: "2025-12-31" })
+    );
+    expect(months).toEqual(["2025-10", "2025-11", "2025-12"]);
+    const foodSeries = series.find((s) => s.key === `c${food.id}`);
+    expect(foodSeries?.values[months.indexOf("2025-11")]).toBe(9);
+  });
+
+  it("rolls child-category spend up into the top-level parent series", async () => {
+    const food = catService.create({ name: "Food" });
+    const groceries = catService.create({ name: "Groceries", parentId: food.id });
+
+    await txService.create(tx({ amount: 5, categoryId: groceries.id, date: "2026-03-01" }));
+    await txService.create(tx({ amount: 3, categoryId: food.id, date: "2026-03-02" }));
+
+    const { months, series } = reports.categoryTrends(
+      CategoryTrendsSchema.parse({ dateFrom: "2026-01-01", dateTo: "2026-03-31" })
+    );
+    const foodSeries = series.find((s) => s.key === `c${food.id}`);
+    expect(foodSeries).toBeDefined();
+    // No separate series for the child category.
+    expect(series.find((s) => s.key === `c${groceries.id}`)).toBeUndefined();
+    const marchIdx = months.indexOf("2026-03");
+    expect(foodSeries?.values[marchIdx]).toBe(8);
+  });
+
+  it("aligns values to the months array and fills empty months with zero", async () => {
+    const food = catService.create({ name: "Food" });
+    await txService.create(tx({ amount: 4, categoryId: food.id, date: "2026-03-10" }));
+
+    const { months, series } = reports.categoryTrends(
+      CategoryTrendsSchema.parse({ dateFrom: "2026-01-01", dateTo: "2026-03-31" })
+    );
+    const foodSeries = series.find((s) => s.key === `c${food.id}`);
+    expect(foodSeries?.values).toHaveLength(months.length);
+    expect(foodSeries?.values[months.indexOf("2026-01")]).toBe(0);
+    expect(foodSeries?.values[months.indexOf("2026-02")]).toBe(0);
+    expect(foodSeries?.values[months.indexOf("2026-03")]).toBe(4);
+  });
+
+  it("orders series by variance ascending (most stable first)", async () => {
+    const stable = catService.create({ name: "Rent" });
+    const spiky = catService.create({ name: "Shopping" });
+
+    // Stable: same amount every month.
+    for (const m of ["01", "02", "03"]) {
+      await txService.create(tx({ amount: 10, categoryId: stable.id, date: `2026-${m}-05` }));
+    }
+    // Spiky: everything in one month.
+    await txService.create(tx({ amount: 30, categoryId: spiky.id, date: "2026-03-05" }));
+
+    const { series } = reports.categoryTrends(
+      CategoryTrendsSchema.parse({ dateFrom: "2026-01-01", dateTo: "2026-03-31" })
+    );
+    expect(series[0].key).toBe(`c${stable.id}`);
+    expect(series[1].key).toBe(`c${spiky.id}`);
+    expect(series[0].variance).toBeLessThan(series[1].variance);
+  });
+
+  it("buckets uncategorized spend into its own series", async () => {
+    await txService.create(tx({ amount: 7, date: "2026-03-05" })); // no categoryId
+
+    const { months, series } = reports.categoryTrends(
+      CategoryTrendsSchema.parse({ dateFrom: "2026-01-01", dateTo: "2026-03-31" })
+    );
+    const uncategorized = series.find((s) => s.key === "uncategorized");
+    expect(uncategorized?.name).toBe("Uncategorized");
+    expect(uncategorized?.color).toBeNull();
+    expect(uncategorized?.values[months.indexOf("2026-03")]).toBe(7);
   });
 });
 

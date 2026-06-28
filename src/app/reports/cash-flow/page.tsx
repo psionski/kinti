@@ -16,6 +16,11 @@ export default function ReportsPage(): React.ReactElement {
   const balance = reportService.netIncome({ dateFrom, dateTo });
   const incomeTrend = reportService.trends({ months: computed.months, type: "income" });
   const expenseTrend = reportService.trends({ months: computed.months, type: "expense" });
+  const categoryTrends = reportService.categoryTrends({
+    dateFrom,
+    dateTo,
+    type: "expense",
+  });
   const summary = reportService.spendingSummary({
     dateFrom,
     dateTo,
@@ -37,7 +42,7 @@ export default function ReportsPage(): React.ReactElement {
     balance,
     incomeTrend,
     expenseTrend,
-    spendingTrend: expenseTrend,
+    categoryTrends,
     summary,
     topMerchants,
   };

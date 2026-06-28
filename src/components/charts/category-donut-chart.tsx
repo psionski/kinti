@@ -5,16 +5,9 @@ import { Pie, PieChart, Cell, Label } from "recharts";
 import { ArrowLeft } from "lucide-react";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import { formatCurrency } from "@/lib/format";
+import { fallbackColor } from "@/lib/chart-colors";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { CategorySpendingItem } from "@/lib/validators/reports";
-
-const FALLBACK_COLORS = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-];
 
 interface BreadcrumbEntry {
   id: number | null;
@@ -90,19 +83,18 @@ export function CategoryDonutChart({
 
     // Compute percentages from this level's total
     const grandTotal = entries.reduce((s, e) => s + e.rawValue, 0);
+    const visible = entries.filter((e) => e.rawValue > 0).sort((a, b) => b.rawValue - a.rawValue);
+    const colorlessCount = visible.filter((e) => !e.color).length;
     let fallbackIndex = 0;
 
-    return entries
-      .filter((e) => e.rawValue > 0)
-      .sort((a, b) => b.rawValue - a.rawValue)
-      .map((entry) => ({
-        name: entry.name,
-        value: entry.rawValue,
-        percentage: grandTotal > 0 ? Math.round((entry.rawValue / grandTotal) * 10000) / 100 : 0,
-        color: entry.color ?? FALLBACK_COLORS[fallbackIndex++ % FALLBACK_COLORS.length],
-        categoryId: entry.categoryId,
-        hasChildren: entry.hasChildren,
-      }));
+    return visible.map((entry) => ({
+      name: entry.name,
+      value: entry.rawValue,
+      percentage: grandTotal > 0 ? Math.round((entry.rawValue / grandTotal) * 10000) / 100 : 0,
+      color: entry.color ?? fallbackColor(fallbackIndex++, colorlessCount),
+      categoryId: entry.categoryId,
+      hasChildren: entry.hasChildren,
+    }));
   }, [data, currentParentId, parentIds]);
 
   const chartConfig = useMemo(

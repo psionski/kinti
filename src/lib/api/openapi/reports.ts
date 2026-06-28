@@ -4,11 +4,13 @@ import {
   CategoryStatsSchema,
   BudgetStatsSchema,
   TrendsSchema,
+  CategoryTrendsSchema,
   TopMerchantsSchema,
   SpendingSummaryResultSchema,
   CategoryStatsResultSchema,
   BudgetStatsItemSchema,
   TrendsResultSchema,
+  CategoryTrendsResultSchema,
   TopMerchantsResultSchema,
 } from "@/lib/validators/reports";
 import { op } from "./helpers";
@@ -17,6 +19,7 @@ const SummaryResult = SpendingSummaryResultSchema.meta({ id: "SpendingSummaryRes
 const CategoryStatsResult = CategoryStatsResultSchema.meta({ id: "CategoryStatsResult" });
 const BudgetStatsItem = BudgetStatsItemSchema.meta({ id: "BudgetStatsItem" });
 const TrendsResult = TrendsResultSchema.meta({ id: "TrendsResult" });
+const CategoryTrendsResult = CategoryTrendsResultSchema.meta({ id: "CategoryTrendsResult" });
 const TopMerchantsResult = TopMerchantsResultSchema.meta({ id: "TopMerchantsResult" });
 
 export const reportPaths = {
@@ -61,6 +64,16 @@ export const reportPaths = {
       tags: ["Reports"],
       query: TrendsSchema,
       response: TrendsResult,
+      errors: [400, 500],
+    }),
+  },
+  "/api/reports/category-trends": {
+    get: op({
+      id: "categoryTrends",
+      summary: "Monthly spend by top-level category, ordered by stability (stacked series)",
+      tags: ["Reports"],
+      query: CategoryTrendsSchema,
+      response: CategoryTrendsResult,
       errors: [400, 500],
     }),
   },

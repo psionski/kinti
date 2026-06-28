@@ -12,6 +12,7 @@ import {
   type CategoryStatsInput,
   type BudgetStatsInput,
   type TrendsInput,
+  type CategoryTrendsInput,
   type DailySpendInput,
   type TopMerchantsInput,
   type NetIncomeInput,
@@ -19,6 +20,8 @@ import {
   type CategorySpendingItem,
   type BudgetStatsItem,
   type TrendPoint,
+  type CategoryTrendsResult,
+  type CategoryTrendSeries,
   type DailySpendPoint,
   type TopMerchant,
   type SpendingSummaryResult,
@@ -451,6 +454,116 @@ export class ReportService {
       count: Number(r.count),
     }));
     return { points, currency: getBaseCurrency() };
+  }
+
+  /**
+   * Monthly spend broken down by top-level category, for a stacked area chart.
+   * Each transaction's spend is rolled up into its root (top-level) category.
+   * Series are ordered by variance ascending — the most stable categories come
+   * first so they render at the bottom of the stack.
+   */
+  categoryTrends(input: CategoryTrendsInput): CategoryTrendsResult {
+    // Build the month series (YYYY-MM) spanning the selected range, inclusive.
+    const startYm = Temporal.PlainDate.from(input.dateFrom).toPlainYearMonth();
+    const endYm = Temporal.PlainDate.from(input.dateTo).toPlainYearMonth();
+    const months: string[] = [];
+    for (
+      let ym = startYm;
+      Temporal.PlainYearMonth.compare(ym, endYm) <= 0;
+      ym = ym.add({ months: 1 })
+    ) {
+      months.push(ym.toString());
+    }
+    const monthIndex = new Map(months.map((m, i) => [m, i]));
+
+    // Map every category to its top-level (root) ancestor.
+    const allCategories = this.db
+      .select({
+        id: categories.id,
+        name: categories.name,
+        parentId: categories.parentId,
+        color: categories.color,
+      })
+      .from(categories)
+      .all();
+    const byId = new Map(allCategories.map((c) => [c.id, c]));
+    const rootCache = new Map<number, number>();
+    const rootOf = (id: number): number => {
+      const cached = rootCache.get(id);
+      if (cached !== undefined) return cached;
+      let cur = byId.get(id);
+      const chain: number[] = [];
+      while (cur && cur.parentId !== null && byId.has(cur.parentId)) {
+        chain.push(cur.id);
+        cur = byId.get(cur.parentId);
+      }
+      const root = cur?.id ?? id;
+      for (const c of chain) rootCache.set(c, root);
+      rootCache.set(id, root);
+      return root;
+    };
+
+    // Monthly per-(leaf)category sums. Non-zero rows only; JS fills the gaps.
+    const filters: SQL[] = [...dateFilters(input.dateFrom, input.dateTo)];
+    const tf = typeFilter(input.type);
+    if (tf) filters.push(tf);
+    const rows = this.db
+      .select({
+        month: sql<string>`strftime('%Y-%m', ${transactions.date})`.mapWith(String),
+        categoryId: transactions.categoryId,
+        total: sql<number>`coalesce(sum(${transactions.amountBase}), 0)`.mapWith(Number),
+      })
+      .from(transactions)
+      .where(and(...filters))
+      .groupBy(sql`strftime('%Y-%m', ${transactions.date})`, transactions.categoryId)
+      .all();
+
+    // Pivot into per-root-category series aligned to the months array.
+    const seriesMap = new Map<string, { name: string; color: string | null; values: number[] }>();
+    const seriesFor = (key: string, name: string, color: string | null) => {
+      let s = seriesMap.get(key);
+      if (!s) {
+        s = { name, color, values: new Array(months.length).fill(0) };
+        seriesMap.set(key, s);
+      }
+      return s;
+    };
+
+    for (const row of rows) {
+      const idx = monthIndex.get(row.month);
+      if (idx === undefined) continue;
+      if (row.categoryId === null) {
+        seriesFor("uncategorized", "Uncategorized", null).values[idx] += row.total;
+      } else {
+        const root = byId.get(rootOf(row.categoryId));
+        const key = `c${root?.id ?? row.categoryId}`;
+        seriesFor(key, root?.name ?? "(unknown)", root?.color ?? null).values[idx] += row.total;
+      }
+    }
+
+    const variance = (values: number[]): number => {
+      const mean = values.reduce((a, b) => a + b, 0) / values.length;
+      return values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length;
+    };
+
+    const series: CategoryTrendSeries[] = Array.from(seriesMap.entries())
+      .map(([key, s]) => ({
+        key,
+        name: s.name,
+        color: s.color,
+        variance: variance(s.values),
+        values: s.values,
+      }))
+      // Most stable (lowest variance) first → bottom of the stack.
+      // Ties broken by total spend desc so larger categories sit lower.
+      .sort((a, b) => {
+        if (a.variance !== b.variance) return a.variance - b.variance;
+        const at = a.values.reduce((x, y) => x + y, 0);
+        const bt = b.values.reduce((x, y) => x + y, 0);
+        return bt - at;
+      });
+
+    return { months, series, currency: getBaseCurrency() };
   }
 
   /**
