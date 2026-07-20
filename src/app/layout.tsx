@@ -29,12 +29,20 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Kinti",
   description: "AI-powered personal finance tracker",
+  // Standalone / "Add to Home Screen" support on iOS. Android/Chrome reads
+  // display + icons from the auto-linked manifest.webmanifest instead.
+  appleWebApp: {
+    capable: true,
+    title: "Kinti",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   interactiveWidget: "resizes-content",
+  themeColor: "#0a0a0a",
 };
 
 export default function RootLayout({
