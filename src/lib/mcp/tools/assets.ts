@@ -74,7 +74,7 @@ export function registerAssetTools(server: McpServer): void {
       description:
         "Update asset metadata (name, icon, color, notes, symbolMap). " +
         "Does not affect holdings or prices — use buy_asset/sell_asset for that.",
-      inputSchema: IdSchema.merge(UpdateAssetSchema),
+      inputSchema: IdSchema.extend(UpdateAssetSchema.shape),
     },
     (input) => {
       const { id, ...rest } = input;
@@ -110,7 +110,7 @@ export function registerAssetTools(server: McpServer): void {
         "Kinti handles the cash-side bookkeeping automatically. " +
         "For ANY 'deposit' asset, regardless of currency: pricePerUnit=1 and quantity=the amount in the asset's currency. " +
         "For investments/crypto/other: pricePerUnit is the per-unit price in the asset's native currency, quantity is the number of units bought.",
-      inputSchema: IdSchema.merge(BuyAssetSchema),
+      inputSchema: IdSchema.extend(BuyAssetSchema.shape),
     },
     async (input) => {
       const { id, ...rest } = input;
@@ -132,7 +132,7 @@ export function registerAssetTools(server: McpServer): void {
         "Errors if quantity exceeds current holdings. " +
         "Same conventions as buy_asset: deposits use pricePerUnit=1 with quantity=the amount; " +
         "investments/crypto use the per-unit price in the asset's native currency.",
-      inputSchema: IdSchema.merge(SellAssetSchema),
+      inputSchema: IdSchema.extend(SellAssetSchema.shape),
     },
     async (input) => {
       const { id, ...rest } = input;
@@ -152,7 +152,7 @@ export function registerAssetTools(server: McpServer): void {
         "Record a current price snapshot for an asset. " +
         "Use get_price first to fetch the latest market price, then call this to persist it. " +
         "Updates the asset's current value and P&L.",
-      inputSchema: IdSchema.merge(RecordPriceSchema),
+      inputSchema: IdSchema.extend(RecordPriceSchema.shape),
     },
     (input) => {
       const { id, ...rest } = input;

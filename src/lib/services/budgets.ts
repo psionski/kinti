@@ -12,6 +12,7 @@ import type {
 import type { ReportService } from "./reports";
 import { ensureOwnRows, monthHasOwnRows } from "./budget-inheritance";
 import { getCurrentMonth } from "@/lib/date-ranges";
+import { requireRow } from "@/lib/db/rows";
 
 type Db = BetterSQLite3Database<typeof schema>;
 
@@ -36,24 +37,30 @@ export class BudgetService {
       .all();
 
     if (existing.length > 0) {
-      const [row] = this.db
-        .update(budgets)
-        .set({ amount: input.amount, deleted: 0 })
-        .where(and(eq(budgets.categoryId, input.categoryId), eq(budgets.month, input.month)))
-        .returning()
-        .all();
+      const row = requireRow(
+        this.db
+          .update(budgets)
+          .set({ amount: input.amount, deleted: 0 })
+          .where(and(eq(budgets.categoryId, input.categoryId), eq(budgets.month, input.month)))
+          .returning()
+          .all(),
+        "budget"
+      );
       return row;
     } else {
-      const [row] = this.db
-        .insert(budgets)
-        .values({
-          categoryId: input.categoryId,
-          month: input.month,
-          amount: input.amount,
-          deleted: 0,
-        })
-        .returning()
-        .all();
+      const row = requireRow(
+        this.db
+          .insert(budgets)
+          .values({
+            categoryId: input.categoryId,
+            month: input.month,
+            amount: input.amount,
+            deleted: 0,
+          })
+          .returning()
+          .all(),
+        "budget"
+      );
       return row;
     }
   }
@@ -151,7 +158,9 @@ export class BudgetService {
   /** Returns budget totals for each of the last N months. */
   getHistory(months: number): BudgetHistoryPoint[] {
     const current = getCurrentMonth();
-    const [curYear, curMonth] = current.split("-").map(Number);
+    const parts = current.split("-").map(Number);
+    const curYear = parts[0]!;
+    const curMonth = parts[1]!;
     const points: BudgetHistoryPoint[] = [];
 
     for (let i = months - 1; i >= 0; i--) {

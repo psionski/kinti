@@ -35,7 +35,7 @@ const ONBOARDING_ORDER: OnboardingStep[] = [
 
 function nextStep(current: OnboardingStep): OnboardingStep {
   const idx = ONBOARDING_ORDER.indexOf(current);
-  return ONBOARDING_ORDER[Math.min(idx + 1, ONBOARDING_ORDER.length - 1)];
+  return ONBOARDING_ORDER[Math.min(idx + 1, ONBOARDING_ORDER.length - 1)]!;
 }
 
 function stepReached(current: OnboardingStep, target: OnboardingStep): boolean {
@@ -55,7 +55,7 @@ function detectLocaleCurrency(): string {
     // Newer browsers expose `getCurrencies()` on Intl.Locale.
     const withCurrencies = locale as Intl.Locale & { getCurrencies?: () => string[] };
     const currencies = withCurrencies.getCurrencies?.();
-    if (currencies && currencies.length > 0) return currencies[0];
+    if (currencies && currencies.length > 0) return currencies[0]!;
   } catch {
     // ignore
   }

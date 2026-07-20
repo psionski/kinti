@@ -21,8 +21,8 @@ interface AllocationMiniDonutProps {
 function buildChartConfig(data: AllocationItem[], colors: string[]): ChartConfig {
   const config: ChartConfig = {};
   for (let i = 0; i < data.length; i++) {
-    config[data[i].name] = {
-      label: data[i].name,
+    config[data[i]!.name] = {
+      label: data[i]!.name,
       color: colors[i],
     };
   }

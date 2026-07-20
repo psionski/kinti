@@ -43,7 +43,7 @@ export function BudgetFormDialog({
   const [amount, setAmount] = useState(initialData ? String(initialData.budgetAmount) : "");
   const [error, setError] = useState("");
 
-  function handleSubmit(e: React.FormEvent): void {
+  function handleSubmit(e: React.SyntheticEvent): void {
     e.preventDefault();
     setError("");
 
@@ -72,7 +72,7 @@ export function BudgetFormDialog({
           <DialogTitle>{isEdit ? "Edit Budget" : "Set Budget"}</DialogTitle>
           <DialogDescription>
             {isEdit
-              ? `Update the budget for ${initialData?.categoryName}.`
+              ? `Update the budget for ${initialData.categoryName}.`
               : "Set a monthly budget for a category."}
           </DialogDescription>
         </DialogHeader>
@@ -81,7 +81,7 @@ export function BudgetFormDialog({
           <div className="space-y-2">
             <Label htmlFor="budget-category">Category</Label>
             {isEdit ? (
-              <Input value={initialData?.categoryName ?? ""} disabled />
+              <Input value={initialData.categoryName} disabled />
             ) : (
               <Select value={categoryId} onValueChange={setCategoryId}>
                 <SelectTrigger id="budget-category">

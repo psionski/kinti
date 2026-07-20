@@ -86,8 +86,10 @@ export function generateBudgets(
         name === "Food & Drink" || name === "Dining" || name === "Entertainment";
       const amount = isDecember && isHolidayCategory ? roundTo25(baseBudget * 1.2) : baseBudget;
 
+      const categoryId = catIds[name];
+      if (categoryId === undefined) continue;
       rows.push({
-        categoryId: catIds[name],
+        categoryId,
         month: monthStr,
         amount,
       });

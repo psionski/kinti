@@ -42,7 +42,7 @@ export function BackupManager({
   async function refreshBackups(): Promise<void> {
     const res = await fetch("/api/backups");
     if (res.ok) {
-      setBackups(await res.json());
+      setBackups((await res.json()) as BackupInfo[]);
     }
   }
 
@@ -52,7 +52,7 @@ export function BackupManager({
     try {
       const res = await fetch("/api/backups", { method: "POST" });
       if (!res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as { error?: string };
         throw new Error(data.error ?? "Backup failed");
       }
       await refreshBackups();
@@ -74,7 +74,7 @@ export function BackupManager({
         body: JSON.stringify({ filename: restoreTarget }),
       });
       if (!res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as { error?: string };
         throw new Error(data.error ?? "Restore failed");
       }
       setRestoreTarget(null);

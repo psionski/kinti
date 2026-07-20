@@ -140,8 +140,8 @@ export class AlphaVantageProvider implements FinancialDataProvider {
     // pre-fill the field.
     return data.bestMatches.slice(0, 10).map((m) => ({
       provider: this.name,
-      symbol: m["1. symbol"],
-      name: `${m["2. name"]} (${m["1. symbol"]})`,
+      symbol: m["1. symbol"] ?? "",
+      name: `${m["2. name"] ?? ""} (${m["1. symbol"] ?? ""})`,
       type: m["3. type"]?.toLowerCase() ?? "stock",
       currency: m["8. currency"]?.toUpperCase(),
     }));

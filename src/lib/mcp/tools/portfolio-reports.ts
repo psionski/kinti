@@ -75,7 +75,7 @@ export function registerPortfolioReportTools(server: McpServer): void {
       description:
         "Combined lot timeline + price/value chart for a single asset. " +
         "Shows all buy/sell events with running quantity, plus weekly price and value data points.",
-      inputSchema: IdSchema.merge(z.object({ window: WindowSchema })),
+      inputSchema: IdSchema.extend({ window: WindowSchema }),
     },
     (input) => {
       const result = getPortfolioReportService().getAssetHistory(input.id, input.window);

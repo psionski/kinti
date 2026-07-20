@@ -184,7 +184,7 @@ describe("create", async () => {
       sortOrder: "asc",
     });
     expect(txs.total).toBe(1);
-    expect(txs.data[0].date).toBe("2026-04-01");
+    expect(txs.data[0]!.date).toBe("2026-04-01");
   });
 
   it("does not auto-generate when startDate is in the future", async () => {
@@ -222,7 +222,7 @@ describe("create", async () => {
       sortOrder: "asc",
     });
     expect(txs.total).toBe(1);
-    const tx = txs.data[0];
+    const tx = txs.data[0]!;
     expect(tx.amount).toBe(12.99);
     expect(tx.type).toBe("expense");
     expect(tx.description).toBe("Netflix");
@@ -451,7 +451,7 @@ describe("generatePending", async () => {
 
   it("skips inactive templates", async () => {
     await service.create(rec({ startDate: "2027-01-15", frequency: "monthly" }));
-    const created = service.list()[0];
+    const created = service.list()[0]!;
     service.update(created.id, { isActive: false });
 
     const count = await service.generatePending("2027-06-30");
@@ -470,7 +470,7 @@ describe("generatePending", async () => {
       recurringId: r.id,
     });
     expect(txs.total).toBe(1);
-    expect(txs.data[0].recurringId).toBe(r.id);
+    expect(txs.data[0]!.recurringId).toBe(r.id);
   });
 
   it("returns 0 when no active templates exist", async () => {

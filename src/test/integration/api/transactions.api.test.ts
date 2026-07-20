@@ -97,7 +97,7 @@ describe("Transaction API Routes", () => {
     );
     const body = await json<{ data: Array<{ description: string }>; total: number }>(res);
     expect(body.total).toBe(1);
-    expect(body.data[0].description).toBe("Feb");
+    expect(body.data[0]!.description).toBe("Feb");
   });
 
   it("GET by ID returns 404 for nonexistent", async () => {
@@ -184,8 +184,8 @@ describe("Transaction API Routes", () => {
     expect(res.status).toBe(201);
     const body = await json<Array<{ description: string }>>(res);
     expect(body).toHaveLength(2);
-    expect(body[0].description).toBe("A");
-    expect(body[1].description).toBe("B");
+    expect(body[0]!.description).toBe("A");
+    expect(body[1]!.description).toBe("B");
   });
 
   it("POST /batch returns 400 with empty transactions array", async () => {

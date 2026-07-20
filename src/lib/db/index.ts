@@ -120,8 +120,7 @@ export function getDb(): AppDb {
 export function resetDb(): void {
   if (g.__kintiDb) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const client = (g.__kintiDb as any).$client as InstanceType<typeof Database>;
+      const client = (g.__kintiDb as unknown as { $client: InstanceType<typeof Database> }).$client;
       client.close();
     } catch {
       // Connection may already be closed — safe to ignore

@@ -69,8 +69,8 @@ describe("Budget API Routes", () => {
     expect(res.status).toBe(200);
     const body = await json<BudgetStatusResponse>(res);
     expect(body.items).toHaveLength(1);
-    expect(body.items[0].budgetAmount).toBe(500);
-    expect(body.items[0].spentAmount).toBe(150);
+    expect(body.items[0]!.budgetAmount).toBe(500);
+    expect(body.items[0]!.spentAmount).toBe(150);
     expect(body.inheritedFrom).toBeNull();
   });
 
@@ -87,7 +87,7 @@ describe("Budget API Routes", () => {
     const body = await json<BudgetStatusResponse>(res);
     expect(body.inheritedFrom).toBe("2025-01");
     expect(body.items).toHaveLength(1);
-    expect(body.items[0].budgetAmount).toBe(500);
+    expect(body.items[0]!.budgetAmount).toBe(500);
   });
 
   it("DELETE soft-deletes a budget and returns success", async () => {

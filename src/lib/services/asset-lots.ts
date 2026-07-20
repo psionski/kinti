@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "@/lib/db/schema";
 import { assets, assetLots, assetPrices, transactions } from "@/lib/db/schema";
+import { requireRow } from "@/lib/db/rows";
 import type {
   BuyAssetInput,
   SellAssetInput,
@@ -117,33 +118,39 @@ export class AssetLotService {
       `${verb} ${input.quantity} ${asset.name} @ ${input.pricePerUnit.toFixed(2)} ${asset.currency}`;
 
     return this.db.transaction(() => {
-      const [txRow] = this.db
-        .insert(transactions)
-        .values({
-          amount: -total,
-          currency: asset.currency,
-          amountBase: -totalBase,
-          type: "transfer",
-          description,
-          date: input.date,
-          notes: input.notes ?? null,
-        })
-        .returning()
-        .all();
+      const txRow = requireRow(
+        this.db
+          .insert(transactions)
+          .values({
+            amount: -total,
+            currency: asset.currency,
+            amountBase: -totalBase,
+            type: "transfer",
+            description,
+            date: input.date,
+            notes: input.notes ?? null,
+          })
+          .returning()
+          .all(),
+        "transaction"
+      );
 
-      const [lotRow] = this.db
-        .insert(assetLots)
-        .values({
-          assetId,
-          quantity: input.quantity,
-          pricePerUnit: input.pricePerUnit,
-          pricePerUnitBase,
-          date: input.date,
-          transactionId: txRow.id,
-          notes: input.notes ?? null,
-        })
-        .returning()
-        .all();
+      const lotRow = requireRow(
+        this.db
+          .insert(assetLots)
+          .values({
+            assetId,
+            quantity: input.quantity,
+            pricePerUnit: input.pricePerUnit,
+            pricePerUnitBase,
+            date: input.date,
+            transactionId: txRow.id,
+            notes: input.notes ?? null,
+          })
+          .returning()
+          .all(),
+        "asset lot"
+      );
 
       this.recordPriceSnapshot(assetId, input.pricePerUnit, input.date);
 
@@ -196,33 +203,39 @@ export class AssetLotService {
         );
       }
 
-      const [txRow] = this.db
-        .insert(transactions)
-        .values({
-          amount: total,
-          currency: asset.currency,
-          amountBase: totalBase,
-          type: "transfer",
-          description,
-          date: input.date,
-          notes: input.notes ?? null,
-        })
-        .returning()
-        .all();
+      const txRow = requireRow(
+        this.db
+          .insert(transactions)
+          .values({
+            amount: total,
+            currency: asset.currency,
+            amountBase: totalBase,
+            type: "transfer",
+            description,
+            date: input.date,
+            notes: input.notes ?? null,
+          })
+          .returning()
+          .all(),
+        "transaction"
+      );
 
-      const [lotRow] = this.db
-        .insert(assetLots)
-        .values({
-          assetId,
-          quantity: -input.quantity,
-          pricePerUnit: input.pricePerUnit,
-          pricePerUnitBase,
-          date: input.date,
-          transactionId: txRow.id,
-          notes: input.notes ?? null,
-        })
-        .returning()
-        .all();
+      const lotRow = requireRow(
+        this.db
+          .insert(assetLots)
+          .values({
+            assetId,
+            quantity: -input.quantity,
+            pricePerUnit: input.pricePerUnit,
+            pricePerUnitBase,
+            date: input.date,
+            transactionId: txRow.id,
+            notes: input.notes ?? null,
+          })
+          .returning()
+          .all(),
+        "asset lot"
+      );
 
       this.recordPriceSnapshot(assetId, input.pricePerUnit, input.date);
 
@@ -252,19 +265,22 @@ export class AssetLotService {
     }
 
     return this.db.transaction(() => {
-      const [lotRow] = this.db
-        .insert(assetLots)
-        .values({
-          assetId,
-          quantity: input.quantity,
-          pricePerUnit: input.pricePerUnit,
-          pricePerUnitBase,
-          date: input.date,
-          transactionId: null,
-          notes: input.notes ?? null,
-        })
-        .returning()
-        .all();
+      const lotRow = requireRow(
+        this.db
+          .insert(assetLots)
+          .values({
+            assetId,
+            quantity: input.quantity,
+            pricePerUnit: input.pricePerUnit,
+            pricePerUnitBase,
+            date: input.date,
+            transactionId: null,
+            notes: input.notes ?? null,
+          })
+          .returning()
+          .all(),
+        "asset lot"
+      );
 
       if (input.pricePerUnit > 0) {
         this.recordPriceSnapshot(assetId, input.pricePerUnit, input.date);

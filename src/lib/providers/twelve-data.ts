@@ -62,7 +62,8 @@ export class TwelveDataProvider implements FinancialDataProvider {
     const data = (await res.json()) as TwelveDataTimeSeriesResponse;
     if (data.status === "error" || !data.values?.length) return null;
 
-    const point = data.values[0];
+    // data.values is non-empty (checked above), so [0] is provably present.
+    const point = data.values[0]!;
     const price = parseFloat(point.close);
     if (isNaN(price)) return null;
 

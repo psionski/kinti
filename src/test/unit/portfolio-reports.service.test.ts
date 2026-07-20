@@ -90,7 +90,7 @@ describe("getAssetPerformance", async () => {
     const result = reportService.getAssetPerformance();
     expect(result).toHaveLength(1);
 
-    const item = result[0];
+    const item = result[0]!;
     expect(item.assetId).toBe(asset.id);
     expect(item.costBasis).toBe(3000); // 10 * 300
     expect(item.currentValue).toBe(3500); // 10 * 350
@@ -109,8 +109,8 @@ describe("getAssetPerformance", async () => {
     priceService.record(a2.id, { pricePerUnit: 150, recordedAt: `${isoToday()}T00:00:00Z` });
 
     const result = reportService.getAssetPerformance();
-    expect(result[0].name).toBe("Winner");
-    expect(result[1].name).toBe("Loser");
+    expect(result[0]!.name).toBe("Winner");
+    expect(result[1]!.name).toBe("Loser");
   });
 });
 
@@ -149,8 +149,8 @@ describe("getAllocation", async () => {
 
     const result = reportService.getAllocation();
     expect(result.byType).toHaveLength(1);
-    expect(result.byType[0].type).toBe("deposit");
-    expect(result.byType[0].pct).toBe(100);
+    expect(result.byType[0]!.type).toBe("deposit");
+    expect(result.byType[0]!.pct).toBe(100);
   });
 });
 
@@ -204,8 +204,8 @@ describe("getCurrencyExposure", async () => {
     const result = reportService.getCurrencyExposure();
     // USD bucket is dropped — only EUR remains.
     expect(result).toHaveLength(1);
-    expect(result[0].currency).toBe("EUR");
-    expect(result[0].pct).toBe(100);
+    expect(result[0]!.currency).toBe("EUR");
+    expect(result[0]!.pct).toBe(100);
   });
 });
 
@@ -230,10 +230,10 @@ describe("getRealizedPnL", async () => {
 
     const result = reportService.getRealizedPnL();
     expect(result.items).toHaveLength(1);
-    expect(result.items[0].totalSold).toBe(1);
-    expect(result.items[0].proceeds).toBe(150); // 1 * 150
-    expect(result.items[0].costBasis).toBe(100); // FIFO: first lot @ 100
-    expect(result.items[0].realizedPnl).toBe(50);
+    expect(result.items[0]!.totalSold).toBe(1);
+    expect(result.items[0]!.proceeds).toBe(150); // 1 * 150
+    expect(result.items[0]!.costBasis).toBe(100); // FIFO: first lot @ 100
+    expect(result.items[0]!.realizedPnl).toBe(50);
     expect(result.totalRealizedPnl).toBe(50);
   });
 
@@ -246,7 +246,7 @@ describe("getRealizedPnL", async () => {
     // Only March sells
     const result = reportService.getRealizedPnL("2026-03-01", "2026-03-31");
     expect(result.items).toHaveLength(1);
-    expect(result.items[0].totalSold).toBe(3);
+    expect(result.items[0]!.totalSold).toBe(3);
   });
 });
 
@@ -266,9 +266,9 @@ describe("getAssetHistory", async () => {
     const result = reportService.getAssetHistory(asset.id, "all");
     expect(result).not.toBeNull();
     expect(result!.lots).toHaveLength(2);
-    expect(result!.lots[0].type).toBe("buy");
-    expect(result!.lots[0].runningQuantity).toBe(5);
-    expect(result!.lots[1].runningQuantity).toBe(8);
+    expect(result!.lots[0]!.type).toBe("buy");
+    expect(result!.lots[0]!.runningQuantity).toBe(5);
+    expect(result!.lots[1]!.runningQuantity).toBe(8);
     expect(result!.timeline.length).toBeGreaterThan(0);
   });
 
@@ -279,8 +279,8 @@ describe("getAssetHistory", async () => {
     const result = reportService.getAssetHistory(asset.id, "all");
     expect(result).not.toBeNull();
     // Timeline should start near the first lot date, not 2000-01-01
-    expect(result!.timeline[0].date >= "2025-06-01").toBe(true);
-    expect(result!.timeline[0].date < "2025-07-01").toBe(true);
+    expect(result!.timeline[0]!.date >= "2025-06-01").toBe(true);
+    expect(result!.timeline[0]!.date < "2025-07-01").toBe(true);
   });
 
   it("tracks buys and sells in lot timeline with correct running quantity", async () => {
@@ -293,15 +293,15 @@ describe("getAssetHistory", async () => {
     expect(result).not.toBeNull();
     expect(result!.lots).toHaveLength(3);
 
-    expect(result!.lots[0].type).toBe("buy");
-    expect(result!.lots[0].runningQuantity).toBe(10);
+    expect(result!.lots[0]!.type).toBe("buy");
+    expect(result!.lots[0]!.runningQuantity).toBe(10);
 
-    expect(result!.lots[1].type).toBe("buy");
-    expect(result!.lots[1].runningQuantity).toBe(15);
+    expect(result!.lots[1]!.type).toBe("buy");
+    expect(result!.lots[1]!.runningQuantity).toBe(15);
 
-    expect(result!.lots[2].type).toBe("sell");
-    expect(result!.lots[2].quantity).toBe(3);
-    expect(result!.lots[2].runningQuantity).toBe(12);
+    expect(result!.lots[2]!.type).toBe("sell");
+    expect(result!.lots[2]!.quantity).toBe(3);
+    expect(result!.lots[2]!.runningQuantity).toBe(12);
   });
 
   it("timeline value reflects holdings * price at each point", async () => {
@@ -314,7 +314,7 @@ describe("getAssetHistory", async () => {
     expect(result).not.toBeNull();
 
     // The last timeline point should reflect current holdings * current price
-    const last = result!.timeline[result!.timeline.length - 1];
+    const last = result!.timeline[result!.timeline.length - 1]!;
     expect(last.quantity).toBe(10);
     expect(last.price).toBe(120);
     expect(last.value).toBe(1200); // 10 * 120
@@ -336,9 +336,9 @@ describe("getTransferSummary", async () => {
 
     const result = reportService.getTransferSummary("2026-03");
     expect(result).toHaveLength(1);
-    expect(result[0].assetId).toBe(a1.id);
-    expect(result[0].purchases).toBe(500 + 315); // 5*100 + 3*105
-    expect(result[0].sales).toBe(0);
+    expect(result[0]!.assetId).toBe(a1.id);
+    expect(result[0]!.purchases).toBe(500 + 315); // 5*100 + 3*105
+    expect(result[0]!.sales).toBe(0);
   });
 });
 
@@ -360,7 +360,7 @@ describe("getNetWorthTimeSeries", async () => {
     expect(result.length).toBeGreaterThan(0);
 
     // The last point should show cash + assets = net worth
-    const last = result[result.length - 1];
+    const last = result[result.length - 1]!;
     expect(last.total).toBe(last.cash + last.assets);
   });
 
@@ -414,7 +414,7 @@ describe("getNetWorthTimeSeries", async () => {
     priceService.record(btc.id, { pricePerUnit: 600, recordedAt: `${isoToday()}T00:00:00Z` });
 
     const result = reportService.getNetWorthTimeSeries("all", "monthly");
-    const last = result[result.length - 1];
+    const last = result[result.length - 1]!;
 
     // ETF: 10 * 120 = 1200, BTC: 2 * 600 = 1200
     expect(last.assets).toBe(2400);
@@ -428,7 +428,7 @@ describe("getNetWorthTimeSeries", async () => {
     priceService.record(asset.id, { pricePerUnit: 120, recordedAt: `${isoToday()}T00:00:00Z` });
 
     const result = reportService.getNetWorthTimeSeries("all", "monthly");
-    const last = result[result.length - 1];
+    const last = result[result.length - 1]!;
 
     // After sell: 5 remaining * 120 = 600
     expect(last.assets).toBe(600);
@@ -449,7 +449,7 @@ describe("getNetWorthTimeSeries", async () => {
     });
 
     const result = reportService.getNetWorthTimeSeries("all", "monthly");
-    const last = result[result.length - 1];
+    const last = result[result.length - 1]!;
 
     expect(last.assets).toBe(0);
     expect(last.cash).toBe(2500);
@@ -497,7 +497,7 @@ describe("multi-currency regressions", async () => {
     });
 
     const result = reportService.getNetWorthTimeSeries("3m", "monthly");
-    const last = result[result.length - 1];
+    const last = result[result.length - 1]!;
     // 1000 (EUR native) + 500 × 1.10 (USD→EUR base) = 1550
     expect(last.cash).toBeCloseTo(1550, 2);
     expect(last.assets).toBe(0);
@@ -516,7 +516,7 @@ describe("multi-currency regressions", async () => {
     db.delete(marketPrices).run();
 
     const result = reportService.getNetWorthTimeSeries("3m", "monthly");
-    const last = result[result.length - 1];
+    const last = result[result.length - 1]!;
     // Cash holds the buy's negative amountBase (rate=1.10): -10 × 100 × 1.10 = -1100.
     // Asset value is 0 because no FX rate is cached on any date point.
     expect(last.assets).toBe(0);
@@ -569,7 +569,7 @@ describe("multi-currency regressions", async () => {
     expect(result.currency).toBe("EUR");
     expect(result.items).toHaveLength(1);
 
-    const item = result.items[0];
+    const item = result.items[0]!;
     expect(item.currency).toBe("USD");
     // Native: 1 × 150 proceeds, 1 × 100 cost, $50 P&L
     expect(item.proceeds).toBeCloseTo(150, 2);
@@ -596,9 +596,9 @@ describe("multi-currency regressions", async () => {
     const result = reportService.getTransferSummary("2026-03");
     expect(result).toHaveLength(1);
     // Native total = $500 → €550 at the mock rate
-    expect(result[0].purchases).toBeCloseTo(550, 2);
-    expect(result[0].sales).toBe(0);
-    expect(result[0].net).toBeCloseTo(550, 2);
+    expect(result[0]!.purchases).toBeCloseTo(550, 2);
+    expect(result[0]!.sales).toBe(0);
+    expect(result[0]!.net).toBeCloseTo(550, 2);
   });
 });
 
@@ -632,8 +632,8 @@ describe("spendingSummary includeTransfers", async () => {
 
     expect(result.transfers).toBeDefined();
     expect(result.transfers!).toHaveLength(1);
-    expect(result.transfers![0].assetName).toBe("ETF");
-    expect(result.transfers![0].purchases).toBe(500);
+    expect(result.transfers![0]!.assetName).toBe("ETF");
+    expect(result.transfers![0]!.purchases).toBe(500);
   });
 
   it("omits transfers when flag is false", async () => {

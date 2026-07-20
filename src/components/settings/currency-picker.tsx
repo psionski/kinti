@@ -131,7 +131,7 @@ export function CurrencyPicker({
               <span>{selected.name}</span>
             </span>
           ) : (
-            (value ?? "Select currency...")
+            value
           )}
           <ChevronDown className="text-muted-foreground size-4 shrink-0" />
         </Button>

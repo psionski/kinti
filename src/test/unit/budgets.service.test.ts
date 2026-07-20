@@ -234,7 +234,7 @@ describe("inheritance", async () => {
     // Feb and Mar have no own rows — both should inherit from Jan
     const feb = budgetService.getForMonth(GetBudgetStatusSchema.parse({ month: "2026-02" }));
     expect(feb.inheritedFrom).toBe("2026-01");
-    expect(feb.items[0].budgetAmount).toBe(500);
+    expect(feb.items[0]!.budgetAmount).toBe(500);
 
     const mar = budgetService.getForMonth(GetBudgetStatusSchema.parse({ month: "2026-03" }));
     expect(mar.inheritedFrom).toBe("2026-01");
@@ -252,7 +252,7 @@ describe("inheritance", async () => {
     const april = budgetService.getForMonth(GetBudgetStatusSchema.parse({ month: "2026-04" }));
     expect(april.inheritedFrom).toBe("2026-03");
     expect(april.items).toHaveLength(1);
-    expect(april.items[0].categoryName).toBe("Food");
+    expect(april.items[0]!.categoryName).toBe("Food");
   });
 
   it("materializing creates independent rows for the month", async () => {
@@ -300,7 +300,7 @@ describe("delete", async () => {
     const april = budgetService.getForMonth(GetBudgetStatusSchema.parse({ month: "2026-04" }));
     expect(april.inheritedFrom).toBeNull();
     expect(april.items).toHaveLength(1);
-    expect(april.items[0].categoryName).toBe("Transport");
+    expect(april.items[0]!.categoryName).toBe("Transport");
   });
 
   it("returns false for non-existent budget in a month with no inheritance", async () => {
@@ -323,7 +323,7 @@ describe("resetToInherited", async () => {
     expect(budgetService.hasOwnRows("2026-04")).toBe(false);
     const april = budgetService.getForMonth(GetBudgetStatusSchema.parse({ month: "2026-04" }));
     expect(april.inheritedFrom).toBe("2026-03");
-    expect(april.items[0].budgetAmount).toBe(500); // back to March's value
+    expect(april.items[0]!.budgetAmount).toBe(500); // back to March's value
   });
 });
 
@@ -359,7 +359,7 @@ describe("listForCategory", async () => {
 
     const foodBudgets = budgetService.listForCategory(foodId);
     expect(foodBudgets).toHaveLength(1);
-    expect(foodBudgets[0].amount).toBe(500);
+    expect(foodBudgets[0]!.amount).toBe(500);
   });
 });
 
@@ -374,17 +374,17 @@ describe("getHistory", async () => {
 
     const points = budgetService.getHistory(1);
     expect(points).toHaveLength(1);
-    expect(points[0].month).toBe("2026-03");
-    expect(points[0].totalBudget).toBe(500);
-    expect(points[0].totalSpent).toBe(200);
-    expect(points[0].percentUsed).toBeCloseTo(40, 0);
+    expect(points[0]!.month).toBe("2026-03");
+    expect(points[0]!.totalBudget).toBe(500);
+    expect(points[0]!.totalSpent).toBe(200);
+    expect(points[0]!.percentUsed).toBeCloseTo(40, 0);
   });
 
   it("returns zero values when no budgets exist", async () => {
     const points = budgetService.getHistory(2);
     expect(points).toHaveLength(2);
-    expect(points[0].totalBudget).toBe(0);
-    expect(points[0].totalSpent).toBe(0);
-    expect(points[0].percentUsed).toBe(0);
+    expect(points[0]!.totalBudget).toBe(0);
+    expect(points[0]!.totalSpent).toBe(0);
+    expect(points[0]!.percentUsed).toBe(0);
   });
 });

@@ -106,7 +106,10 @@ export function IncomeExpensesCard({
                 content={
                   <ChartTooltipContent
                     formatter={(value, name) => {
-                      const label = chartConfig[name as keyof typeof chartConfig]?.label ?? name;
+                      const label =
+                        (chartConfig as Record<string, { label?: string } | undefined>)[
+                          name as string
+                        ]?.label ?? name;
                       return `${label}: €${(value as number).toLocaleString("de-DE", { minimumFractionDigits: 2 })}`;
                     }}
                     labelFormatter={formatMonth}

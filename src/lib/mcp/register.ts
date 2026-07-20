@@ -16,21 +16,24 @@ import { registerSampleDataTools } from "./tools/sample-data";
 import { INSTRUCTIONS } from "./instructions";
 import { mcpLogger } from "@/lib/logger";
 
+type RegisterTool = McpServer["registerTool"];
+type RegisterToolArgs = Parameters<RegisterTool>;
+type ToolConfig = RegisterToolArgs[1];
+type ToolCallbackFn = RegisterToolArgs[2];
+
 /**
  * Wrap server.registerTool so every tool handler is instrumented with
  * timing and structured logging — no changes needed in individual tool files.
  */
 function instrumentRegisterTool(server: McpServer): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const original: (...args: any[]) => any = server.registerTool.bind(server);
+  const original: RegisterTool = server.registerTool.bind(server);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (server as any).registerTool = (name: string, config: any, cb: (...args: any[]) => any) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const wrappedCb = async (...handlerArgs: any[]): Promise<unknown> => {
+  const instrumented = (name: string, config: ToolConfig, cb: ToolCallbackFn) => {
+    const rawCb = cb as (...args: unknown[]) => unknown;
+    const wrappedCb = async (...handlerArgs: unknown[]): Promise<unknown> => {
       const start = performance.now();
       try {
-        const result = await cb(...handlerArgs);
+        const result = await rawCb(...handlerArgs);
         const durationMs = Math.round(performance.now() - start);
         mcpLogger.info({ tool: name, durationMs }, "MCP tool executed");
         return result;
@@ -40,8 +43,10 @@ function instrumentRegisterTool(server: McpServer): void {
         throw err;
       }
     };
-    return original(name, config, wrappedCb);
+    return original(name, config, wrappedCb as ToolCallbackFn);
   };
+
+  server.registerTool = instrumented as RegisterTool;
 }
 
 export function registerTools(server: McpServer): void {

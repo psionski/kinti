@@ -96,7 +96,7 @@ export function CategoryFormDialog({
     (c) => c.id !== initialData?.id && !excludedIds.has(c.id)
   );
 
-  function handleSubmit(e: React.FormEvent): void {
+  function handleSubmit(e: React.SyntheticEvent): void {
     e.preventDefault();
     setError("");
 

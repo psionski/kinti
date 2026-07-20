@@ -107,7 +107,7 @@ describe("runRecurringJob", () => {
     const infoSpy = vi.spyOn(cronLogger, "info");
     await runRecurringJob();
     expect(infoSpy).not.toHaveBeenCalledWith(
-      expect.objectContaining({ count: expect.any(Number) }),
+      expect.objectContaining({ count: expect.any(Number) as unknown }),
       expect.stringContaining("Generated recurring transactions")
     );
     infoSpy.mockRestore();
@@ -125,7 +125,7 @@ describe("runRecurringJob", () => {
     const errorSpy = vi.spyOn(cronLogger, "error");
     await expect(runRecurringJob()).resolves.toBeUndefined();
     expect(errorSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ err: expect.any(Error) }),
+      expect.objectContaining({ err: expect.any(Error) as unknown }),
       expect.stringContaining("Failed to generate")
     );
     errorSpy.mockRestore();
@@ -165,7 +165,7 @@ describe("runBackupJob", () => {
     const errorSpy = vi.spyOn(cronLogger, "error");
     await expect(runBackupJob()).resolves.toBeUndefined();
     expect(errorSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ err: expect.any(Error) }),
+      expect.objectContaining({ err: expect.any(Error) as unknown }),
       expect.stringContaining("Backup failed")
     );
     errorSpy.mockRestore();

@@ -33,7 +33,7 @@ export function CategoryDonutChart({
   monthLabel,
 }: CategoryDonutChartProps): React.ReactElement {
   const [breadcrumb, setBreadcrumb] = useState<BreadcrumbEntry[]>([{ id: null, name: "All" }]);
-  const currentParentId = breadcrumb[breadcrumb.length - 1].id;
+  const currentParentId = breadcrumb[breadcrumb.length - 1]!.id;
 
   // Build a set of category IDs that have children in the dataset
   const parentIds = useMemo(() => {

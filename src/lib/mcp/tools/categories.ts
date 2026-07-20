@@ -47,7 +47,7 @@ export function registerCategoryTools(server: McpServer): void {
     "update_category",
     {
       description: "Rename, reparent, or change icon/color of a category.",
-      inputSchema: IdSchema.merge(UpdateCategorySchema),
+      inputSchema: IdSchema.extend(UpdateCategorySchema.shape),
     },
     ({ id, ...updates }) => {
       const result = getCategoryService().update(id, updates);

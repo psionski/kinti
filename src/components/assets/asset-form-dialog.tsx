@@ -79,7 +79,7 @@ export function AssetFormDialog({
     }
   }
 
-  function handleSubmit(e: React.FormEvent): void {
+  function handleSubmit(e: React.SyntheticEvent): void {
     e.preventDefault();
     setError("");
     if (!name.trim()) {

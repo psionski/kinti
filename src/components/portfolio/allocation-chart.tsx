@@ -30,7 +30,7 @@ function CustomTooltip({
   payload?: Array<{ payload: ChartEntry }>;
 }): React.ReactElement | null {
   if (!active || !payload?.length) return null;
-  const entry = payload[0].payload;
+  const entry = payload[0]!.payload;
   return (
     <div className="bg-background border-border rounded-md border px-3 py-1.5 text-xs shadow-sm">
       <p className="font-medium">{entry.name}</p>

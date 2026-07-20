@@ -32,7 +32,7 @@ export function CategoryTrendsChart({ data }: CategoryTrendsChartProps): React.R
   const chartData = data.months.map((month, i) => {
     const row: Record<string, string | number> = { month };
     for (const s of data.series) {
-      row[s.key] = s.values[i];
+      row[s.key] = s.values[i]!;
     }
     return row;
   });

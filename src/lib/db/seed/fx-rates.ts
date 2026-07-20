@@ -36,15 +36,20 @@ function dateToDays(date: string): number {
 /** Linear interpolation between sorted anchor points (by date). */
 function lerp(anchors: Anchor[], target: string): number {
   const t = dateToDays(target);
-  if (t <= dateToDays(anchors[0].date)) return anchors[0].value;
-  const last = anchors[anchors.length - 1];
+  // Every pair defines a non-empty anchor list, so index 0 and the last
+  // element are provably present; loop indices are bounded by length - 1.
+  const first = anchors[0]!;
+  if (t <= dateToDays(first.date)) return first.value;
+  const last = anchors[anchors.length - 1]!;
   if (t >= dateToDays(last.date)) return last.value;
   for (let i = 0; i < anchors.length - 1; i++) {
-    const a = dateToDays(anchors[i].date);
-    const b = dateToDays(anchors[i + 1].date);
+    const lo = anchors[i]!;
+    const hi = anchors[i + 1]!;
+    const a = dateToDays(lo.date);
+    const b = dateToDays(hi.date);
     if (t >= a && t <= b) {
       const frac = (t - a) / (b - a);
-      return anchors[i].value + frac * (anchors[i + 1].value - anchors[i].value);
+      return lo.value + frac * (hi.value - lo.value);
     }
   }
   return last.value;
@@ -87,8 +92,9 @@ export function buildFxRates(months: MonthSpec[]): {
   marketPrices: MarketPriceSeed[];
   lookup: FxRateLookup;
 } {
-  const first = months[0];
-  const last = months[months.length - 1];
+  if (months.length === 0) throw new Error("buildFxRates requires at least one month");
+  const first = months[0]!;
+  const last = months[months.length - 1]!;
   const startDate = isoDate(first.year, first.month, 1);
   const endDate = isoDate(last.year, last.month, last.lastDay);
 
@@ -177,7 +183,9 @@ export function buildFxRates(months: MonthSpec[]): {
     // Most recent entry ≤ date. Linear scan back from the end is fine for
     // ~365 entries.
     for (let i = bucket.length - 1; i >= 0; i--) {
-      if (bucket[i].date <= date) return bucket[i].price;
+      // i is bounded by [0, bucket.length), so the entry is present.
+      const entry = bucket[i]!;
+      if (entry.date <= date) return entry.price;
     }
     throw new Error(
       `Seed FX rate lookup failed: no ${from}→${to} entry on or before ${date}. ` +

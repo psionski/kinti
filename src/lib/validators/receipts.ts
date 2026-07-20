@@ -8,7 +8,7 @@ export const ReceiptResponseSchema = z.object({
   merchant: z.string().nullable(),
   date: z.string(),
   total: z.number().nullable(),
-  imageUrl: z.string().url().nullable(), // absolute URL, e.g. http://localhost:4000/api/receipts/{id}/image — null if no image uploaded
+  imageUrl: z.url().nullable(), // absolute URL, e.g. http://localhost:4000/api/receipts/{id}/image — null if no image uploaded
   rawText: z.string().nullable(),
   createdAt: z.string(),
 });

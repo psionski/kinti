@@ -10,7 +10,15 @@ export interface RecurringTemplate {
   description: string;
   merchant: string;
   categoryId: number;
-  frequency: "monthly";
+  /**
+   * Recurrence cadence. The DB column and runtime recurring engine support
+   * the full `daily | weekly | monthly | yearly` set (see the
+   * `recurring_frequency_check` constraint in schema.ts); the seed currently
+   * only emits monthly templates, but the type mirrors the real domain so
+   * the frequency guard in `generateEvents` stays a meaningful runtime check
+   * rather than dead code narrowed to a single literal.
+   */
+  frequency: "daily" | "weekly" | "monthly" | "yearly";
   dayOfMonth: number;
   startDate: string;
   lastGenerated: string;
@@ -35,12 +43,15 @@ export function generateRecurringTemplates(
   months: MonthSpec[],
   todayStr: string
 ): RecurringTemplate[] {
-  const firstMonth = months[0];
+  if (months.length === 0)
+    throw new Error("generateRecurringTemplates requires at least one month");
+  const firstMonth = months[0]!;
   const fullStartDate = isoDate(firstMonth.year, firstMonth.month, 1);
 
   // London co-working starts ~6 months in to demo a "newer" recurring
   // pattern with shorter history than the rest.
-  const londonStartMonth = months[Math.max(0, months.length - 6)];
+  // Index is clamped to [0, months.length), so the month is present.
+  const londonStartMonth = months[Math.max(0, months.length - 6)]!;
   const londonStartDate = isoDate(londonStartMonth.year, londonStartMonth.month, 1);
 
   return [
@@ -49,7 +60,7 @@ export function generateRecurringTemplates(
       type: "expense",
       description: "Monthly rent",
       merchant: "Landlord",
-      categoryId: catIds.Rent,
+      categoryId: catIds.Rent!,
       frequency: "monthly",
       dayOfMonth: 1,
       startDate: fullStartDate,
@@ -61,7 +72,7 @@ export function generateRecurringTemplates(
       type: "expense",
       description: "Netflix Standard",
       merchant: "Netflix",
-      categoryId: catIds.Subscriptions,
+      categoryId: catIds.Subscriptions!,
       frequency: "monthly",
       dayOfMonth: 1,
       startDate: fullStartDate,
@@ -73,7 +84,7 @@ export function generateRecurringTemplates(
       type: "expense",
       description: "Amazon Prime",
       merchant: "Amazon",
-      categoryId: catIds.Subscriptions,
+      categoryId: catIds.Subscriptions!,
       frequency: "monthly",
       dayOfMonth: 1,
       startDate: fullStartDate,
@@ -85,7 +96,7 @@ export function generateRecurringTemplates(
       type: "expense",
       description: "Spotify Premium",
       merchant: "Spotify",
-      categoryId: catIds.Subscriptions,
+      categoryId: catIds.Subscriptions!,
       frequency: "monthly",
       dayOfMonth: 5,
       startDate: fullStartDate,
@@ -97,7 +108,7 @@ export function generateRecurringTemplates(
       type: "expense",
       description: "iCloud+ 50GB",
       merchant: "Apple",
-      categoryId: catIds.Subscriptions,
+      categoryId: catIds.Subscriptions!,
       frequency: "monthly",
       dayOfMonth: 10,
       startDate: fullStartDate,
@@ -109,7 +120,7 @@ export function generateRecurringTemplates(
       type: "expense",
       description: "Internet bill",
       merchant: "Telekom",
-      categoryId: catIds.Utilities,
+      categoryId: catIds.Utilities!,
       frequency: "monthly",
       dayOfMonth: 15,
       startDate: fullStartDate,
@@ -121,7 +132,7 @@ export function generateRecurringTemplates(
       type: "income",
       description: "Monthly salary",
       merchant: "Employer",
-      categoryId: catIds.Income,
+      categoryId: catIds.Income!,
       frequency: "monthly",
       dayOfMonth: 25,
       startDate: fullStartDate,
@@ -139,7 +150,7 @@ export function generateRecurringTemplates(
       type: "expense",
       description: "London co-working",
       merchant: "Workspace London",
-      categoryId: catIds.Subscriptions,
+      categoryId: catIds.Subscriptions!,
       frequency: "monthly",
       dayOfMonth: 1,
       startDate: londonStartDate,

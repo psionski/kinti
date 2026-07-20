@@ -116,9 +116,9 @@ describe("listBackups", () => {
     expect(backups).toHaveLength(3);
 
     // In test env _tz defaults to UTC, so local == UTC (without Z suffix)
-    expect(backups[0].createdAt).toBe("2026-03-21T14:30:00");
-    expect(backups[1].createdAt).toBe("2026-03-21T14:25:00");
-    expect(backups[2].createdAt).toBe("2026-03-20T10:00:00");
+    expect(backups[0]!.createdAt).toBe("2026-03-21T14:30:00");
+    expect(backups[1]!.createdAt).toBe("2026-03-21T14:25:00");
+    expect(backups[2]!.createdAt).toBe("2026-03-20T10:00:00");
   });
 
   it("skips files without a parseable timestamp", () => {
@@ -135,7 +135,7 @@ describe("listBackups", () => {
 
     const backups = listBackups(backupDir);
     expect(backups).toHaveLength(1);
-    expect(backups[0].filename).toBe("kinti-backup-2026-01-01T00-00-00Z.db");
+    expect(backups[0]!.filename).toBe("kinti-backup-2026-01-01T00-00-00Z.db");
   });
 });
 

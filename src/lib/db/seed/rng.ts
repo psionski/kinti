@@ -13,7 +13,9 @@ function mulberry32(seed: number): () => number {
 const rng = mulberry32(42);
 
 export function pick<T>(arr: T[]): T {
-  return arr[Math.floor(rng() * arr.length)];
+  // Index is in [0, arr.length); all callers pass non-empty literal arrays,
+  // so the element is provably present.
+  return arr[Math.floor(rng() * arr.length)]!;
 }
 
 export function rand(min: number, max: number): number {

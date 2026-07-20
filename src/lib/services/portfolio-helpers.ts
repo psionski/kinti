@@ -63,7 +63,7 @@ export function consumeFifo(
   // after the queue is fully drained.
   let nativeCurrency = baseCurrency;
   while (toConsume > 0 && queue.length > 0) {
-    const front = queue[0];
+    const front = queue[0]!;
     nativeCurrency = front.currency;
     const consumed = Math.min(front.qty, toConsume);
     cost += consumed * front.price;
@@ -126,5 +126,5 @@ export function getCostBasisAtDate(
     queue.reduce((sum, e) => sum + e.qty * e.priceBase, 0),
     baseCurrency
   );
-  return { costBasis, costBasisBase, earliestDate: lots[0].date };
+  return { costBasis, costBasisBase, earliestDate: lots[0]!.date };
 }

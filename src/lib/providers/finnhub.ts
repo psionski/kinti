@@ -64,8 +64,9 @@ export class FinnhubProvider implements FinancialDataProvider {
     const data = (await res.json()) as FinnhubCandleResponse;
     if (data.s !== "ok" || !data.c?.length) return null;
 
-    // Use the last close price in the range
-    const price = data.c[data.c.length - 1];
+    // Use the last close price in the range. data.c is non-empty (checked above),
+    // so the last element is provably present.
+    const price = data.c[data.c.length - 1]!;
     const timestamp = data.t?.[data.t.length - 1];
     const resultDate = timestamp
       ? Temporal.Instant.fromEpochMilliseconds(timestamp * 1000)
@@ -106,8 +107,10 @@ export class FinnhubProvider implements FinancialDataProvider {
 
     const results: PriceResult[] = [];
     for (let i = 0; i < data.c.length; i++) {
-      const price = data.c[i];
+      // i < data.c.length, so data.c[i] is provably present.
+      const price = data.c[i]!;
       const timestamp = data.t[i];
+      if (timestamp === undefined) continue;
       const dateStr = Temporal.Instant.fromEpochMilliseconds(timestamp * 1000)
         .toString()
         .slice(0, 10);

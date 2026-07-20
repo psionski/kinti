@@ -464,7 +464,7 @@ export class FinancialDataService {
     const results: SymbolSearchResult[] = [];
 
     const searches = providers
-      .filter((p) => p.searchSymbol)
+      .filter((p) => p.searchSymbol !== undefined)
       .map(async (p) => {
         try {
           const matches = await p.searchSymbol!(query);
@@ -490,7 +490,7 @@ export class FinancialDataService {
     assetType?: AssetType
   ): AsyncGenerator<{ provider: ProviderName; results: SymbolSearchResult[] }> {
     const providers = getProvidersByAssetType(this.settings, assetType).filter(
-      (p) => p.searchSymbol
+      (p) => p.searchSymbol !== undefined
     );
 
     if (providers.length === 0) return;
@@ -498,7 +498,7 @@ export class FinancialDataService {
     const indexed = providers.map((p, i) =>
       p.searchSymbol!(query)
         .then((results) => ({ index: i, provider: p.name, results }))
-        .catch((err) => {
+        .catch((err: unknown) => {
           financialLogger.warn({ provider: p.name, query, err }, "Symbol search provider failed");
           return { index: i, provider: p.name, results: [] as SymbolSearchResult[] };
         })
@@ -507,7 +507,7 @@ export class FinancialDataService {
     const remaining = new Set(indexed.map((_, i) => i));
 
     while (remaining.size > 0) {
-      const winner = await Promise.race([...remaining].map((i) => indexed[i]));
+      const winner = await Promise.race([...remaining].map((i) => indexed[i]!));
       remaining.delete(winner.index);
       if (winner.results.length > 0) {
         yield { provider: winner.provider, results: winner.results };
@@ -563,7 +563,10 @@ function toPriceResult(row: MarketPriceRow): PriceResult {
 
 /** Extract defined entries from a SymbolMap (skips undefined values). */
 function symbolMapEntries(symbolMap: SymbolMap): Array<[ProviderName, string]> {
-  return Object.entries(symbolMap)
+  // Partial records can hold explicit `undefined` values at runtime even though
+  // `Object.entries` widens the value type to `string`, so keep the guard.
+  const entries = Object.entries(symbolMap) as Array<[string, string | undefined]>;
+  return entries
     .filter((entry): entry is [string, string] => entry[1] !== undefined)
     .map(([name, symbol]) => [name as ProviderName, symbol]);
 }

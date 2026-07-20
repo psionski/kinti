@@ -20,7 +20,7 @@ describe("GET /api/sample-data", () => {
   it("returns hasSampleData: false when no sample data", async () => {
     const { GET } = await import("@/app/api/sample-data/route");
     const res = GET();
-    const body = await res.json();
+    const body = (await res.json()) as { hasSampleData: boolean };
     expect(res.status).toBe(200);
     expect(body.hasSampleData).toBe(false);
   });
@@ -29,7 +29,7 @@ describe("GET /api/sample-data", () => {
     mockHasSampleData = true;
     const { GET } = await import("@/app/api/sample-data/route");
     const res = GET();
-    const body = await res.json();
+    const body = (await res.json()) as { hasSampleData: boolean };
     expect(res.status).toBe(200);
     expect(body.hasSampleData).toBe(true);
   });
@@ -39,7 +39,7 @@ describe("DELETE /api/sample-data", () => {
   it("clears sample data and returns success", async () => {
     const { DELETE } = await import("@/app/api/sample-data/route");
     const res = DELETE();
-    const body = await res.json();
+    const body = (await res.json()) as { cleared: boolean };
     expect(res.status).toBe(200);
     expect(body.cleared).toBe(true);
   });

@@ -1,5 +1,9 @@
 import { z, type ZodType } from "zod";
-import type { ZodOpenApiOperationObject } from "zod-openapi";
+import type {
+  ZodOpenApiOperationObject,
+  ZodOpenApiResponsesObject,
+  ZodOpenApiParameters,
+} from "zod-openapi";
 import { ErrorResponseSchema } from "@/lib/validators/common";
 import { TransactionResponseSchema } from "@/lib/validators/transactions";
 
@@ -57,8 +61,7 @@ export function op(cfg: OpConfig): ZodOpenApiOperationObject {
     operationId: cfg.id,
     summary: cfg.summary,
     tags: cfg.tags,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    responses: Object.fromEntries(entries) as any,
+    responses: Object.fromEntries(entries) as ZodOpenApiResponsesObject,
   };
 
   if (cfg.pathId) {
@@ -67,8 +70,10 @@ export function op(cfg: OpConfig): ZodOpenApiOperationObject {
     };
   }
   if (cfg.query) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    result.requestParams = { ...result.requestParams, query: cfg.query as any };
+    result.requestParams = {
+      ...result.requestParams,
+      query: cfg.query as ZodOpenApiParameters["query"],
+    };
   }
   if (cfg.body) {
     result.requestBody = {

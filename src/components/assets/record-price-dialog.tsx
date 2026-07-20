@@ -41,7 +41,7 @@ export function RecordPriceDialog({
   const [date, setDate] = useState(today);
   const [error, setError] = useState("");
 
-  function handleSubmit(e: React.FormEvent): void {
+  function handleSubmit(e: React.SyntheticEvent): void {
     e.preventDefault();
     setError("");
 

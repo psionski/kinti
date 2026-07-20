@@ -99,7 +99,7 @@ describe("FrankfurterProvider", () => {
     expect(result?.currency).toBe("GBP");
 
     // Verify the URL: ?from=USD&to=GBP — not reversed, not pivoting through EUR.
-    const calledUrl = fetchMock.mock.calls[0][0] as string;
+    const calledUrl = fetchMock.mock.calls[0]![0] as string;
     expect(calledUrl).toContain("from=USD");
     expect(calledUrl).toContain("to=GBP");
     expect(calledUrl).not.toContain("EUR");
@@ -286,9 +286,9 @@ describe("AlphaVantageProvider", () => {
 
     const results = await provider.getPriceRange("AAPL", "USD", "2026-01-13", "2026-01-15");
     expect(results).toHaveLength(3);
-    expect(results[0].date).toBe("2026-01-13");
-    expect(results[2].date).toBe("2026-01-15");
-    expect(results[0].price).toBeCloseTo(148.0);
+    expect(results[0]!.date).toBe("2026-01-13");
+    expect(results[2]!.date).toBe("2026-01-15");
+    expect(results[0]!.price).toBeCloseTo(148.0);
     expect(results.every((r) => r.provider === "alpha-vantage")).toBe(true);
   });
 
@@ -309,7 +309,7 @@ describe("AlphaVantageProvider", () => {
 
     const results = await provider.getPriceRange("AAPL", "USD", "2026-01-13", "2026-01-15");
     expect(results).toHaveLength(1);
-    expect(results[0].date).toBe("2026-01-15");
+    expect(results[0]!.date).toBe("2026-01-15");
   });
 
   it("getPriceRange returns empty on HTTP error", async () => {
@@ -334,8 +334,8 @@ describe("AlphaVantageProvider", () => {
 
     const results = await provider.searchSymbol("apple");
     expect(results).toHaveLength(2);
-    expect(results[0].symbol).toBe("AAPL");
-    expect(results[0].type).toBe("equity");
+    expect(results[0]!.symbol).toBe("AAPL");
+    expect(results[0]!.type).toBe("equity");
   });
 });
 
@@ -374,10 +374,10 @@ describe("EcbProvider — extended", () => {
 
     const results = await provider.getPriceRange("EUR", "USD", "2026-01-13", "2026-01-15");
     expect(results).toHaveLength(3);
-    expect(results[0].date).toBe("2026-01-13");
-    expect(results[0].price).toBeCloseTo(1.083);
-    expect(results[2].date).toBe("2026-01-15");
-    expect(results[2].price).toBeCloseTo(1.087);
+    expect(results[0]!.date).toBe("2026-01-13");
+    expect(results[0]!.price).toBeCloseTo(1.083);
+    expect(results[2]!.date).toBe("2026-01-15");
+    expect(results[2]!.price).toBeCloseTo(1.087);
   });
 
   it("getPriceRange handles non-EUR base (USD→GBP)", async () => {
@@ -392,7 +392,7 @@ describe("EcbProvider — extended", () => {
     const results = await provider.getPriceRange("USD", "GBP", "2026-01-14", "2026-01-15");
     expect(results).toHaveLength(2);
     // USD→GBP on 2026-01-15: 0.86 / 1.087
-    expect(results[1].price).toBeCloseTo(0.86 / 1.087, 3);
+    expect(results[1]!.price).toBeCloseTo(0.86 / 1.087, 3);
   });
 
   it("getPriceRange returns empty on HTTP error", async () => {
@@ -413,7 +413,7 @@ describe("EcbProvider — extended", () => {
     const results = await provider.searchSymbol("USD");
     expect(results.length).toBeGreaterThanOrEqual(1);
     expect(results.find((r) => r.symbol === "USD")).toBeTruthy();
-    expect(results[0].type).toBe("currency");
+    expect(results[0]!.type).toBe("currency");
   });
 
   it("searchSymbol returns empty on HTTP error", async () => {
@@ -465,7 +465,7 @@ describe("OpenExchangeRatesProvider", () => {
     const results = await provider.searchSymbol("euro");
     expect(results.length).toBeGreaterThanOrEqual(1);
     expect(results.find((r) => r.symbol === "EUR")).toBeTruthy();
-    expect(results[0].type).toBe("currency");
+    expect(results[0]!.type).toBe("currency");
   });
 
   it("searchSymbol returns empty on HTTP error", async () => {
@@ -487,9 +487,9 @@ describe("OpenExchangeRatesProvider", () => {
 
     const results = await provider.getPriceRange("EUR", "GBP", "2026-01-13", "2026-01-15");
     expect(results).toHaveLength(3);
-    expect(results[0].date).toBe("2026-01-13");
-    expect(results[2].date).toBe("2026-01-15");
-    expect(results[0].price).toBeCloseTo(0.78 / 0.92, 3);
+    expect(results[0]!.date).toBe("2026-01-13");
+    expect(results[2]!.date).toBe("2026-01-15");
+    expect(results[0]!.price).toBeCloseTo(0.78 / 0.92, 3);
     // Should have made 3 fetch calls (one per day)
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
@@ -577,7 +577,7 @@ describe("ExchangeRateApiProvider", () => {
     const results = await provider.searchSymbol("euro");
     expect(results.length).toBeGreaterThanOrEqual(1);
     expect(results.find((r) => r.symbol === "EUR")).toBeTruthy();
-    expect(results[0].type).toBe("currency");
+    expect(results[0]!.type).toBe("currency");
   });
 });
 
@@ -667,9 +667,9 @@ describe("TwelveDataProvider", () => {
 
     const results = await provider.getPriceRange("AAPL", "USD", "2026-01-13", "2026-01-15");
     expect(results).toHaveLength(3);
-    expect(results[0].date).toBe("2026-01-13");
-    expect(results[2].date).toBe("2026-01-15");
-    expect(results[0].price).toBeCloseTo(148.25);
+    expect(results[0]!.date).toBe("2026-01-13");
+    expect(results[2]!.date).toBe("2026-01-15");
+    expect(results[0]!.price).toBeCloseTo(148.25);
     expect(results.every((r) => r.provider === "twelve-data")).toBe(true);
   });
 
@@ -700,8 +700,8 @@ describe("TwelveDataProvider", () => {
 
     const results = await provider.searchSymbol("apple");
     expect(results).toHaveLength(2);
-    expect(results[0].symbol).toBe("AAPL");
-    expect(results[0].type).toBe("stock");
+    expect(results[0]!.symbol).toBe("AAPL");
+    expect(results[0]!.type).toBe("stock");
   });
 });
 
@@ -772,8 +772,8 @@ describe("FinnhubProvider", () => {
 
     const results = await provider.getPriceRange("AAPL", "USD", "2025-01-13", "2025-01-15");
     expect(results).toHaveLength(3);
-    expect(results[0].price).toBeCloseTo(148.0);
-    expect(results[2].price).toBeCloseTo(150.0);
+    expect(results[0]!.price).toBeCloseTo(148.0);
+    expect(results[2]!.price).toBeCloseTo(150.0);
     expect(results.every((r) => r.provider === "finnhub")).toBe(true);
   });
 
@@ -816,9 +816,9 @@ describe("FinnhubProvider", () => {
 
     const results = await provider.searchSymbol("apple");
     expect(results).toHaveLength(2);
-    expect(results[0].symbol).toBe("AAPL");
-    expect(results[0].type).toBe("stock");
-    expect(results[1].type).toBe("reit");
+    expect(results[0]!.symbol).toBe("AAPL");
+    expect(results[0]!.type).toBe("stock");
+    expect(results[1]!.type).toBe("reit");
   });
 });
 
@@ -927,8 +927,8 @@ describe("CoinMarketCapProvider", () => {
 
     const results = await provider.searchSymbol("bitcoin");
     expect(results).toHaveLength(2);
-    expect(results[0].symbol).toBe("bitcoin");
-    expect(results[1].symbol).toBe("bitcoin-cash");
-    expect(results[0].type).toBe("crypto");
+    expect(results[0]!.symbol).toBe("bitcoin");
+    expect(results[1]!.symbol).toBe("bitcoin-cash");
+    expect(results[0]!.type).toBe("crypto");
   });
 });

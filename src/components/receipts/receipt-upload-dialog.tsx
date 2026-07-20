@@ -83,11 +83,11 @@ export function ReceiptUploadDialog({
   function handleDrop(e: React.DragEvent): void {
     e.preventDefault();
     setDragging(false);
-    const f = e.dataTransfer.files?.[0];
+    const f = e.dataTransfer.files[0];
     if (f) acceptFile(f);
   }
 
-  async function handleSubmit(e: React.FormEvent): Promise<void> {
+  async function handleSubmit(e: React.SyntheticEvent): Promise<void> {
     e.preventDefault();
     if (!file) {
       setError("Please select a file.");

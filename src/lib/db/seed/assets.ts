@@ -73,15 +73,20 @@ function dateToDays(date: string): number {
 /** Linear interpolation between sorted anchor points. */
 function lerp(anchors: Array<{ date: string; value: number }>, target: string): number {
   const t = dateToDays(target);
-  if (t <= dateToDays(anchors[0].date)) return anchors[0].value;
-  const last = anchors[anchors.length - 1];
+  // Callers always pass a non-empty anchor list, so index 0 and the last
+  // element are provably present; loop indices are bounded by length - 1.
+  const first = anchors[0]!;
+  if (t <= dateToDays(first.date)) return first.value;
+  const last = anchors[anchors.length - 1]!;
   if (t >= dateToDays(last.date)) return last.value;
   for (let i = 0; i < anchors.length - 1; i++) {
-    const a = dateToDays(anchors[i].date);
-    const b = dateToDays(anchors[i + 1].date);
+    const lo = anchors[i]!;
+    const hi = anchors[i + 1]!;
+    const a = dateToDays(lo.date);
+    const b = dateToDays(hi.date);
     if (t >= a && t <= b) {
       const frac = (t - a) / (b - a);
-      return anchors[i].value + frac * (anchors[i + 1].value - anchors[i].value);
+      return lo.value + frac * (hi.value - lo.value);
     }
   }
   return last.value;
@@ -118,7 +123,8 @@ function buildLots(defs: LotDef[], months: MonthSpec[]): AssetSeed["lots"] {
     .map((d) => ({
       quantity: d.quantity,
       pricePerUnit: d.pricePerUnit,
-      date: dateAt(months[d.monthIdx], d.day),
+      // monthIdx < months.length is guaranteed by the filter above.
+      date: dateAt(months[d.monthIdx]!, d.day),
       description: d.description,
       notes: d.notes,
     }));
@@ -142,8 +148,9 @@ export function generateAssets(months: MonthSpec[]): {
   marketPrices: MarketPriceSeed[];
 } {
   const n = months.length;
-  const first = months[0];
-  const last = months[n - 1];
+  if (n === 0) throw new Error("generateAssets requires at least one month");
+  const first = months[0]!;
+  const last = months[n - 1]!;
   const frac = (f: number): string => dateAtFrac(first, last, f);
 
   // Weekly date points for market price data
@@ -301,9 +308,11 @@ export function generateAssets(months: MonthSpec[]): {
     const f = n > 1 ? i / (n - 1) : 0;
     const trend = etfStart + (etfEnd - etfStart) * f;
     const wobble = Math.sin(f * Math.PI * 3) * 1.5;
-    etfAnchors.push({ date: dateAt(months[i], 1), value: trend + wobble });
+    // i < n, so months[i] is in bounds.
+    const month = months[i]!;
+    etfAnchors.push({ date: dateAt(month, 1), value: trend + wobble });
     if (i < n - 1) {
-      etfAnchors.push({ date: dateAt(months[i], 15), value: trend - wobble * 0.5 });
+      etfAnchors.push({ date: dateAt(month, 15), value: trend - wobble * 0.5 });
     }
   }
   etfAnchors.push({ date: dateAt(last, last.lastDay), value: etfEnd });

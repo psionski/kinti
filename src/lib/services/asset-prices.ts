@@ -5,6 +5,7 @@ import * as schema from "@/lib/db/schema";
 import { assets, assetPrices } from "@/lib/db/schema";
 import type { RecordPriceInput, AssetPriceResponse } from "@/lib/validators/assets";
 import { utcToLocal, localToUtc, isoToday, offsetDate } from "@/lib/date-ranges";
+import { requireRow } from "@/lib/db/rows";
 
 type Db = BetterSQLite3Database<typeof schema>;
 
@@ -55,11 +56,14 @@ export class AssetPriceService {
       )
       .run();
 
-    const [row] = this.db
-      .insert(assetPrices)
-      .values({ assetId, pricePerUnit: input.pricePerUnit, recordedAt })
-      .returning()
-      .all();
+    const row = requireRow(
+      this.db
+        .insert(assetPrices)
+        .values({ assetId, pricePerUnit: input.pricePerUnit, recordedAt })
+        .returning()
+        .all(),
+      "asset price"
+    );
     return parsePrice(row);
   }
 }

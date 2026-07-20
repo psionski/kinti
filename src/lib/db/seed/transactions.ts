@@ -211,7 +211,9 @@ export function generateEvents({
   // never get visited by the day-by-day iteration. Drain them first,
   // sorted by date, so the running balance picks them up before any
   // in-period events.
-  const firstLoopDate = isoDate(months[0].year, months[0].month, 1);
+  const firstMonth = months[0];
+  if (firstMonth === undefined) throw new Error("generateEvents requires at least one month");
+  const firstLoopDate = isoDate(firstMonth.year, firstMonth.month, 1);
   const preLoopDates: string[] = [];
   for (const date of deterministicByDate.keys()) {
     if (date < firstLoopDate) preLoopDates.push(date);
@@ -274,7 +276,7 @@ export function generateEvents({
             type: "expense",
             description: "Electricity bill",
             merchant: "Vattenfall",
-            categoryId: catIds.Utilities,
+            categoryId: catIds.Utilities!,
             date,
             tags: ["bills", "electricity"],
           })
@@ -288,7 +290,7 @@ export function generateEvents({
             type: "expense",
             description: "Grocery run",
             merchant: pick(GROCERY_STORES),
-            categoryId: catIds.Groceries,
+            categoryId: catIds.Groceries!,
             date,
             tags: ["groceries"],
           })
@@ -303,7 +305,7 @@ export function generateEvents({
             type: "expense",
             description: pick(COFFEE_ORDERS),
             merchant: pick(COFFEE_SHOPS),
-            categoryId: catIds.Coffee,
+            categoryId: catIds.Coffee!,
             date,
             tags: ["coffee"],
           })
@@ -316,7 +318,7 @@ export function generateEvents({
             type: "expense",
             description: "Lunch",
             merchant: pick(LUNCH_SPOTS),
-            categoryId: catIds.Dining,
+            categoryId: catIds.Dining!,
             date,
             tags: ["lunch"],
           })
@@ -329,7 +331,7 @@ export function generateEvents({
             type: "expense",
             description: "Dinner",
             merchant: pick(DINNER_SPOTS),
-            categoryId: catIds.Dining,
+            categoryId: catIds.Dining!,
             date,
             tags: ["dining"],
           })
@@ -351,7 +353,7 @@ export function generateEvents({
             type: "expense",
             description: "Travel",
             merchant,
-            categoryId: catIds.Transport,
+            categoryId: catIds.Transport!,
             date,
             tags: ["transport"],
           })
@@ -364,7 +366,7 @@ export function generateEvents({
             type: "expense",
             description: pick(ENTERTAINMENT_DESCS),
             merchant: pick(ENTERTAINMENT_MERCHANTS),
-            categoryId: catIds.Entertainment,
+            categoryId: catIds.Entertainment!,
             date,
             tags: ["entertainment"],
           })
@@ -377,7 +379,7 @@ export function generateEvents({
             type: "expense",
             description: pick(SHOPPING_DESCS),
             merchant: pick(SHOPPING_MERCHANTS),
-            categoryId: catIds.Shopping,
+            categoryId: catIds.Shopping!,
             date,
             tags: ["shopping"],
           })
@@ -390,7 +392,7 @@ export function generateEvents({
             type: "expense",
             description: pick(HEALTH_DESCS),
             merchant: pick(HEALTH_MERCHANTS),
-            categoryId: catIds.Health,
+            categoryId: catIds.Health!,
             date,
             tags: ["health"],
           })

@@ -51,6 +51,7 @@ export class AssetService {
       })
       .returning()
       .all();
+    if (!row) throw new Error("Failed to insert asset");
     return parseAsset(row);
   }
 
@@ -114,6 +115,7 @@ export class AssetService {
         let toConsume = -lot.quantity;
         while (toConsume > 0 && queue.length > 0) {
           const front = queue[0];
+          if (!front) break;
           if (front.qty <= toConsume) {
             toConsume -= front.qty;
             queue.shift();

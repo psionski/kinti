@@ -102,9 +102,9 @@ describe("Database", () => {
 
       const rows = db.select().from(schema.transactions).all();
       expect(rows).toHaveLength(1);
-      expect(rows[0].amount).toBe(1250);
-      expect(rows[0].description).toBe("Morning coffee");
-      expect(rows[0].merchant).toBe("Starbucks");
+      expect(rows[0]!.amount).toBe(1250);
+      expect(rows[0]!.description).toBe("Morning coffee");
+      expect(rows[0]!.merchant).toBe("Starbucks");
     });
 
     it("updates a transaction", () => {
@@ -118,17 +118,17 @@ describe("Database", () => {
 
       db.update(schema.transactions)
         .set({ amount: 600, description: "Bus ticket (updated)" })
-        .where(eq(schema.transactions.id, inserted.id))
+        .where(eq(schema.transactions.id, inserted!.id))
         .run();
 
       const [updated] = db
         .select()
         .from(schema.transactions)
-        .where(eq(schema.transactions.id, inserted.id))
+        .where(eq(schema.transactions.id, inserted!.id))
         .all();
 
-      expect(updated.amount).toBe(600);
-      expect(updated.description).toBe("Bus ticket (updated)");
+      expect(updated!.amount).toBe(600);
+      expect(updated!.description).toBe("Bus ticket (updated)");
     });
 
     it("deletes a transaction", () => {
@@ -140,7 +140,7 @@ describe("Database", () => {
         .returning()
         .all();
 
-      db.delete(schema.transactions).where(eq(schema.transactions.id, inserted.id)).run();
+      db.delete(schema.transactions).where(eq(schema.transactions.id, inserted!.id)).run();
 
       const rows = db.select().from(schema.transactions).all();
       expect(rows).toHaveLength(0);
@@ -246,7 +246,7 @@ describe("Database", () => {
 
       db.update(schema.transactions)
         .set({ description: "New description after update" })
-        .where(eq(schema.transactions.id, tx.id))
+        .where(eq(schema.transactions.id, tx!.id))
         .run();
 
       const rawClient = Object.values(db).find(
@@ -281,7 +281,7 @@ describe("Database", () => {
         .returning()
         .all();
 
-      db.delete(schema.transactions).where(eq(schema.transactions.id, tx.id)).run();
+      db.delete(schema.transactions).where(eq(schema.transactions.id, tx!.id)).run();
 
       const rawClient = Object.values(db).find(
         (v) => v && typeof v === "object" && typeof (v as Database.Database).prepare === "function"
@@ -311,7 +311,7 @@ describe("Database", () => {
           amount: 500,
           type: "expense",
           description: "Weekly shop",
-          categoryId: cat.id,
+          categoryId: cat!.id,
           date: "2026-03-17",
         })
         .run();
@@ -342,7 +342,7 @@ describe("Database", () => {
           amount: 500,
           type: "expense",
           description: "Lunch",
-          categoryId: cat.id,
+          categoryId: cat!.id,
           date: "2026-03-17",
         })
         .run();
@@ -350,7 +350,7 @@ describe("Database", () => {
       // Rename category
       db.update(schema.categories)
         .set({ name: "Dining" })
-        .where(eq(schema.categories.id, cat.id))
+        .where(eq(schema.categories.id, cat!.id))
         .run();
 
       const rawClient = Object.values(db).find(

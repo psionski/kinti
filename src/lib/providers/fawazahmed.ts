@@ -126,7 +126,8 @@ function nextDay(iso: string): string {
   // a tiny implementation here to avoid pulling Temporal into a hot path
   // for what amounts to "+1 day on a string". The Date object is acceptable
   // for pure date arithmetic with no timezone semantics.
-  const [y, m, d] = iso.split("-").map(Number);
+  // iso is a known YYYY-MM-DD string, so split yields exactly three parts.
+  const [y, m, d] = iso.split("-").map(Number) as [number, number, number];
   const next = new Date(Date.UTC(y, m - 1, d + 1));
   return next.toISOString().slice(0, 10);
 }

@@ -91,8 +91,8 @@ function buildGrid(points: DailySpendPoint[]): Grid | null {
   if (points.length === 0) return null;
 
   const cells = bucketize(points);
-  const firstDate = Temporal.PlainDate.from(points[0].date);
-  const lastDate = Temporal.PlainDate.from(points[points.length - 1].date);
+  const firstDate = Temporal.PlainDate.from(points[0]!.date);
+  const lastDate = Temporal.PlainDate.from(points[points.length - 1]!.date);
 
   // Pad the grid to start on a Monday and end on a Sunday so every column
   // is a full 7-day stack.
@@ -125,7 +125,7 @@ function buildGrid(points: DailySpendPoint[]): Grid | null {
   const monthLabels: { col: number; label: string }[] = [];
   let prevMonth = "";
   for (let w = 0; w < weeks.length; w++) {
-    const firstInWindow = weeks[w].find((c): c is Cell => c !== null);
+    const firstInWindow = weeks[w]!.find((c): c is Cell => c !== null);
     if (!firstInWindow) continue;
     const month = firstInWindow.date.slice(0, 7);
     if (month !== prevMonth) {

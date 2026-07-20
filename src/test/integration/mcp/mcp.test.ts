@@ -59,12 +59,12 @@ function toolCallRequest(name: string, args: Record<string, unknown>) {
 }
 
 async function parseResult(res: Response): Promise<unknown> {
-  const body = await res.json();
-  return (body as { result?: unknown }).result;
+  const body = (await res.json()) as { result?: unknown };
+  return body.result;
 }
 
 function parseToolText(result: unknown): unknown {
-  const text = (result as { content: { text: string }[] }).content[0].text;
+  const text = (result as { content: { text: string }[] }).content[0]!.text;
   return JSON.parse(text);
 }
 
@@ -105,10 +105,8 @@ describe("MCP infrastructure", () => {
   it("responds to initialize", async () => {
     const res = await POST(initRequest());
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect((body as { result?: { serverInfo?: { name: string } } }).result?.serverInfo?.name).toBe(
-      "kinti"
-    );
+    const body = (await res.json()) as { result?: { serverInfo?: { name: string } } };
+    expect(body.result?.serverInfo?.name).toBe("kinti");
   });
 
   it("lists all registered tools", async () => {
@@ -136,19 +134,19 @@ describe("query tool", () => {
 
   it("executes read-only SQL and returns rows", async () => {
     const svc = new TransactionService(db);
-    svc.create({ amount: 3, description: "Test", date: "2025-06-01", type: "expense" });
+    await svc.create({ amount: 3, description: "Test", date: "2025-06-01", type: "expense" });
 
     const res = await POST(
       toolCallRequest("query", { sql: "SELECT count(*) AS n FROM transactions" })
     );
     const rows = parseToolText(await parseResult(res)) as { n: number }[];
-    expect(rows[0].n).toBe(1);
+    expect(rows[0]!.n).toBe(1);
   });
 
   it("rejects non-SELECT statements", async () => {
     const res = await POST(toolCallRequest("query", { sql: "DELETE FROM transactions" }));
-    const body = await res.json();
-    expect((body as { result?: { isError?: boolean } }).result?.isError).toBe(true);
+    const body = (await res.json()) as { result?: { isError?: boolean } };
+    expect(body.result?.isError).toBe(true);
   });
 
   it("allows WITH (CTE) statements", async () => {
@@ -158,15 +156,15 @@ describe("query tool", () => {
       })
     );
     const rows = parseToolText(await parseResult(res)) as { x: number }[];
-    expect(rows[0].x).toBe(1);
+    expect(rows[0]!.x).toBe(1);
   });
 
   it("rejects INSERT disguised with leading whitespace", async () => {
     const res = await POST(
       toolCallRequest("query", { sql: "  INSERT INTO transactions VALUES (1)" })
     );
-    const body = await res.json();
-    expect((body as { result?: { isError?: boolean } }).result?.isError).toBe(true);
+    const body = (await res.json()) as { result?: { isError?: boolean } };
+    expect(body.result?.isError).toBe(true);
   });
 });
 
@@ -254,8 +252,8 @@ describe("delete_transaction tool", () => {
 
   it("throws for non-existent single ID", async () => {
     const res = await POST(toolCallRequest("delete_transaction", { id: 99999 }));
-    const body = await res.json();
-    expect((body as { result?: { isError?: boolean } }).result?.isError).toBe(true);
+    const body = (await res.json()) as { result?: { isError?: boolean } };
+    expect(body.result?.isError).toBe(true);
   });
 });
 
@@ -293,7 +291,7 @@ describe("delete_receipt tool", () => {
 
   it("throws for non-existent single ID", async () => {
     const res = await POST(toolCallRequest("delete_receipt", { id: 99999 }));
-    const body = await res.json();
-    expect((body as { result?: { isError?: boolean } }).result?.isError).toBe(true);
+    const body = (await res.json()) as { result?: { isError?: boolean } };
+    expect(body.result?.isError).toBe(true);
   });
 });

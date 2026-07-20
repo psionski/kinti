@@ -34,10 +34,10 @@ export async function POST(req: Request): Promise<NextResponse> {
   const date = formData.get("date");
   const total = formData.get("total");
   const rawText = formData.get("raw_text");
-  if (merchant) rawMeta.merchant = String(merchant);
-  if (date) rawMeta.date = String(date);
-  if (total) rawMeta.total = Number(total);
-  if (rawText) rawMeta.rawText = String(rawText);
+  if (merchant && typeof merchant === "string") rawMeta.merchant = merchant;
+  if (date && typeof date === "string") rawMeta.date = date;
+  if (total && typeof total === "string") rawMeta.total = Number(total);
+  if (rawText && typeof rawText === "string") rawMeta.rawText = rawText;
 
   const metaResult = CreateReceiptSchema.safeParse(rawMeta);
   if (!metaResult.success) {

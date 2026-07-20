@@ -11,6 +11,7 @@ import type {
 } from "@/lib/validators/recurring";
 import { isoToday, utcToLocal } from "@/lib/date-ranges";
 import { getBaseCurrency, roundToCurrency } from "@/lib/format";
+import { requireRow } from "@/lib/db/rows";
 import type { FinancialDataService } from "./financial-data";
 
 type Db = BetterSQLite3Database<typeof schema>;
@@ -100,7 +101,7 @@ function occurrencesBetween(r: RecurringTransaction, fromDate: string, upToDate:
   const end = Temporal.PlainDate.from(upToDate);
   let cursor = fromDate;
 
-  while (true) {
+  for (;;) {
     const next = computeNextOccurrence(r, cursor);
     if (!next) break;
     if (Temporal.PlainDate.compare(Temporal.PlainDate.from(next), end) > 0) break;
@@ -132,25 +133,28 @@ export class RecurringService {
   ) {}
 
   async create(input: CreateRecurringInput): Promise<RecurringResponse> {
-    const [row] = this.db
-      .insert(recurringTransactions)
-      .values({
-        amount: input.amount,
-        currency: input.currency ?? getBaseCurrency(),
-        type: input.type,
-        description: input.description,
-        merchant: input.merchant,
-        categoryId: input.categoryId,
-        frequency: input.frequency,
-        dayOfMonth: input.dayOfMonth ?? null,
-        dayOfWeek: input.dayOfWeek ?? null,
-        startDate: input.startDate,
-        endDate: input.endDate ?? null,
-        notes: input.notes,
-        tags: input.tags ? JSON.stringify(input.tags) : null,
-      })
-      .returning()
-      .all();
+    const row = requireRow(
+      this.db
+        .insert(recurringTransactions)
+        .values({
+          amount: input.amount,
+          currency: input.currency ?? getBaseCurrency(),
+          type: input.type,
+          description: input.description,
+          merchant: input.merchant,
+          categoryId: input.categoryId,
+          frequency: input.frequency,
+          dayOfMonth: input.dayOfMonth ?? null,
+          dayOfWeek: input.dayOfWeek ?? null,
+          startDate: input.startDate,
+          endDate: input.endDate ?? null,
+          notes: input.notes,
+          tags: input.tags ? JSON.stringify(input.tags) : null,
+        })
+        .returning()
+        .all(),
+      "recurring transaction"
+    );
 
     const today = isoToday();
     await this.generateForTemplate(row, today);
@@ -208,7 +212,8 @@ export class RecurringService {
       .returning()
       .all();
 
-    return rows.length > 0 ? parseRecurring(rows[0], isoToday()) : null;
+    const row = rows[0];
+    return row ? parseRecurring(row, isoToday()) : null;
   }
 
   delete(id: number): boolean {

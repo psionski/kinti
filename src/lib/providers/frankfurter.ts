@@ -64,7 +64,8 @@ export class FrankfurterProvider implements FinancialDataProvider {
 
     return Object.entries(data.rates).map(([date, rates]) => ({
       symbol,
-      price: rates[currency],
+      // The request pins to=currency, so each day's rates includes it.
+      price: rates[currency]!,
       currency,
       date,
       provider: this.name,
@@ -103,12 +104,14 @@ export class FrankfurterProvider implements FinancialDataProvider {
 interface FrankfurterResponse {
   date: string;
   base: string;
-  rates: Record<string, number>;
+  // External API: rates may be absent (e.g. unknown base currency / error).
+  rates?: Record<string, number>;
 }
 
 interface FrankfurterTimeseriesResponse {
   base: string;
   start_date: string;
   end_date: string;
-  rates: Record<string, Record<string, number>>;
+  // External API: rates may be absent (e.g. unknown base currency / error).
+  rates?: Record<string, Record<string, number>>;
 }

@@ -77,19 +77,19 @@ describe("createBatch", async () => {
     const [receipt] = db.insert(receipts).values({ date: "2026-03-17" }).returning().all();
     const result = await service.createBatch({
       transactions: [tx({ amount: 5 }), tx({ amount: 6 })],
-      receiptId: receipt.id,
+      receiptId: receipt!.id,
     });
-    expect(result.every((r) => r.receiptId === receipt.id)).toBe(true);
+    expect(result.every((r) => r.receiptId === receipt!.id)).toBe(true);
   });
 
   it("item-level receiptId takes precedence over batch-level", async () => {
     const [r1] = db.insert(receipts).values({ date: "2026-03-17" }).returning().all();
     const [r2] = db.insert(receipts).values({ date: "2026-03-17" }).returning().all();
     const result = await service.createBatch({
-      transactions: [tx({ amount: 5, receiptId: r1.id })],
-      receiptId: r2.id,
+      transactions: [tx({ amount: 5, receiptId: r1!.id })],
+      receiptId: r2!.id,
     });
-    expect(result[0].receiptId).toBe(r1.id);
+    expect(result[0]!.receiptId).toBe(r1!.id);
   });
 });
 
@@ -149,7 +149,7 @@ describe("list", async () => {
   it("filters by type", async () => {
     const result = service.list(listInput({ type: "income" }));
     expect(result.total).toBe(1);
-    expect(result.data[0].description).toBe("Salary");
+    expect(result.data[0]!.description).toBe("Salary");
   });
 
   it("filters by dateFrom", async () => {
@@ -160,13 +160,13 @@ describe("list", async () => {
   it("filters by dateTo", async () => {
     const result = service.list(listInput({ dateTo: "2026-01-31" }));
     expect(result.total).toBe(1);
-    expect(result.data[0].description).toBe("Groceries");
+    expect(result.data[0]!.description).toBe("Groceries");
   });
 
   it("filters by date range", async () => {
     const result = service.list(listInput({ dateFrom: "2026-02-01", dateTo: "2026-02-28" }));
     expect(result.total).toBe(1);
-    expect(result.data[0].description).toBe("Coffee");
+    expect(result.data[0]!.description).toBe("Coffee");
   });
 
   it("filters by amountMin", async () => {
@@ -182,7 +182,7 @@ describe("list", async () => {
   it("filters by merchant (partial match)", async () => {
     const result = service.list(listInput({ merchant: "star" }));
     expect(result.total).toBe(1);
-    expect(result.data[0].merchant).toBe("Starbucks");
+    expect(result.data[0]!.merchant).toBe("Starbucks");
   });
 
   it("sorts by amount asc", async () => {
@@ -203,43 +203,43 @@ describe("list", async () => {
 describe("list — categoryId filter", async () => {
   it("filters for uncategorized transactions when categoryId is null", async () => {
     const [cat] = db.insert(categories).values({ name: "Food" }).returning().all();
-    await service.create(tx({ description: "Categorized", categoryId: cat.id }));
+    await service.create(tx({ description: "Categorized", categoryId: cat!.id }));
     await service.create(tx({ description: "Uncategorized" }));
 
     const result = service.list(listInput({ categoryId: null }));
     expect(result.total).toBe(1);
-    expect(result.data[0].description).toBe("Uncategorized");
+    expect(result.data[0]!.description).toBe("Uncategorized");
   });
 
   it("filters by a specific categoryId", async () => {
     const [cat] = db.insert(categories).values({ name: "Transport" }).returning().all();
-    await service.create(tx({ description: "Bus", categoryId: cat.id }));
+    await service.create(tx({ description: "Bus", categoryId: cat!.id }));
     await service.create(tx({ description: "Groceries" }));
 
-    const result = service.list(listInput({ categoryId: cat.id }));
+    const result = service.list(listInput({ categoryId: cat!.id }));
     expect(result.total).toBe(1);
-    expect(result.data[0].description).toBe("Bus");
+    expect(result.data[0]!.description).toBe("Bus");
   });
 
   it("includes child category transactions when filtering by parent", async () => {
     const [parent] = db.insert(categories).values({ name: "Food" }).returning().all();
     const [child] = db
       .insert(categories)
-      .values({ name: "Groceries", parentId: parent.id })
+      .values({ name: "Groceries", parentId: parent!.id })
       .returning()
       .all();
     const [grandchild] = db
       .insert(categories)
-      .values({ name: "Organic", parentId: child.id })
+      .values({ name: "Organic", parentId: child!.id })
       .returning()
       .all();
 
-    await service.create(tx({ description: "Parent tx", categoryId: parent.id }));
-    await service.create(tx({ description: "Child tx", categoryId: child.id }));
-    await service.create(tx({ description: "Grandchild tx", categoryId: grandchild.id }));
+    await service.create(tx({ description: "Parent tx", categoryId: parent!.id }));
+    await service.create(tx({ description: "Child tx", categoryId: child!.id }));
+    await service.create(tx({ description: "Grandchild tx", categoryId: grandchild!.id }));
     await service.create(tx({ description: "Unrelated" }));
 
-    const result = service.list(listInput({ categoryId: parent.id }));
+    const result = service.list(listInput({ categoryId: parent!.id }));
     expect(result.total).toBe(3);
     const descs = result.data.map((r) => r.description).sort();
     expect(descs).toEqual(["Child tx", "Grandchild tx", "Parent tx"]);
@@ -258,13 +258,13 @@ describe("list — FTS search", async () => {
   it("finds transactions matching description keyword", async () => {
     const result = service.list(listInput({ search: "supermarket" }));
     expect(result.total).toBe(1);
-    expect(result.data[0].merchant).toBe("ALDI");
+    expect(result.data[0]!.merchant).toBe("ALDI");
   });
 
   it("finds transactions matching merchant keyword", async () => {
     const result = service.list(listInput({ search: "Netflix" }));
     expect(result.total).toBe(1);
-    expect(result.data[0].description).toBe("Monthly subscription");
+    expect(result.data[0]!.description).toBe("Monthly subscription");
   });
 
   it("returns empty when no match", async () => {
@@ -275,14 +275,14 @@ describe("list — FTS search", async () => {
   it("finds transactions by prefix (partial word)", async () => {
     const result = service.list(listInput({ search: "cof" }));
     expect(result.total).toBe(1);
-    expect(result.data[0].description).toBe("Coffee and cake");
+    expect(result.data[0]!.description).toBe("Coffee and cake");
   });
 
   it("phrase matches consecutive words", async () => {
     // "weekly shop" appears consecutively in "Supermarket weekly shop"
     const result = service.list(listInput({ search: "weekly shop" }));
     expect(result.total).toBe(1);
-    expect(result.data[0].merchant).toBe("ALDI");
+    expect(result.data[0]!.merchant).toBe("ALDI");
   });
 
   it("does not match words in wrong order", async () => {
@@ -295,7 +295,7 @@ describe("list — FTS search", async () => {
     // "weekly sho" — phrase match with prefix on last: "weekly sho"*
     const result = service.list(listInput({ search: "weekly sho" }));
     expect(result.total).toBe(1);
-    expect(result.data[0].merchant).toBe("ALDI");
+    expect(result.data[0]!.merchant).toBe("ALDI");
   });
 
   it("returns empty for search with only special characters", async () => {
@@ -310,11 +310,12 @@ describe("list — FTS search by category name", async () => {
   let catId: number;
 
   beforeEach(async () => {
-    [{ id: catId }] = db
+    const [firstCat] = db
       .insert(categories)
       .values({ name: "Groceries", icon: "cart" })
       .returning({ id: categories.id })
       .all();
+    catId = firstCat!.id;
     await service.create(tx({ description: "Weekly shop", merchant: "ALDI", categoryId: catId }));
     await service.create(tx({ description: "Coffee", merchant: "Starbucks" })); // no category
   });
@@ -322,7 +323,7 @@ describe("list — FTS search by category name", async () => {
   it("matches transactions by category name prefix", async () => {
     const result = service.list(listInput({ search: "groc" }));
     expect(result.total).toBe(1);
-    expect(result.data[0].description).toBe("Weekly shop");
+    expect(result.data[0]!.description).toBe("Weekly shop");
   });
 
   it("matches transactions by full category name", async () => {
@@ -333,7 +334,7 @@ describe("list — FTS search by category name", async () => {
   it("does not match uncategorized transactions for category search", async () => {
     const result = service.list(listInput({ search: "Groceries" }));
     expect(result.total).toBe(1);
-    expect(result.data[0].merchant).toBe("ALDI");
+    expect(result.data[0]!.merchant).toBe("ALDI");
   });
 });
 
@@ -350,7 +351,7 @@ describe("list — tag filtering", async () => {
   it("filters by single tag", async () => {
     const result = service.list(listInput({ tags: ["transport"] }));
     expect(result.total).toBe(1);
-    expect(result.data[0].description).toBe("B");
+    expect(result.data[0]!.description).toBe("B");
   });
 
   it("filters by multiple tags (OR logic)", async () => {
@@ -457,13 +458,13 @@ describe("updateBatch", async () => {
 
     const results = await service.updateBatch({
       updates: [
-        { id: a.id, categoryId: cat.id },
+        { id: a.id, categoryId: cat!.id },
         { id: b.id, description: "B updated" },
       ],
     });
 
     expect(results).toHaveLength(2);
-    expect(results.find((r) => r.id === a.id)?.categoryId).toBe(cat.id);
+    expect(results.find((r) => r.id === a.id)?.categoryId).toBe(cat!.id);
     expect(results.find((r) => r.id === b.id)?.description).toBe("B updated");
   });
 
@@ -478,7 +479,7 @@ describe("updateBatch", async () => {
     });
 
     expect(results).toHaveLength(1);
-    expect(results[0].description).toBe("A updated");
+    expect(results[0]!.description).toBe("A updated");
   });
 
   it("is atomic — all updates succeed or none do", async () => {
@@ -541,6 +542,6 @@ describe("transfer type", async () => {
 
     const transfers = service.list(ListTransactionsSchema.parse({ type: "transfer" }));
     expect(transfers.total).toBe(1);
-    expect(transfers.data[0].type).toBe("transfer");
+    expect(transfers.data[0]!.type).toBe("transfer");
   });
 });

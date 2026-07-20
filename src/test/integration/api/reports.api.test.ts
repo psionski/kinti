@@ -83,7 +83,7 @@ describe("Report API Routes", () => {
     expect(res.status).toBe(200);
     const body = await json<{ items: Array<{ percentage: number }>; currency: string }>(res);
     expect(body.items).toHaveLength(1);
-    expect(body.items[0].percentage).toBe(100);
+    expect(body.items[0]!.percentage).toBe(100);
     expect(body.currency).toBe("EUR");
   });
 
@@ -121,10 +121,10 @@ describe("Report API Routes", () => {
       makeGet("/api/reports/trends", { months: "3", categoryId: String(cat.id), type: "expense" })
     );
     expect(res.status).toBe(200);
-    const body = await json<unknown>(res);
+    const body = await json(res);
 
     expect(Array.isArray(body)).toBe(false);
-    expect(body).toMatchObject({ points: expect.any(Array), currency: "EUR" });
+    expect(body).toMatchObject({ points: expect.any(Array) as unknown, currency: "EUR" });
   });
 
   it("GET /category-trends returns months/series/currency envelope for the range", async () => {

@@ -23,7 +23,7 @@ interface BudgetsClientProps {
 function shiftMonth(month: string, delta: number): string {
   const [year, m] = month.split("-").map(Number);
   // Pure arithmetic: handle month overflow/underflow
-  const totalMonths = year * 12 + (m - 1) + delta;
+  const totalMonths = year! * 12 + (m! - 1) + delta;
   const newYear = Math.floor(totalMonths / 12);
   const newMonth = (totalMonths % 12) + 1;
   return `${newYear}-${String(newMonth).padStart(2, "0")}`;

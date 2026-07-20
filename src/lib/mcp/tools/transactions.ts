@@ -46,7 +46,7 @@ export function registerTransactionTools(server: McpServer): void {
       description:
         "Update fields on an existing transaction by ID. Only supplied fields are changed. " +
         "Updating amount, currency, or date triggers a fresh FX lookup to recompute amount_base.",
-      inputSchema: IdSchema.merge(UpdateTransactionSchema),
+      inputSchema: IdSchema.extend(UpdateTransactionSchema.shape),
     },
     async ({ id, ...updates }) => {
       const svc = getTransactionService();

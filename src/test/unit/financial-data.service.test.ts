@@ -262,8 +262,8 @@ describe("getPrices", () => {
 
     const results = await svc.getPrices({ frankfurter: "USD" }, "2026-03-01");
     expect(results).toHaveLength(1);
-    expect(results[0].price).toBeCloseTo(0.92);
-    expect(results[0].stale).toBe(false);
+    expect(results[0]!.price).toBeCloseTo(0.92);
+    expect(results[0]!.stale).toBe(false);
   });
 
   it("caches all prices returned by getPrices", async () => {
@@ -515,8 +515,8 @@ describe("searchSymbol", () => {
     const results = await svc.searchSymbol("bitcoin");
 
     expect(results).toHaveLength(2);
-    expect(results[0].symbol).toBe("bitcoin");
-    expect(results[1].symbol).toBe("BTC-USD");
+    expect(results[0]!.symbol).toBe("bitcoin");
+    expect(results[1]!.symbol).toBe("BTC-USD");
   });
 
   it("handles provider search failure gracefully", async () => {
@@ -548,7 +548,7 @@ describe("searchSymbol", () => {
 
     // Should still return results from the working provider
     expect(results).toHaveLength(1);
-    expect(results[0].symbol).toBe("AAPL");
+    expect(results[0]!.symbol).toBe("AAPL");
   });
 
   it("skips providers without searchSymbol method", async () => {
@@ -621,8 +621,8 @@ describe("searchSymbolStream", () => {
 
     expect(batches).toHaveLength(2);
     // alpha-vantage resolves instantly, coingecko after 50ms
-    expect(batches[0].provider).toBe("alpha-vantage");
-    expect(batches[1].provider).toBe("coingecko");
+    expect(batches[0]!.provider).toBe("alpha-vantage");
+    expect(batches[1]!.provider).toBe("coingecko");
   });
 
   it("skips providers that return empty results", async () => {
@@ -654,7 +654,7 @@ describe("searchSymbolStream", () => {
     }
 
     expect(batches).toHaveLength(1);
-    expect(batches[0].provider).toBe("alpha-vantage");
+    expect(batches[0]!.provider).toBe("alpha-vantage");
   });
 
   it("handles provider failure gracefully", async () => {
@@ -688,7 +688,7 @@ describe("searchSymbolStream", () => {
     }
 
     expect(batches).toHaveLength(1);
-    expect(batches[0].provider).toBe("alpha-vantage");
+    expect(batches[0]!.provider).toBe("alpha-vantage");
   });
 });
 

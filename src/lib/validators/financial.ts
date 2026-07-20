@@ -7,7 +7,7 @@ import { PastOrTodayDateSchema } from "./common";
 
 /** SymbolMap that also accepts a JSON string (for GET query params). */
 const QuerySymbolMapSchema = z.preprocess(
-  (val) => (typeof val === "string" ? JSON.parse(val) : val),
+  (val): unknown => (typeof val === "string" ? JSON.parse(val) : val),
   SymbolMapSchema
 );
 

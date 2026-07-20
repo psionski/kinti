@@ -13,6 +13,7 @@ import type {
 import type { PaginatedResponse } from "@/lib/validators/common";
 import { sql } from "drizzle-orm";
 import { isoToday, utcToLocal } from "@/lib/date-ranges";
+import { requireRow } from "@/lib/db/rows";
 
 type Db = BetterSQLite3Database<typeof schema>;
 
@@ -51,17 +52,20 @@ export class ReceiptService {
     const date = meta.date ?? isoToday();
 
     // Insert placeholder row first to get the auto-incremented ID
-    const [row] = this.db
-      .insert(receipts)
-      .values({
-        merchant: meta.merchant,
-        date,
-        total: meta.total,
-        rawText: meta.rawText,
-        imagePath: null, // filled in after we know the ID
-      })
-      .returning()
-      .all();
+    const row = requireRow(
+      this.db
+        .insert(receipts)
+        .values({
+          merchant: meta.merchant,
+          date,
+          total: meta.total,
+          rawText: meta.rawText,
+          imagePath: null, // filled in after we know the ID
+        })
+        .returning()
+        .all(),
+      "receipt"
+    );
 
     // Build deterministic path: data/receipts/YYYY-MM/receipt-{id}.{ext}
     const month = date.slice(0, 7); // "YYYY-MM"
@@ -74,12 +78,10 @@ export class ReceiptService {
     writeFileSync(imagePath, file);
 
     // Update row with the actual path
-    const [updated] = this.db
-      .update(receipts)
-      .set({ imagePath })
-      .where(eq(receipts.id, row.id))
-      .returning()
-      .all();
+    const updated = requireRow(
+      this.db.update(receipts).set({ imagePath }).where(eq(receipts.id, row.id)).returning().all(),
+      "receipt"
+    );
 
     return toResponse(updated);
   }
@@ -87,17 +89,20 @@ export class ReceiptService {
   /** Upload a receipt without an image (metadata only). */
   createMetadataOnly(meta: CreateReceiptInput): ReceiptResponse {
     const date = meta.date ?? isoToday();
-    const [row] = this.db
-      .insert(receipts)
-      .values({
-        merchant: meta.merchant,
-        date,
-        total: meta.total,
-        rawText: meta.rawText,
-        imagePath: null,
-      })
-      .returning()
-      .all();
+    const row = requireRow(
+      this.db
+        .insert(receipts)
+        .values({
+          merchant: meta.merchant,
+          date,
+          total: meta.total,
+          rawText: meta.rawText,
+          imagePath: null,
+        })
+        .returning()
+        .all(),
+      "receipt"
+    );
     return toResponse(row);
   }
 
@@ -128,11 +133,14 @@ export class ReceiptService {
 
     const where = filters.length > 0 ? and(...filters) : undefined;
 
-    const [{ total }] = this.db
-      .select({ total: sql<number>`count(*)`.mapWith(Number) })
-      .from(receipts)
-      .where(where)
-      .all();
+    const { total } = requireRow(
+      this.db
+        .select({ total: sql<number>`count(*)`.mapWith(Number) })
+        .from(receipts)
+        .where(where)
+        .all(),
+      "count"
+    );
 
     const data = this.db
       .select()
@@ -202,11 +210,14 @@ export class ReceiptService {
         .where(eq(transactions.receiptId, receipts.id))
     );
 
-    const [{ total }] = this.db
-      .select({ total: sql<number>`count(*)`.mapWith(Number) })
-      .from(receipts)
-      .where(where)
-      .all();
+    const { total } = requireRow(
+      this.db
+        .select({ total: sql<number>`count(*)`.mapWith(Number) })
+        .from(receipts)
+        .where(where)
+        .all(),
+      "count"
+    );
 
     const data = this.db
       .select()

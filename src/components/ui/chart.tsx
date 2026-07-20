@@ -96,6 +96,20 @@ ${colorConfig
 
 const ChartTooltip = RechartsPrimitive.Tooltip;
 
+/**
+ * A single item in a Recharts tooltip/legend payload. Recharts types the
+ * `payload` field of each entry as `any`; we narrow it to the fields this
+ * component actually reads so downstream access is type-safe.
+ */
+interface ChartPayloadItem {
+  value?: number | string;
+  name?: number | string;
+  dataKey?: number | string;
+  type?: string;
+  color?: string;
+  payload?: { fill?: string } & Record<string, unknown>;
+}
+
 function ChartTooltipContent({
   active,
   payload,
@@ -131,9 +145,7 @@ function ChartTooltipContent({
     const key = `${labelKey || item?.dataKey || item?.name || "value"}`;
     const itemConfig = getPayloadConfigFromPayload(config, item, key);
     const value =
-      !labelKey && typeof label === "string"
-        ? config[label as keyof typeof config]?.label || label
-        : itemConfig?.label;
+      !labelKey && typeof label === "string" ? config[label]?.label || label : itemConfig?.label;
 
     if (labelFormatter) {
       return (
@@ -165,10 +177,11 @@ function ChartTooltipContent({
       <div className="grid gap-1.5">
         {(reverse ? [...payload].reverse() : payload)
           .filter((item) => item.type !== "none")
-          .map((item, index) => {
+          .map((rawItem, index) => {
+            const item = rawItem as ChartPayloadItem;
             const key = `${nameKey || item.name || item.dataKey || "value"}`;
             const itemConfig = getPayloadConfigFromPayload(config, item, key);
-            const indicatorColor = color || item.payload.fill || item.color;
+            const indicatorColor = color || item.payload?.fill || item.color;
 
             return (
               <div
@@ -178,8 +191,14 @@ function ChartTooltipContent({
                   indicator === "dot" && "items-center"
                 )}
               >
-                {formatter && item?.value !== undefined && item.name ? (
-                  formatter(item.value, item.name, item, index, item.payload)
+                {formatter && item.value !== undefined && item.name ? (
+                  formatter(
+                    item.value,
+                    item.name,
+                    rawItem,
+                    index,
+                    rawItem.payload as typeof payload
+                  )
                 ) : (
                   <>
                     {itemConfig?.icon ? (
@@ -263,7 +282,8 @@ function ChartLegendContent({
     >
       {payload
         .filter((item) => item.type !== "none")
-        .map((item) => {
+        .map((rawItem) => {
+          const item = rawItem as ChartPayloadItem;
           const key = `${nameKey || item.dataKey || "value"}`;
           const itemConfig = getPayloadConfigFromPayload(config, item, key);
 
@@ -314,7 +334,7 @@ function getPayloadConfigFromPayload(config: ChartConfig, payload: unknown, key:
     configLabelKey = payloadPayload[key as keyof typeof payloadPayload] as string;
   }
 
-  return configLabelKey in config ? config[configLabelKey] : config[key as keyof typeof config];
+  return configLabelKey in config ? config[configLabelKey] : config[key];
 }
 
 export {

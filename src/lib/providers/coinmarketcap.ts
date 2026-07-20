@@ -59,9 +59,8 @@ export class CoinMarketCapProvider implements FinancialDataProvider {
 
     // v2 returns data as { [id]: CoinData }
     const coins = Object.values(data.data ?? {});
-    if (!coins.length) return null;
-
     const coin = coins[0];
+    if (!coin) return null;
     const cur = currency.toUpperCase();
     const quote = coin.quote?.[cur];
     if (!quote?.price) return null;
@@ -104,14 +103,13 @@ export class CoinMarketCapProvider implements FinancialDataProvider {
     }
 
     const quotes = Object.values(data.data ?? {});
-    if (!quotes.length) return this.getCurrentPrice(symbol, currency);
-
     const coinData = quotes[0];
+    if (!coinData) return this.getCurrentPrice(symbol, currency);
     const quoteEntries = coinData.quotes;
-    if (!quoteEntries?.length) return this.getCurrentPrice(symbol, currency);
+    const quoteEntry = quoteEntries?.[0];
+    if (!quoteEntry) return this.getCurrentPrice(symbol, currency);
 
     const cur = currency.toUpperCase();
-    const quoteEntry = quoteEntries[0];
     const price = quoteEntry.quote?.[cur]?.price;
     if (price === undefined) return this.getCurrentPrice(symbol, currency);
 
@@ -141,9 +139,8 @@ export class CoinMarketCapProvider implements FinancialDataProvider {
     if (data.status?.error_code !== 0) return [];
 
     const coins = Object.values(data.data ?? {});
-    if (!coins.length) return [];
-
     const coin = coins[0];
+    if (!coin) return [];
     const results: PriceResult[] = [];
 
     for (const cur of COMMON_CONVERT_CURRENCIES) {

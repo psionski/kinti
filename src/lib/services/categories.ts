@@ -11,6 +11,7 @@ import type {
   CategoryWithCountResponse,
 } from "@/lib/validators/categories";
 import { utcToLocal } from "@/lib/date-ranges";
+import { requireRow } from "@/lib/db/rows";
 
 type Db = BetterSQLite3Database<typeof schema>;
 
@@ -34,16 +35,19 @@ export class CategoryService {
   constructor(private db: Db) {}
 
   create(input: CreateCategoryInput): CategoryResponse {
-    const [row] = this.db
-      .insert(categories)
-      .values({
-        name: input.name,
-        parentId: input.parentId ?? null,
-        icon: input.icon,
-        color: input.color,
-      })
-      .returning()
-      .all();
+    const row = requireRow(
+      this.db
+        .insert(categories)
+        .values({
+          name: input.name,
+          parentId: input.parentId ?? null,
+          icon: input.icon,
+          color: input.color,
+        })
+        .returning()
+        .all(),
+      "category"
+    );
     return parseCategory(row);
   }
 
@@ -90,7 +94,8 @@ export class CategoryService {
       .returning()
       .all();
 
-    return rows.length > 0 ? parseCategory(rows[0]) : null;
+    const row = rows[0];
+    return row ? parseCategory(row) : null;
   }
 
   delete(id: number): boolean {

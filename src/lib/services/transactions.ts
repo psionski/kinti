@@ -29,6 +29,7 @@ import type {
 import type { PaginatedResponse } from "@/lib/validators/common";
 import { isoToday, utcToLocal } from "@/lib/date-ranges";
 import { getBaseCurrency, roundToCurrency } from "@/lib/format";
+import { requireRow } from "@/lib/db/rows";
 import type { FinancialDataService } from "./financial-data";
 
 type Db = BetterSQLite3Database<typeof schema>;
@@ -96,24 +97,27 @@ export class TransactionService {
     const currency = input.currency ?? getBaseCurrency();
     const amountBase = await this.resolveAmountBase(input.amount, currency, date);
 
-    const [row] = this.db
-      .insert(transactions)
-      .values({
-        amount: input.amount,
-        currency,
-        amountBase,
-        type: input.type,
-        description: input.description,
-        merchant: input.merchant,
-        categoryId: input.categoryId,
-        date,
-        receiptId: input.receiptId,
-        recurringId: input.recurringId,
-        notes: input.notes,
-        tags: input.tags ? JSON.stringify(input.tags) : null,
-      })
-      .returning()
-      .all();
+    const row = requireRow(
+      this.db
+        .insert(transactions)
+        .values({
+          amount: input.amount,
+          currency,
+          amountBase,
+          type: input.type,
+          description: input.description,
+          merchant: input.merchant,
+          categoryId: input.categoryId,
+          date,
+          receiptId: input.receiptId,
+          recurringId: input.recurringId,
+          notes: input.notes,
+          tags: input.tags ? JSON.stringify(input.tags) : null,
+        })
+        .returning()
+        .all(),
+      "transaction"
+    );
     return parseTransaction(row);
   }
 
@@ -206,11 +210,14 @@ export class TransactionService {
     const sortCol = sortColumnMap[input.sortBy];
     const orderBy = input.sortOrder === "asc" ? asc(sortCol) : desc(sortCol);
 
-    const [{ total }] = this.db
-      .select({ total: sql<number>`count(*)`.mapWith(Number) })
-      .from(transactions)
-      .where(where)
-      .all();
+    const { total } = requireRow(
+      this.db
+        .select({ total: sql<number>`count(*)`.mapWith(Number) })
+        .from(transactions)
+        .where(where)
+        .all(),
+      "count"
+    );
 
     const data = this.db
       .select()
@@ -279,7 +286,8 @@ export class TransactionService {
       .returning()
       .all();
 
-    return rows.length > 0 ? parseTransaction(rows[0]) : null;
+    const row = rows[0];
+    return row ? parseTransaction(row) : null;
   }
 
   async updateBatch(input: UpdateTransactionsBatchInput): Promise<TransactionResponse[]> {

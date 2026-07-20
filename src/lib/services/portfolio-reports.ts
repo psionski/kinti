@@ -86,6 +86,7 @@ export class PortfolioReportService {
 
     const datePoints = generateDatePoints(dateRange.from, dateRange.to, interval);
     if (datePoints.length === 0) return [];
+    const lastDatePoint = datePoints[datePoints.length - 1]!;
 
     const baseCurrency = getBaseCurrency();
     const fx = makeFxLookup(this.db, baseCurrency);
@@ -102,7 +103,7 @@ export class PortfolioReportService {
         amountBase: transactions.amountBase,
       })
       .from(transactions)
-      .where(lte(transactions.date, datePoints[datePoints.length - 1]))
+      .where(lte(transactions.date, lastDatePoint))
       .orderBy(asc(transactions.date))
       .all();
 
@@ -111,8 +112,8 @@ export class PortfolioReportService {
     let txIdx = 0;
     let runningCash = 0;
     for (const dp of datePoints) {
-      while (txIdx < txRows.length && txRows[txIdx].date <= dp) {
-        const row = txRows[txIdx];
+      while (txIdx < txRows.length && txRows[txIdx]!.date <= dp) {
+        const row = txRows[txIdx]!;
         if (row.type === "income") runningCash += row.amountBase;
         else if (row.type === "expense") runningCash -= row.amountBase;
         else if (row.type === "transfer") runningCash += row.amountBase;
@@ -127,12 +128,7 @@ export class PortfolioReportService {
       const lots = this.db
         .select({ date: assetLots.date, quantity: assetLots.quantity })
         .from(assetLots)
-        .where(
-          and(
-            eq(assetLots.assetId, asset.id),
-            lte(assetLots.date, datePoints[datePoints.length - 1])
-          )
-        )
+        .where(and(eq(assetLots.assetId, asset.id), lte(assetLots.date, lastDatePoint)))
         .orderBy(asc(assetLots.date), asc(assetLots.id))
         .all();
 
@@ -140,8 +136,8 @@ export class PortfolioReportService {
       let lotIdx = 0;
       let runningQty = 0;
       for (const dp of datePoints) {
-        while (lotIdx < lots.length && lots[lotIdx].date <= dp) {
-          runningQty += lots[lotIdx].quantity;
+        while (lotIdx < lots.length && lots[lotIdx]!.date <= dp) {
+          runningQty += lots[lotIdx]!.quantity;
           lotIdx++;
         }
         qtyAtDate.set(dp, parseFloat(runningQty.toFixed(8)));
@@ -519,23 +515,23 @@ export class PortfolioReportService {
     });
 
     const datePoints = generateDatePoints(dateRange.from, dateRange.to, "weekly");
+    if (datePoints.length === 0) return { lots: lotHistory, timeline: [] };
+    const lastDatePoint = datePoints[datePoints.length - 1]!;
 
     // Batch holdings: fetch all lots up to last date point once,
     // then compute running quantity per date point in a single pass.
     const allLots = this.db
       .select({ date: assetLots.date, quantity: assetLots.quantity })
       .from(assetLots)
-      .where(
-        and(eq(assetLots.assetId, assetId), lte(assetLots.date, datePoints[datePoints.length - 1]))
-      )
+      .where(and(eq(assetLots.assetId, assetId), lte(assetLots.date, lastDatePoint)))
       .orderBy(asc(assetLots.date), asc(assetLots.id))
       .all();
 
     let lotIdx = 0;
     let cumulativeQty = 0;
     const timeline: AssetHistoryPoint[] = datePoints.map((date) => {
-      while (lotIdx < allLots.length && allLots[lotIdx].date <= date) {
-        cumulativeQty += allLots[lotIdx].quantity;
+      while (lotIdx < allLots.length && allLots[lotIdx]!.date <= date) {
+        cumulativeQty += allLots[lotIdx]!.quantity;
         lotIdx++;
       }
       const qty = parseFloat(cumulativeQty.toFixed(8));

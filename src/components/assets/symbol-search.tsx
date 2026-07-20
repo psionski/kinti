@@ -121,7 +121,7 @@ export function SymbolSearchDialog({
         const decoder = new TextDecoder();
         let buffer = "";
 
-        while (true) {
+        for (;;) {
           const { done, value: chunk } = await reader.read();
           if (done) break;
 
@@ -162,19 +162,20 @@ export function SymbolSearchDialog({
   }
 
   function toggleResult(result: SymbolSearchResult): void {
-    const next = { ...pending };
-    if (next[result.provider] === result.symbol) {
-      delete next[result.provider];
+    if (pending[result.provider] === result.symbol) {
+      const next = Object.fromEntries(
+        Object.entries(pending).filter(([provider]) => provider !== result.provider)
+      );
+      setPending(next);
     } else {
-      next[result.provider] = result.symbol;
       // Pre-fill the asset form's currency field on the *first* selection.
       // Cross-listed instruments (SHEL on LSE in GBP vs NYSE in USD) mean the
       // user can still override.
       if (result.currency && onCurrencyHint) {
         onCurrencyHint(result.currency);
       }
+      setPending({ ...pending, [result.provider]: result.symbol });
     }
-    setPending(next);
   }
 
   const grouped = groupByProvider(results);
@@ -216,7 +217,7 @@ export function SymbolSearchDialog({
           {[...grouped.entries()].map(([provider, items]) => (
             <div key={provider}>
               <div className="text-muted-foreground bg-muted/50 px-3 py-1.5 text-xs font-medium">
-                {PROVIDER_LABELS[provider as keyof typeof PROVIDER_LABELS] ?? provider}
+                {(PROVIDER_LABELS as Record<string, string | undefined>)[provider] ?? provider}
               </div>
               {items.map((item) => {
                 const isSelected = pending[item.provider] === item.symbol;
@@ -285,8 +286,7 @@ export function SymbolSearch({
   const entries = Object.entries(value);
 
   function removeEntry(provider: string): void {
-    const next = { ...value };
-    delete next[provider];
+    const next = Object.fromEntries(Object.entries(value).filter(([key]) => key !== provider));
     onChange(next);
   }
 
@@ -299,7 +299,7 @@ export function SymbolSearch({
             className="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs"
           >
             <span className="text-muted-foreground">
-              {PROVIDER_LABELS[provider as keyof typeof PROVIDER_LABELS] ?? provider}:
+              {(PROVIDER_LABELS as Record<string, string | undefined>)[provider] ?? provider}:
             </span>
             <span className="font-medium">{symbol}</span>
             <button

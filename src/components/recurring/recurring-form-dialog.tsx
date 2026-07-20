@@ -72,7 +72,7 @@ export function RecurringFormDialog({
     if (value !== "monthly") setDayOfMonth("");
   }
 
-  function handleSubmit(e: React.FormEvent): void {
+  function handleSubmit(e: React.SyntheticEvent): void {
     e.preventDefault();
     setError("");
 
@@ -125,7 +125,7 @@ export function RecurringFormDialog({
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? `Update the recurring template for "${initialData?.description}".`
+              ? `Update the recurring template for "${initialData.description}".`
               : "Create a new recurring transaction template."}
           </DialogDescription>
         </DialogHeader>

@@ -45,7 +45,7 @@ export function registerRecurringTools(server: McpServer): void {
     "update_recurring",
     {
       description: "Modify a recurring template. Use isActive: false to pause it.",
-      inputSchema: IdSchema.merge(UpdateRecurringSchema),
+      inputSchema: IdSchema.extend(UpdateRecurringSchema.shape),
     },
     ({ id, ...updates }) => {
       const result = getRecurringService().update(id, updates);

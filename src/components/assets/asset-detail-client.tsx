@@ -338,7 +338,9 @@ export function AssetDetailClient({
                 {Object.entries(asset.symbolMap).map(([provider, symbol]) => (
                   <Badge key={provider} variant="secondary" className="gap-1">
                     <span className="text-muted-foreground">
-                      {PROVIDER_LABELS[provider as keyof typeof PROVIDER_LABELS] ?? provider}:
+                      {(PROVIDER_LABELS as Record<string, string | undefined>)[provider] ??
+                        provider}
+                      :
                     </span>
                     {symbol}
                     <button
@@ -346,8 +348,9 @@ export function AssetDetailClient({
                       className="hover:text-destructive relative ml-0.5 after:absolute after:-inset-2"
                       disabled={loading}
                       onClick={() => {
-                        const next = { ...asset.symbolMap } as SymbolMap;
-                        delete next[provider as keyof SymbolMap];
+                        const next = Object.fromEntries(
+                          Object.entries(asset.symbolMap ?? {}).filter(([k]) => k !== provider)
+                        ) as SymbolMap;
                         const hasSymbols = Object.keys(next).length > 0;
                         void handleUpdateTracking(hasSymbols ? next : {});
                       }}
@@ -385,7 +388,7 @@ export function AssetDetailClient({
         <AssetFormDialog
           open={showEdit}
           onOpenChange={setShowEdit}
-          onSubmit={handleEdit}
+          onSubmit={(data) => void handleEdit(data)}
           initialData={asset}
           loading={loading}
         />

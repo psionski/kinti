@@ -19,6 +19,7 @@ import { generateAssets, lotsToEvents } from "./assets";
 import { buildFxRates } from "./fx-rates";
 import { Temporal } from "@js-temporal/polyfill";
 import { isoDate } from "./rng";
+import { requireRow } from "@/lib/db/rows";
 import { seedLogger } from "@/lib/logger";
 
 const BASE_CURRENCY = "EUR";
@@ -76,12 +77,12 @@ export async function seed(): Promise<void> {
     months.push({ year: ym.year, month: ym.month, lastDay });
   }
 
-  const firstMonth = months[0];
-  const lastMonth = months[months.length - 1];
+  const firstMonth = months[0]!;
+  const lastMonth = months[months.length - 1]!;
   const todayStr = isoDate(todayYear, todayMonth, todayDay);
   const rangeLabel =
     `${isoDate(firstMonth.year, firstMonth.month, 1).slice(0, 7)} – ` +
-    `${isoDate(lastMonth.year, lastMonth.month, 1).slice(0, 7)}`;
+    isoDate(lastMonth.year, lastMonth.month, 1).slice(0, 7);
 
   // ── FX rates (insert FIRST so any later FX-aware insert can rely on the cache) ──
   // Daily rate entries spanning the seed period for every foreign currency
@@ -104,7 +105,7 @@ export async function seed(): Promise<void> {
 
   const templatesWithIds: TemplateWithId[] = [];
   for (const tmpl of templates) {
-    const [row] = await db
+    const rows = await db
       .insert(recurringTransactions)
       .values({
         ...tmpl,
@@ -114,6 +115,7 @@ export async function seed(): Promise<void> {
         tags: tmpl.tags ? JSON.stringify(tmpl.tags) : null,
       })
       .returning({ id: recurringTransactions.id });
+    const row = requireRow(rows, "recurringTransaction");
     templatesWithIds.push({ ...tmpl, id: row.id });
   }
   seedLogger.info(`  ${templates.length} recurring templates created.`);
@@ -151,7 +153,7 @@ export async function seed(): Promise<void> {
       amountBase: OPENING_BALANCE,
       type: "income",
       description: "Previous month balance",
-      categoryId: catIds.Income,
+      categoryId: catIds.Income!,
       date: openingDate,
       tags: ["opening-balance"],
     },
@@ -162,7 +164,7 @@ export async function seed(): Promise<void> {
       type: "expense",
       description: "Airport coffee in London",
       merchant: "Heathrow Costa",
-      categoryId: catIds.Coffee,
+      categoryId: catIds.Coffee!,
       date: fcDate,
       tags: ["travel", "coffee"],
     },
@@ -194,7 +196,8 @@ export async function seed(): Promise<void> {
   // asset_id (looked up by name post-insert).
   const assetIdByName = new Map<string, number>();
   for (const seed of assetSeeds) {
-    const [row] = await db.insert(assets).values(seed.asset).returning({ id: assets.id });
+    const rows = await db.insert(assets).values(seed.asset).returning({ id: assets.id });
+    const row = requireRow(rows, "asset");
     assetIdByName.set(seed.asset.name, row.id);
   }
   seedLogger.info(`  ${assetSeeds.length} assets inserted.`);
@@ -204,7 +207,7 @@ export async function seed(): Promise<void> {
   // a `lotLinkage` can later look up its tx id and create the
   // corresponding asset_lots row.
   seedLogger.info(`Inserting ${events.length} transactions...`);
-  const txIdsByEventIndex: number[] = new Array(events.length);
+  const txIdsByEventIndex = new Array<number>(events.length);
   const BATCH = 50;
   for (let i = 0; i < events.length; i += BATCH) {
     const slice = events.slice(i, i + BATCH);
@@ -227,7 +230,8 @@ export async function seed(): Promise<void> {
       )
       .returning({ id: transactions.id });
     for (let j = 0; j < inserted.length; j++) {
-      txIdsByEventIndex[i + j] = inserted[j].id;
+      // j is bounded by inserted.length, so the row is present.
+      txIdsByEventIndex[i + j] = inserted[j]!.id;
     }
   }
 
@@ -237,7 +241,9 @@ export async function seed(): Promise<void> {
   // matching what AssetLotService.buy() does inside its DB transaction.
   let totalLots = 0;
   for (let i = 0; i < events.length; i++) {
-    const link: LotLinkage | undefined = events[i].lotLinkage;
+    // i is bounded by events.length, so the event is present.
+    const event = events[i]!;
+    const link: LotLinkage | undefined = event.lotLinkage;
     if (!link) continue;
     const assetId = assetIdByName.get(link.assetName);
     if (assetId === undefined) {
@@ -248,14 +254,14 @@ export async function seed(): Promise<void> {
       quantity: link.quantity,
       pricePerUnit: link.pricePerUnit,
       pricePerUnitBase: link.pricePerUnitBase,
-      date: events[i].date,
-      transactionId: txIdsByEventIndex[i],
+      date: event.date,
+      transactionId: txIdsByEventIndex[i]!,
       notes: link.notes ?? null,
     });
     await db.insert(assetPrices).values({
       assetId,
       pricePerUnit: link.pricePerUnit,
-      recordedAt: `${events[i].date}T12:00:00`,
+      recordedAt: `${event.date}T12:00:00`,
     });
     totalLots++;
   }

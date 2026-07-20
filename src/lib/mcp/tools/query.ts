@@ -59,7 +59,7 @@ export function registerQueryTool(server: McpServer): void {
       }
       // $client is present at runtime but not on the base type — drizzle adds it via the factory.
       const client = (getDb() as unknown as { $client: InstanceType<typeof Database> }).$client;
-      const rows = client.prepare(sql).all() as unknown[];
+      const rows = client.prepare(sql).all();
       return ok(rows);
     }
   );

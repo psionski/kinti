@@ -108,7 +108,7 @@ describe("listUnprocessed", () => {
 
     const result = service.listUnprocessed({ limit: 50, offset: 0 });
     expect(result.total).toBe(1);
-    expect(result.data[0].id).toBe(r2.id);
+    expect(result.data[0]!.id).toBe(r2.id);
   });
 
   it("returns empty when all receipts are processed", () => {
@@ -179,7 +179,7 @@ describe("list", () => {
     service.upload(Buffer.from("img"), ".jpg", { date: "2026-03-10" });
     const result = service.list({ limit: 50, offset: 0, dateFrom: "2026-03-01" });
     expect(result.total).toBe(1);
-    expect(result.data[0].date).toBe("2026-03-10");
+    expect(result.data[0]!.date).toBe("2026-03-10");
   });
 
   it("filters by dateTo", () => {
@@ -187,7 +187,7 @@ describe("list", () => {
     service.upload(Buffer.from("img"), ".jpg", { date: "2026-03-10" });
     const result = service.list({ limit: 50, offset: 0, dateTo: "2026-02-01" });
     expect(result.total).toBe(1);
-    expect(result.data[0].date).toBe("2026-01-15");
+    expect(result.data[0]!.date).toBe("2026-01-15");
   });
 
   it("filters by merchant substring", () => {
@@ -195,7 +195,7 @@ describe("list", () => {
     service.upload(Buffer.from("img"), ".jpg", { date: "2026-03-02", merchant: "Rewe Hamburg" });
     const result = service.list({ limit: 50, offset: 0, merchant: "Lidl" });
     expect(result.total).toBe(1);
-    expect(result.data[0].merchant).toBe("Lidl Berlin");
+    expect(result.data[0]!.merchant).toBe("Lidl Berlin");
   });
 
   it("combines multiple filters", () => {
@@ -204,7 +204,7 @@ describe("list", () => {
     service.upload(Buffer.from("img"), ".jpg", { date: "2026-03-10", merchant: "Rewe" });
     const result = service.list({ limit: 50, offset: 0, dateFrom: "2026-03-01", merchant: "Lidl" });
     expect(result.total).toBe(1);
-    expect(result.data[0].date).toBe("2026-03-10");
+    expect(result.data[0]!.date).toBe("2026-03-10");
   });
 });
 
@@ -306,7 +306,7 @@ describe("delete", () => {
     service.delete(r.id);
 
     const [tx] = db.select().from(transactions).all();
-    expect(tx.receiptId).toBeNull();
+    expect(tx!.receiptId).toBeNull();
   });
 
   it("calls unlinkSync for the image file", async () => {

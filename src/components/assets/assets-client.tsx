@@ -260,11 +260,7 @@ export function AssetsClient({ initialAssets, portfolio }: AssetsClientProps): R
                       <span>Cost basis</span>
                       <span
                         className="font-mono"
-                        title={
-                          asset.currency !== undefined
-                            ? `≈ ${formatCurrency(asset.costBasisBase)} (base)`
-                            : undefined
-                        }
+                        title={`≈ ${formatCurrency(asset.costBasisBase)} (base)`}
                       >
                         {formatCurrency(asset.costBasis, asset.currency)}
                       </span>
@@ -353,7 +349,7 @@ export function AssetsClient({ initialAssets, portfolio }: AssetsClientProps): R
         <AssetFormDialog
           open={showCreate}
           onOpenChange={setShowCreate}
-          onSubmit={handleCreate}
+          onSubmit={(data) => void handleCreate(data)}
           loading={loading}
         />
       )}

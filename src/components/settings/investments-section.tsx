@@ -66,7 +66,7 @@ export function InvestmentsSection({
           body: JSON.stringify({ name: entry.name, type: entry.type, currency: baseCurrency }),
         });
         if (!assetRes.ok) continue;
-        const asset = await assetRes.json();
+        const asset = (await assetRes.json()) as { id: number };
         await fetch(`/api/assets/${asset.id}/lots`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -96,7 +96,7 @@ export function InvestmentsSection({
                 disabled={saved}
                 onChange={(e) => {
                   const next = [...entries];
-                  next[i] = { ...next[i], name: e.target.value };
+                  next[i] = { ...next[i]!, name: e.target.value };
                   setEntries(next);
                 }}
               />
@@ -106,7 +106,7 @@ export function InvestmentsSection({
                 disabled={saved}
                 onChange={(e) => {
                   const next = [...entries];
-                  next[i] = { ...next[i], type: e.target.value as "investment" | "crypto" };
+                  next[i] = { ...next[i]!, type: e.target.value as "investment" | "crypto" };
                   setEntries(next);
                 }}
               >
@@ -136,7 +136,7 @@ export function InvestmentsSection({
                   disabled={saved}
                   onChange={(e) => {
                     const next = [...entries];
-                    next[i] = { ...next[i], quantity: e.target.value };
+                    next[i] = { ...next[i]!, quantity: e.target.value };
                     setEntries(next);
                   }}
                 />
@@ -157,7 +157,7 @@ export function InvestmentsSection({
                     disabled={saved}
                     onChange={(e) => {
                       const next = [...entries];
-                      next[i] = { ...next[i], costBasis: e.target.value };
+                      next[i] = { ...next[i]!, costBasis: e.target.value };
                       setEntries(next);
                     }}
                   />

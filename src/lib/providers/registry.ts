@@ -172,7 +172,9 @@ export async function getProviderStatuses(settings: SettingsService): Promise<Pr
   );
 
   checks.forEach((result, i) => {
-    statuses[i].healthy = result.status === "fulfilled" ? result.value : false;
+    // statuses and checks are both built from PROVIDER_REGISTRY, so index i is
+    // always in range for statuses.
+    statuses[i]!.healthy = result.status === "fulfilled" ? result.value : false;
   });
 
   financialLogger.debug(

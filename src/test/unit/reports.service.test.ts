@@ -223,8 +223,8 @@ describe("getCategoryStats", async () => {
       })
     );
     expect(items).toHaveLength(1);
-    expect(items[0].categoryId).toBeNull();
-    expect(items[0].percentage).toBe(100);
+    expect(items[0]!.categoryId).toBeNull();
+    expect(items[0]!.percentage).toBe(100);
   });
 
   it("includes color and icon from category", async () => {
@@ -354,7 +354,7 @@ describe("getBudgetStats", async () => {
     catService.create({ name: "Food" });
 
     const { items } = reports.getBudgetStats(budgetStats());
-    expect(items[0].budgetAmount).toBeNull();
+    expect(items[0]!.budgetAmount).toBeNull();
   });
 
   it("includes spending stats from getCategoryStats", async () => {
@@ -516,9 +516,9 @@ describe("categoryTrends", async () => {
     const { series } = reports.categoryTrends(
       CategoryTrendsSchema.parse({ dateFrom: "2026-01-01", dateTo: "2026-03-31" })
     );
-    expect(series[0].key).toBe(`c${stable.id}`);
-    expect(series[1].key).toBe(`c${spiky.id}`);
-    expect(series[0].variance).toBeLessThan(series[1].variance);
+    expect(series[0]!.key).toBe(`c${stable.id}`);
+    expect(series[1]!.key).toBe(`c${spiky.id}`);
+    expect(series[0]!.variance).toBeLessThan(series[1]!.variance);
   });
 
   it("buckets uncategorized spend into its own series", async () => {
@@ -541,8 +541,8 @@ describe("dailySpend", async () => {
     const { points, currency } = reports.dailySpend(DailySpendSchema.parse({ days: 7 }));
     expect(points).toHaveLength(7);
     expect(currency).toBe("EUR");
-    expect(points[0].date).toBe("2026-03-09");
-    expect(points[6].date).toBe("2026-03-15"); // today (clock pinned to 2026-03-15 UTC)
+    expect(points[0]!.date).toBe("2026-03-09");
+    expect(points[6]!.date).toBe("2026-03-15"); // today (clock pinned to 2026-03-15 UTC)
     const dates = points.map((p) => p.date);
     expect(dates).toEqual([...dates].sort());
   });
@@ -689,16 +689,16 @@ describe("topMerchants", async () => {
       TopMerchantsSchema.parse({ dateFrom: "2026-03-01", dateTo: "2026-03-31" })
     );
     expect(currency).toBe("EUR");
-    expect(merchants[0].merchant).toBe("ALDI");
-    expect(merchants[0].total).toBe(15);
-    expect(merchants[0].count).toBe(2);
+    expect(merchants[0]!.merchant).toBe("ALDI");
+    expect(merchants[0]!.total).toBe(15);
+    expect(merchants[0]!.count).toBe(2);
   });
 
   it("excludes transactions without a merchant", async () => {
     const { merchants } = reports.topMerchants(
       TopMerchantsSchema.parse({ dateFrom: "2026-03-01", dateTo: "2026-03-31" })
     );
-    expect(merchants.every((r) => r.merchant !== null)).toBe(true);
+    expect(merchants.every((r) => Boolean(r.merchant))).toBe(true);
     expect(merchants).toHaveLength(2);
   });
 
@@ -707,7 +707,7 @@ describe("topMerchants", async () => {
       TopMerchantsSchema.parse({ dateFrom: "2026-03-01", dateTo: "2026-03-31", limit: 1 })
     );
     expect(merchants).toHaveLength(1);
-    expect(merchants[0].merchant).toBe("ALDI");
+    expect(merchants[0]!.merchant).toBe("ALDI");
   });
 
   it("computes avgAmount correctly", async () => {
@@ -721,8 +721,8 @@ describe("topMerchants", async () => {
   it("returns all-time results when no dates are provided", async () => {
     const { merchants } = reports.topMerchants(TopMerchantsSchema.parse({}));
     expect(merchants).toHaveLength(2);
-    expect(merchants[0].merchant).toBe("ALDI");
-    expect(merchants[0].total).toBe(15);
+    expect(merchants[0]!.merchant).toBe("ALDI");
+    expect(merchants[0]!.total).toBe(15);
   });
 });
 

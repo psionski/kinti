@@ -116,8 +116,10 @@ function parseEcbXml(xml: string, date?: string): Map<string, number> | null {
 
   let m: RegExpExecArray | null;
   while ((m = cubeRegex.exec(xml)) !== null) {
-    const cubeDate = m[1];
-    const content = m[2];
+    // Both capture groups are non-optional in cubeRegex, so on a match they are
+    // provably present.
+    const cubeDate = m[1]!;
+    const content = m[2]!;
     if (date) {
       if (cubeDate === date) {
         best = { date: cubeDate, content };
@@ -141,7 +143,8 @@ function parseEcbXml(xml: string, date?: string): Map<string, number> | null {
   const rateRegex = /<Cube\s+currency=['"]([A-Z]+)['"]\s+rate=['"]([^'"]+)['"]\s*\/>/g;
   let r: RegExpExecArray | null;
   while ((r = rateRegex.exec(best.content)) !== null) {
-    rateMap.set(r[1], parseFloat(r[2]));
+    // Both capture groups are non-optional, so on a match they are present.
+    rateMap.set(r[1]!, parseFloat(r[2]!));
   }
 
   return rateMap;
@@ -149,7 +152,8 @@ function parseEcbXml(xml: string, date?: string): Map<string, number> | null {
 
 function latestDateFromXml(xml: string): string | null {
   const m = /<Cube\s+time=['"]([^'"]+)['"]/.exec(xml);
-  return m ? m[1] : null;
+  // The capture group is non-optional, so on a match m[1] is present.
+  return m ? m[1]! : null;
 }
 
 function parseEcbXmlRange(
@@ -162,14 +166,15 @@ function parseEcbXmlRange(
 
   let m: RegExpExecArray | null;
   while ((m = cubeRegex.exec(xml)) !== null) {
-    const cubeDate = m[1];
+    // Both capture groups are non-optional, so on a match they are present.
+    const cubeDate = m[1]!;
     if (cubeDate < from || cubeDate > to) continue;
 
     const rateMap = new Map<string, number>();
     const rateRegex = /<Cube\s+currency=['"]([A-Z]+)['"]\s+rate=['"]([^'"]+)['"]\s*\/>/g;
     let r: RegExpExecArray | null;
-    while ((r = rateRegex.exec(m[2])) !== null) {
-      rateMap.set(r[1], parseFloat(r[2]));
+    while ((r = rateRegex.exec(m[2]!)) !== null) {
+      rateMap.set(r[1]!, parseFloat(r[2]!));
     }
     results.push({ date: cubeDate, rates: rateMap });
   }
@@ -217,7 +222,8 @@ function parseCurrencyList(xml: string): Map<string, string> {
   const rateRegex = /<Cube\s+currency=['"]([A-Z]+)['"]\s+rate=['"][^'"]+['"]\s*\/>/g;
   let m: RegExpExecArray | null;
   while ((m = rateRegex.exec(xml)) !== null) {
-    const code = m[1];
+    // The capture group is non-optional, so on a match code is present.
+    const code = m[1]!;
     currencies.set(code, ECB_CURRENCY_NAMES[code] ?? code);
   }
   return currencies;

@@ -1,4 +1,5 @@
 // @vitest-environment node
+/* eslint-disable @typescript-eslint/unbound-method */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { makeTestDb } from "../helpers";
 import { triggerSymbolBackfill } from "@/lib/services/symbol-backfill";
@@ -103,7 +104,7 @@ describe("triggerSymbolBackfill", () => {
     });
 
     // from and to should both be today
-    const call = (fds.ensurePriceHistory as ReturnType<typeof vi.fn>).mock.calls[0];
+    const call = (fds.ensurePriceHistory as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(call[2]).toBe(call[3]); // from === to
   });
 

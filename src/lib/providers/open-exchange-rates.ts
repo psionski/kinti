@@ -126,8 +126,9 @@ export class OpenExchangeRatesProvider implements FinancialDataProvider {
 /** Generate YYYY-MM-DD dates between from and to, capped at maxDays. */
 function generateDateRange(from: string, to: string, maxDays: number): string[] {
   const dates: string[] = [];
-  const [fy, fm, fd] = from.split("-").map(Number);
-  const [ty, tm, td] = to.split("-").map(Number);
+  // from/to are known YYYY-MM-DD strings, so each split yields three parts.
+  const [fy, fm, fd] = from.split("-").map(Number) as [number, number, number];
+  const [ty, tm, td] = to.split("-").map(Number) as [number, number, number];
   const start = new Date(fy, fm - 1, fd);
   const end = new Date(ty, tm - 1, td);
 
@@ -146,5 +147,6 @@ function generateDateRange(from: string, to: string, maxDays: number): string[] 
 interface OerResponse {
   timestamp: number;
   base: string;
-  rates: Record<string, number>;
+  // External API: rates may be absent on error responses.
+  rates?: Record<string, number>;
 }

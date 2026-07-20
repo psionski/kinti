@@ -46,7 +46,10 @@ export function resolvePrice(db: Db, asset: AssetResponse, date?: string): Resol
 
   // Step 3: Provider data — iterate symbolMap (provider, symbol) pairs
   if (asset.symbolMap) {
-    for (const [, symbol] of Object.entries(asset.symbolMap)) {
+    // Partial records can hold explicit `undefined` values at runtime even though
+    // `Object.entries` widens the value type to `string`, so keep the guard.
+    const symbolEntries = Object.entries(asset.symbolMap) as Array<[string, string | undefined]>;
+    for (const [, symbol] of symbolEntries) {
       if (symbol === undefined) continue;
 
       // Try with asset's own currency first (crypto/stocks priced in that currency)

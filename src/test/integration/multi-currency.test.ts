@@ -156,8 +156,8 @@ describe("Multi-currency end-to-end", () => {
 
     // The lot stores both prices, locked at creation.
     const lots = lotService.listLots(usdStock.id);
-    expect(lots[0].pricePerUnit).toBe(100); // native
-    expect(lots[0].pricePerUnitBase).toBeCloseTo(100 * USD_TO_EUR, 2); // ≈ 92
+    expect(lots[0]!.pricePerUnit).toBe(100); // native
+    expect(lots[0]!.pricePerUnitBase).toBeCloseTo(100 * USD_TO_EUR, 2); // ≈ 92
 
     // Asset metrics: native and base both populated. Lot price is the only
     // price source so currentValue == costBasis (no P&L yet).

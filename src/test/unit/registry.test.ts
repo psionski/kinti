@@ -189,19 +189,19 @@ describe("Provider Registry", () => {
       const byName = Object.fromEntries(statuses.map((s) => [s.name, s]));
 
       // Asset types
-      expect(byName["frankfurter"].assetTypes).toEqual(["deposit"]);
-      expect(byName["coingecko"].assetTypes).toEqual(["crypto"]);
-      expect(byName["alpha-vantage"].assetTypes).toEqual(["investment", "crypto"]);
+      expect(byName["frankfurter"]!.assetTypes).toEqual(["deposit"]);
+      expect(byName["coingecko"]!.assetTypes).toEqual(["crypto"]);
+      expect(byName["alpha-vantage"]!.assetTypes).toEqual(["investment", "crypto"]);
 
       // Key requirements
-      expect(byName["frankfurter"].apiKeyRequired).toBe("none");
-      expect(byName["coingecko"].apiKeyRequired).toBe("optional");
-      expect(byName["alpha-vantage"].apiKeyRequired).toBe("required");
+      expect(byName["frankfurter"]!.apiKeyRequired).toBe("none");
+      expect(byName["coingecko"]!.apiKeyRequired).toBe("optional");
+      expect(byName["alpha-vantage"]!.apiKeyRequired).toBe("required");
 
       // Key state
-      expect(byName["frankfurter"].apiKeySet).toBe(true);
-      expect(byName["open-exchange-rates"].apiKeySet).toBe(false);
-      expect(byName["alpha-vantage"].apiKeySet).toBe(true);
+      expect(byName["frankfurter"]!.apiKeySet).toBe(true);
+      expect(byName["open-exchange-rates"]!.apiKeySet).toBe(false);
+      expect(byName["alpha-vantage"]!.apiKeySet).toBe(true);
 
       // Health is always populated (boolean or false on failure)
       for (const s of statuses) {

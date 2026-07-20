@@ -450,8 +450,8 @@ export class ReportService {
 
     const points: TrendPoint[] = rows.map((r) => ({
       month: r.month,
-      total: Number(r.total),
-      count: Number(r.count),
+      total: r.total,
+      count: r.count,
     }));
     return { points, currency: getBaseCurrency() };
   }
@@ -523,7 +523,7 @@ export class ReportService {
     const seriesFor = (key: string, name: string, color: string | null) => {
       let s = seriesMap.get(key);
       if (!s) {
-        s = { name, color, values: new Array(months.length).fill(0) };
+        s = { name, color, values: new Array<number>(months.length).fill(0) };
         seriesMap.set(key, s);
       }
       return s;
@@ -533,11 +533,13 @@ export class ReportService {
       const idx = monthIndex.get(row.month);
       if (idx === undefined) continue;
       if (row.categoryId === null) {
-        seriesFor("uncategorized", "Uncategorized", null).values[idx] += row.total;
+        const s = seriesFor("uncategorized", "Uncategorized", null);
+        s.values[idx] = (s.values[idx] ?? 0) + row.total;
       } else {
         const root = byId.get(rootOf(row.categoryId));
         const key = `c${root?.id ?? row.categoryId}`;
-        seriesFor(key, root?.name ?? "(unknown)", root?.color ?? null).values[idx] += row.total;
+        const s = seriesFor(key, root?.name ?? "(unknown)", root?.color ?? null);
+        s.values[idx] = (s.values[idx] ?? 0) + row.total;
       }
     }
 
@@ -602,8 +604,8 @@ export class ReportService {
 
     const points: DailySpendPoint[] = rows.map((r) => ({
       date: r.date,
-      total: Number(r.total),
-      count: Number(r.count),
+      total: r.total,
+      count: r.count,
     }));
     return { points, currency: getBaseCurrency() };
   }

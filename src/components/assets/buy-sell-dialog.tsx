@@ -57,7 +57,7 @@ export function BuySellDialog({
   // Fetch price for the selected date (re-fetches when date changes)
   useEffect(() => {
     if (!open || !asset.symbolMap) return;
-    let cancelled = false;
+    const run = { cancelled: false };
     void (async () => {
       setFetchingPrice(true);
       try {
@@ -67,16 +67,16 @@ export function BuySellDialog({
           date,
         });
         const res = await fetch(`/api/financial/price?${params}`);
-        if (!cancelled && res.ok) {
+        if (!run.cancelled && res.ok) {
           const data = (await res.json()) as { price: number };
           setPrice(formatPrice(data.price));
         }
       } finally {
-        if (!cancelled) setFetchingPrice(false);
+        if (!run.cancelled) setFetchingPrice(false);
       }
     })();
     return () => {
-      cancelled = true;
+      run.cancelled = true;
     };
   }, [open, date, asset.symbolMap, asset.currency]);
 
@@ -95,7 +95,7 @@ export function BuySellDialog({
       return;
     }
     const total = qty * priceNum;
-    let cancelled = false;
+    const run = { cancelled: false };
     void (async () => {
       const params = new URLSearchParams({
         amount: String(total),
@@ -105,20 +105,20 @@ export function BuySellDialog({
       });
       try {
         const res = await fetch(`/api/financial/convert?${params}`);
-        if (!cancelled && res.ok) {
+        if (!run.cancelled && res.ok) {
           const data = (await res.json()) as { converted: number; rate: number };
           setBasePreview({ base: data.converted, rate: data.rate });
         }
       } catch {
-        if (!cancelled) setBasePreview(null);
+        if (!run.cancelled) setBasePreview(null);
       }
     })();
     return () => {
-      cancelled = true;
+      run.cancelled = true;
     };
   }, [open, isForeign, quantity, price, date, asset.currency, baseCurrency]);
 
-  function handleSubmit(e: React.FormEvent): void {
+  function handleSubmit(e: React.SyntheticEvent): void {
     e.preventDefault();
     setError("");
 

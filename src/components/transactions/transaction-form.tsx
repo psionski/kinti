@@ -71,7 +71,7 @@ export function TransactionFormDialog({
   const [tagsStr, setTagsStr] = useState(initialData?.tags?.join(", ") ?? "");
   const [error, setError] = useState("");
 
-  function handleSubmit(e: React.FormEvent): void {
+  function handleSubmit(e: React.SyntheticEvent): void {
     e.preventDefault();
     setError("");
 

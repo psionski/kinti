@@ -68,7 +68,7 @@ export function DepositWithdrawDialog({
       setBasePreview(null);
       return;
     }
-    let cancelled = false;
+    const run = { cancelled: false };
     setFetchingPreview(true);
     void (async () => {
       const params = new URLSearchParams({
@@ -79,24 +79,24 @@ export function DepositWithdrawDialog({
       });
       try {
         const res = await fetch(`/api/financial/convert?${params}`);
-        if (!cancelled && res.ok) {
+        if (!run.cancelled && res.ok) {
           const data = (await res.json()) as { converted: number; rate: number };
           setBasePreview({ base: data.converted, rate: data.rate });
-        } else if (!cancelled) {
+        } else if (!run.cancelled) {
           setBasePreview(null);
         }
       } catch {
-        if (!cancelled) setBasePreview(null);
+        if (!run.cancelled) setBasePreview(null);
       } finally {
-        if (!cancelled) setFetchingPreview(false);
+        if (!run.cancelled) setFetchingPreview(false);
       }
     })();
     return () => {
-      cancelled = true;
+      run.cancelled = true;
     };
   }, [open, isForeign, amount, date, asset.currency, baseCurrency]);
 
-  function handleSubmit(e: React.FormEvent): void {
+  function handleSubmit(e: React.SyntheticEvent): void {
     e.preventDefault();
     setError("");
 

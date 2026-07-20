@@ -76,10 +76,10 @@ describe("AssetService", async () => {
     assetService.create({ name: "My Stocks", type: "investment", currency: "EUR" });
     const list = assetService.list();
     expect(list).toHaveLength(1);
-    expect(list[0].currentHoldings).toBe(0);
-    expect(list[0].costBasis).toBe(0);
-    expect(list[0].currentValue).toBeNull();
-    expect(list[0].pnl).toBeNull();
+    expect(list[0]!.currentHoldings).toBe(0);
+    expect(list[0]!.costBasis).toBe(0);
+    expect(list[0]!.currentValue).toBeNull();
+    expect(list[0]!.pnl).toBeNull();
   });
 
   it("getById returns null for missing asset", async () => {
@@ -293,7 +293,7 @@ describe("AssetLotService", async () => {
     await lotService.buy(asset.id, { quantity: 5, pricePerUnit: 100, date: "2026-01-01" });
 
     const lots = lotService.listLots(asset.id);
-    expect(lots[0].pricePerUnitBase).toBe(100); // EUR base, EUR asset → 1:1
+    expect(lots[0]!.pricePerUnitBase).toBe(100); // EUR base, EUR asset → 1:1
 
     const metrics = assetService.getById(asset.id);
     expect(metrics?.costBasis).toBe(500);
@@ -419,8 +419,8 @@ describe("AssetLotService", async () => {
 
     const lots = lotService.listLots(asset.id);
     expect(lots).toHaveLength(2);
-    expect(lots[0].date).toBe("2026-03-01");
-    expect(lots[1].date).toBe("2026-01-01");
+    expect(lots[0]!.date).toBe("2026-03-01");
+    expect(lots[1]!.date).toBe("2026-01-01");
   });
 });
 
@@ -537,7 +537,7 @@ describe("PortfolioService", async () => {
 
     const portfolio = portfolioService.getPortfolio();
     expect(portfolio.allocation).toHaveLength(1);
-    expect(portfolio.allocation[0].pct).toBe(100);
+    expect(portfolio.allocation[0]!.pct).toBe(100);
   });
 });
 
