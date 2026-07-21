@@ -6,7 +6,7 @@ AI-powered personal finance tracker. Track spending, scan receipts, manage budge
 
 ## Features
 
-**Transactions** — Full CRUD with filtering, search, bulk operations, tags, and inline editing. Link transactions to receipts for audit trails.
+**Transactions** — Full CRUD with filtering, search, bulk operations, tags, and inline editing. Description, merchant, and tag fields autocomplete from your previously-used values. Link transactions to receipts for audit trails.
 
 **Categories** — Hierarchical tree with icons and colors. Merge, reparent, and drill down into spending per category.
 

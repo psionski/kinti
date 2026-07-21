@@ -355,4 +355,36 @@ export class TransactionService {
     );
     return rows.map((r) => r.tag);
   }
+
+  /**
+   * Autocomplete suggestions for a free-text field, ranked by how often each
+   * value has been used (most-used first). Rides the `transactions_fts` FTS5
+   * index for token-prefix matching, scoped to the queried column so a
+   * description query never surfaces rows that only matched on merchant. An
+   * empty/blank query returns the most-used values (for the on-focus dropdown).
+   */
+  suggest(field: "description" | "merchant", q: string | undefined, limit = 10): string[] {
+    const col = field === "description" ? transactions.description : transactions.merchant;
+    const clean = (q ?? "").replace(/[^\p{L}\p{N}\s_]/gu, "").trim();
+
+    const filters: SQL[] = [sql`${col} IS NOT NULL`, sql`${col} <> ''`];
+    if (clean) {
+      // Column-scoped FTS5 phrase-prefix query, e.g. `description : "weekly gro"*`.
+      const ftsQuery = `${field} : "${clean}"*`;
+      filters.push(
+        sql`${transactions.id} IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${ftsQuery})`
+      );
+    }
+
+    const rows = this.db
+      .select({ value: col, count: sql<number>`count(*)`.mapWith(Number) })
+      .from(transactions)
+      .where(and(...filters))
+      .groupBy(col)
+      .orderBy(sql`count(*) DESC`, asc(col))
+      .limit(limit)
+      .all();
+
+    return rows.flatMap((r) => (r.value != null ? [r.value] : []));
+  }
 }

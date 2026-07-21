@@ -6,6 +6,7 @@ import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import {
   Dialog,
   DialogContent,
@@ -170,10 +171,11 @@ export function ReceiptUploadDialog({
           <div className="space-y-3">
             <div className="space-y-1">
               <Label htmlFor="receipt-merchant">Merchant (optional)</Label>
-              <Input
+              <AutocompleteInput
                 id="receipt-merchant"
+                field="merchant"
                 value={merchant}
-                onChange={(e) => setMerchant(e.target.value)}
+                onChange={setMerchant}
                 placeholder="e.g. Lidl"
               />
             </div>

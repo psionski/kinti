@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { CategorySelectItems } from "@/components/categories/category-select-items";
 import { CurrencyPicker } from "@/components/settings/currency-picker";
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { getBaseCurrency } from "@/lib/format";
 import type { CategoryWithCountResponse } from "@/lib/validators/categories";
 import type { RecurringResponse } from "@/lib/validators/recurring";
@@ -146,10 +147,11 @@ export function RecurringFormDialog({
 
           <div className="space-y-2">
             <Label htmlFor="recurring-description">Description</Label>
-            <Input
+            <AutocompleteInput
               id="recurring-description"
+              field="description"
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={setDescription}
               placeholder="e.g. Netflix subscription"
             />
           </div>
@@ -174,10 +176,11 @@ export function RecurringFormDialog({
 
           <div className="space-y-2">
             <Label htmlFor="recurring-merchant">Merchant</Label>
-            <Input
+            <AutocompleteInput
               id="recurring-merchant"
+              field="merchant"
               value={merchant}
-              onChange={(e) => setMerchant(e.target.value)}
+              onChange={setMerchant}
               placeholder="Optional"
             />
           </div>

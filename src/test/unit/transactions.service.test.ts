@@ -524,6 +524,72 @@ describe("listTags", async () => {
   });
 });
 
+// ─── suggest (field autocomplete) ───────────────────────────────────────────
+
+describe("suggest", async () => {
+  beforeEach(async () => {
+    for (let i = 0; i < 3; i++) {
+      await service.create(tx({ description: "Weekly groceries", merchant: "Lidl" }));
+    }
+    await service.create(tx({ description: "Weekly gym", merchant: "Gym Co" }));
+    for (let i = 0; i < 2; i++) {
+      await service.create(tx({ description: "Coffee", merchant: "Starbucks" }));
+    }
+    await service.create(tx({ description: "Bakery bread", merchant: "Lidl" }));
+    await service.create(tx({ description: "Solo" })); // no merchant
+  });
+
+  it("ranks description suggestions by frequency (most-used first)", () => {
+    const result = service.suggest("description", "");
+    expect(result[0]).toBe("Weekly groceries"); // 3 uses
+    expect(result).toContain("Coffee"); // 2 uses
+    expect(result).toContain("Weekly gym"); // 1 use
+  });
+
+  it("returns most-used values for a blank/whitespace query (on-focus dropdown)", () => {
+    expect(service.suggest("description", "   ")[0]).toBe("Weekly groceries");
+  });
+
+  it("prefix-matches within the queried column", () => {
+    const result = service.suggest("description", "week");
+    expect(result).toContain("Weekly groceries");
+    expect(result).toContain("Weekly gym");
+    expect(result).not.toContain("Coffee");
+  });
+
+  it("matches a token mid-string (FTS token-prefix)", () => {
+    expect(service.suggest("description", "gym")).toEqual(["Weekly gym"]);
+  });
+
+  it("scopes matching to the requested column", () => {
+    // "Lidl" only ever appears as a merchant, never in a description.
+    const result = service.suggest("description", "lidl");
+    expect(result).not.toContain("Bakery bread");
+    expect(result).toHaveLength(0);
+  });
+
+  it("ranks merchant suggestions by frequency", () => {
+    const result = service.suggest("merchant", "");
+    expect(result[0]).toBe("Lidl"); // 4 uses (3 groceries + 1 bakery)
+    expect(result).toContain("Starbucks");
+    expect(result).toContain("Gym Co");
+  });
+
+  it("excludes null/empty merchants", () => {
+    expect(service.suggest("merchant", "")).not.toContain("");
+  });
+
+  it("respects the limit", () => {
+    const result = service.suggest("merchant", "", 1);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe("Lidl");
+  });
+
+  it("returns no matches for a non-matching query", () => {
+    expect(service.suggest("description", "zxcvbnm")).toEqual([]);
+  });
+});
+
 describe("transfer type", async () => {
   it("creates a transfer transaction successfully", async () => {
     const result = await service.create(

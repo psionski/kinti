@@ -23,6 +23,8 @@ import {
 } from "@/components/ui/select";
 import { CategorySelectItems } from "@/components/categories/category-select-items";
 import { CurrencyPicker } from "@/components/settings/currency-picker";
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
+import { TagsAutocompleteInput } from "@/components/transactions/tags-input";
 import type { CategoryWithCountResponse } from "@/lib/validators/categories";
 import type { TransactionResponse } from "@/lib/validators/transactions";
 
@@ -68,7 +70,7 @@ export function TransactionFormDialog({
   );
   const [date, setDate] = useState(initialData?.date ?? isoToday());
   const [notes, setNotes] = useState(initialData?.notes ?? "");
-  const [tagsStr, setTagsStr] = useState(initialData?.tags?.join(", ") ?? "");
+  const [tags, setTags] = useState<string[]>(initialData?.tags ?? []);
   const [error, setError] = useState("");
 
   function handleSubmit(e: React.SyntheticEvent): void {
@@ -88,11 +90,6 @@ export function TransactionFormDialog({
       setError("Date is required");
       return;
     }
-
-    const tags = tagsStr
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
 
     onSubmit({
       amount: amountNum,
@@ -176,11 +173,12 @@ export function TransactionFormDialog({
           {/* Description */}
           <div className="space-y-1.5">
             <Label htmlFor="tx-description">Description</Label>
-            <Input
+            <AutocompleteInput
               id="tx-description"
+              field="description"
               placeholder="e.g. Weekly groceries"
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={setDescription}
               maxLength={500}
               required
             />
@@ -189,11 +187,12 @@ export function TransactionFormDialog({
           {/* Merchant */}
           <div className="space-y-1.5">
             <Label htmlFor="tx-merchant">Merchant</Label>
-            <Input
+            <AutocompleteInput
               id="tx-merchant"
+              field="merchant"
               placeholder="e.g. Lidl"
               value={merchant}
-              onChange={(e) => setMerchant(e.target.value)}
+              onChange={setMerchant}
               maxLength={255}
             />
           </div>
@@ -226,12 +225,12 @@ export function TransactionFormDialog({
 
           {/* Tags */}
           <div className="space-y-1.5">
-            <Label htmlFor="tx-tags">Tags (comma-separated)</Label>
-            <Input
+            <Label htmlFor="tx-tags">Tags</Label>
+            <TagsAutocompleteInput
               id="tx-tags"
+              value={tags}
+              onChange={setTags}
               placeholder="e.g. groceries, weekly"
-              value={tagsStr}
-              onChange={(e) => setTagsStr(e.target.value)}
             />
           </div>
 

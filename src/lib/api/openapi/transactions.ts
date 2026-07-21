@@ -1,7 +1,9 @@
+import { z } from "zod";
 import {
   CreateTransactionSchema,
   UpdateTransactionSchema,
   ListTransactionsSchema,
+  SuggestSchema,
   PaginatedTransactionsResponseSchema,
 } from "@/lib/validators/transactions";
 import { op, SuccessSchema, Transaction } from "./helpers";
@@ -26,6 +28,16 @@ export const transactionPaths = {
       tags: ["Transactions"],
       query: ListTransactionsSchema,
       response: PaginatedTransactions,
+      errors: [400, 500],
+    }),
+  },
+  "/api/transactions/suggest": {
+    get: op({
+      id: "suggestTransactionFields",
+      summary: "Autocomplete suggestions for a free-text field (description or merchant)",
+      tags: ["Transactions"],
+      query: SuggestSchema,
+      response: z.array(z.string()),
       errors: [400, 500],
     }),
   },

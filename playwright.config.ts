@@ -32,6 +32,7 @@ export default defineConfig({
     {
       name: "main",
       testMatch: [
+        "autocomplete.spec.ts",
         "transactions.spec.ts",
         "categories.spec.ts",
         "budgets.spec.ts",

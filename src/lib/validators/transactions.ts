@@ -136,6 +136,22 @@ export const ListTransactionsSchema = PaginationSchema.extend({
 
 export type ListTransactionsInput = z.infer<typeof ListTransactionsSchema>;
 
+// ─── Field Suggestions (autocomplete) ─────────────────────────────────────────
+
+export const SuggestSchema = z.object({
+  field: z
+    .enum(["description", "merchant"])
+    .describe("Which free-text field to suggest previously-used values for"),
+  q: z.coerce
+    .string()
+    .max(255)
+    .optional()
+    .describe("Partial text typed so far. Omit or leave empty to get the most-used values."),
+  limit: z.coerce.number().int().min(1).max(20).default(10),
+});
+
+export type SuggestInput = z.infer<typeof SuggestSchema>;
+
 // ─── Batch Update ─────────────────────────────────────────────────────────────
 
 export const UpdateTransactionsBatchSchema = z.object({

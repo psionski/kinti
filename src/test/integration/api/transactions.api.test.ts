@@ -9,6 +9,7 @@ describe("Transaction API Routes", () => {
   let BATCH_DELETE: (req: Request) => Promise<Response>;
   let BATCH_POST: (req: Request) => Promise<Response>;
   let GET_TAGS: () => Promise<Response>;
+  let GET_SUGGEST: (req: Request) => Promise<Response>;
   let GET_BY_ID: (req: Request, ctx: { params: Promise<{ id: string }> }) => Promise<Response>;
   let PATCH: (req: Request, ctx: { params: Promise<{ id: string }> }) => Promise<Response>;
   let DELETE: (req: Request, ctx: { params: Promise<{ id: string }> }) => Promise<Response>;
@@ -18,11 +19,13 @@ describe("Transaction API Routes", () => {
     const single = await import("@/app/api/transactions/[id]/route");
     const batch = await import("@/app/api/transactions/batch/route");
     const tags = await import("@/app/api/transactions/tags/route");
+    const suggest = await import("@/app/api/transactions/suggest/route");
     POST = collection.POST;
     GET = collection.GET;
     BATCH_DELETE = collection.DELETE;
     BATCH_POST = batch.POST;
     GET_TAGS = tags.GET;
+    GET_SUGGEST = suggest.GET;
     GET_BY_ID = single.GET;
     PATCH = single.PATCH;
     DELETE = single.DELETE;
@@ -225,5 +228,39 @@ describe("Transaction API Routes", () => {
     expect(res.status).toBe(200);
     const body = await json<string[]>(res);
     expect(body).toEqual([]);
+  });
+
+  it("GET /suggest returns frequency-ranked distinct values for a field", async () => {
+    for (let i = 0; i < 2; i++) {
+      await POST(
+        makeJson("POST", "/api/transactions", {
+          amount: 1,
+          description: "Weekly groceries",
+          date: "2025-01-01",
+        })
+      );
+    }
+    await POST(
+      makeJson("POST", "/api/transactions", {
+        amount: 1,
+        description: "Weekly gym",
+        date: "2025-01-02",
+      })
+    );
+
+    const res = await GET_SUGGEST(
+      makeGet("/api/transactions/suggest", { field: "description", q: "week" })
+    );
+    expect(res.status).toBe(200);
+    const body = await json<string[]>(res);
+    expect(body[0]).toBe("Weekly groceries"); // most-used first
+    expect(body).toContain("Weekly gym");
+  });
+
+  it("GET /suggest returns 400 for a missing/invalid field", async () => {
+    const res = await GET_SUGGEST(makeGet("/api/transactions/suggest", { q: "x" }));
+    expect(res.status).toBe(400);
+    const body = await json<{ code: string }>(res);
+    expect(body.code).toBe("VALIDATION_ERROR");
   });
 });
