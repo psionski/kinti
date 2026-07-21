@@ -267,6 +267,10 @@ export function InteractiveTour({
     }
   }, [initialTutorial]);
 
+  // Manual memoization kept on purpose (React Compiler otherwise handles this):
+  // `useJoyride` is identity-sensitive — a fresh `steps` array or callback each
+  // render restarts/desyncs the running tour — so stable references here are
+  // load-bearing for correctness, not just performance.
   const handleTourEnd = useCallback(() => {
     setRun(false);
     void setTutorialComplete();

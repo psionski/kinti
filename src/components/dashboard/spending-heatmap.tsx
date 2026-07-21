@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
 import { Temporal } from "@js-temporal/polyfill";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -155,9 +154,9 @@ function formatCellDate(date: string): string {
 }
 
 export function SpendingHeatmap({ points, today }: SpendingHeatmapProps): React.ReactElement {
-  const grid = useMemo(() => buildGrid(points), [points]);
-  const totalSpend = useMemo(() => points.reduce((sum, p) => sum + p.total, 0), [points]);
-  const activeDays = useMemo(() => points.filter((p) => p.total > 0).length, [points]);
+  const grid = buildGrid(points);
+  const totalSpend = points.reduce((sum, p) => sum + p.total, 0);
+  const activeDays = points.filter((p) => p.total > 0).length;
 
   return (
     <Card>

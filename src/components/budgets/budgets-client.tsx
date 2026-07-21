@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Temporal } from "@js-temporal/polyfill";
 import { ChevronLeft, ChevronRight, Plus, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -53,7 +53,7 @@ export function BudgetsClient({
   const [deletingBudget, setDeletingBudget] = useState<BudgetStatusItem | null>(null);
   const [formLoading, setFormLoading] = useState(false);
 
-  const refresh = useCallback(async (m: string): Promise<void> => {
+  async function refresh(m: string): Promise<void> {
     setLoading(true);
     try {
       const res = await fetch(`/api/budgets?month=${m}`);
@@ -65,7 +65,7 @@ export function BudgetsClient({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }
 
   function navigateMonth(delta: number): void {
     const newMonth = shiftMonth(month, delta);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { MonthPicker } from "@/components/ui/month-picker";
 import { Temporal } from "@js-temporal/polyfill";
@@ -22,7 +22,7 @@ export function DateRangeFilter({ onChange }: DateRangeFilterProps): React.React
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
 
-  const presets = useMemo(() => Object.keys(PRESET_LABELS) as Preset[], []);
+  const presets = Object.keys(PRESET_LABELS) as Preset[];
 
   function handlePreset(preset: Preset): void {
     setActivePreset(preset);

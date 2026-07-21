@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { DateRangeFilter } from "./date-range-filter";
 import { computeCompareRange, type ComputedRange, type DateRange } from "@/lib/date-ranges";
 import { IncomeExpensesCard } from "./income-expenses-card";
@@ -43,7 +43,7 @@ export function ReportsClient({
   const [range, setRange] = useState<ComputedRange>(computeCompareRange(initialDateRange));
   const isLongRange = range.months >= 3;
 
-  const fetchAll = useCallback(async (r: ComputedRange): Promise<void> => {
+  async function fetchAll(r: ComputedRange): Promise<void> {
     setLoading(true);
     try {
       const params = (extra: Record<string, string>): string =>
@@ -115,7 +115,7 @@ export function ReportsClient({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }
 
   function handleRangeChange(newRange: ComputedRange): void {
     setRange(newRange);

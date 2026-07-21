@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
@@ -31,7 +31,7 @@ export function RecurringClient({
 
   const categoryMap = new Map<number, CategoryWithCountResponse>(categories.map((c) => [c.id, c]));
 
-  const refresh = useCallback(async (): Promise<void> => {
+  async function refresh(): Promise<void> {
     setLoading(true);
     try {
       const res = await fetch("/api/recurring");
@@ -39,7 +39,7 @@ export function RecurringClient({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }
 
   async function handleCreate(data: Record<string, unknown>): Promise<void> {
     setFormLoading(true);

@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/format";
@@ -19,25 +18,23 @@ interface ChangeRow {
 }
 
 export function CategoryChangesCard({ groups }: CategoryChangesCardProps): React.ReactElement {
-  const changes = useMemo((): ChangeRow[] => {
-    return groups
-      .filter((g) => g.compareTotal !== undefined)
-      .map((g) => {
-        const current = g.total;
-        const previous = g.compareTotal!;
-        const delta = current - previous;
-        const deltaPercent = previous > 0 ? (delta / previous) * 100 : current > 0 ? 100 : 0;
-        return {
-          name: g.key,
-          current,
-          previous,
-          delta,
-          deltaPercent: Math.round(deltaPercent * 10) / 10,
-        };
-      })
-      .filter((r) => Math.abs(r.delta) > 100) // filter out changes < €1
-      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-  }, [groups]);
+  const changes: ChangeRow[] = groups
+    .filter((g) => g.compareTotal !== undefined)
+    .map((g) => {
+      const current = g.total;
+      const previous = g.compareTotal!;
+      const delta = current - previous;
+      const deltaPercent = previous > 0 ? (delta / previous) * 100 : current > 0 ? 100 : 0;
+      return {
+        name: g.key,
+        current,
+        previous,
+        delta,
+        deltaPercent: Math.round(deltaPercent * 10) / 10,
+      };
+    })
+    .filter((r) => Math.abs(r.delta) > 100) // filter out changes < €1
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
 
   return (
     <Card>

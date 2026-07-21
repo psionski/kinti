@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Plus, TrendingUp, TrendingDown, ArrowRight } from "lucide-react";
 import { PnlDisplay } from "@/components/shared/pnl-display";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -109,7 +109,7 @@ export function AssetsClient({ initialAssets, portfolio }: AssetsClientProps): R
   const [withdrawingAsset, setWithdrawingAsset] = useState<AssetWithMetrics | null>(null);
   const [pricingAsset, setPricingAsset] = useState<AssetWithMetrics | null>(null);
 
-  const refresh = useCallback(async (): Promise<void> => {
+  async function refresh(): Promise<void> {
     setLoading(true);
     try {
       const [assetsRes, portfolioRes] = await Promise.all([
@@ -121,7 +121,7 @@ export function AssetsClient({ initialAssets, portfolio }: AssetsClientProps): R
     } finally {
       setLoading(false);
     }
-  }, []);
+  }
 
   async function handleCreate(data: {
     name: string;

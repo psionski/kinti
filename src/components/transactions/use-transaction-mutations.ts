@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import type { TransactionFormData } from "./transaction-form";
 
 async function postJson(url: string, body: unknown): Promise<Response> {
@@ -65,69 +65,57 @@ export interface UseTransactionMutationsResult {
 export function useTransactionMutations(onRefresh: () => void): UseTransactionMutationsResult {
   const [formLoading, setFormLoading] = useState(false);
 
-  const addTransaction = useCallback(
-    async (data: TransactionFormData): Promise<boolean> => {
-      setFormLoading(true);
-      try {
-        const res = await postJson("/api/transactions", buildCreateBody(data));
-        if (res.ok) {
-          onRefresh();
-          return true;
-        }
-        return false;
-      } finally {
-        setFormLoading(false);
-      }
-    },
-    [onRefresh]
-  );
-
-  const editTransaction = useCallback(
-    async (id: number, data: TransactionFormData): Promise<boolean> => {
-      setFormLoading(true);
-      try {
-        const res = await patchJson(`/api/transactions/${id}`, buildUpdateBody(data));
-        if (res.ok) {
-          onRefresh();
-          return true;
-        }
-        return false;
-      } finally {
-        setFormLoading(false);
-      }
-    },
-    [onRefresh]
-  );
-
-  const bulkDelete = useCallback(
-    async (ids: number[]): Promise<boolean> => {
-      const res = await deleteJson("/api/transactions", { ids });
+  async function addTransaction(data: TransactionFormData): Promise<boolean> {
+    setFormLoading(true);
+    try {
+      const res = await postJson("/api/transactions", buildCreateBody(data));
       if (res.ok) {
         onRefresh();
         return true;
       }
       return false;
-    },
-    [onRefresh]
-  );
+    } finally {
+      setFormLoading(false);
+    }
+  }
 
-  const recategorize = useCallback(
-    async (ids: number[], categoryId: number): Promise<boolean> => {
-      setFormLoading(true);
-      try {
-        const updates = ids.map((id) => ({ id, categoryId }));
-        const res = await patchJson("/api/transactions", { updates });
-        if (res.ok) {
-          onRefresh();
-          return true;
-        }
-        return false;
-      } finally {
-        setFormLoading(false);
+  async function editTransaction(id: number, data: TransactionFormData): Promise<boolean> {
+    setFormLoading(true);
+    try {
+      const res = await patchJson(`/api/transactions/${id}`, buildUpdateBody(data));
+      if (res.ok) {
+        onRefresh();
+        return true;
       }
-    },
-    [onRefresh]
-  );
+      return false;
+    } finally {
+      setFormLoading(false);
+    }
+  }
+
+  async function bulkDelete(ids: number[]): Promise<boolean> {
+    const res = await deleteJson("/api/transactions", { ids });
+    if (res.ok) {
+      onRefresh();
+      return true;
+    }
+    return false;
+  }
+
+  async function recategorize(ids: number[], categoryId: number): Promise<boolean> {
+    setFormLoading(true);
+    try {
+      const updates = ids.map((id) => ({ id, categoryId }));
+      const res = await patchJson("/api/transactions", { updates });
+      if (res.ok) {
+        onRefresh();
+        return true;
+      }
+      return false;
+    } finally {
+      setFormLoading(false);
+    }
+  }
 
   return { formLoading, addTransaction, editTransaction, bulkDelete, recategorize };
 }

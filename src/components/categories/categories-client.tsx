@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
@@ -32,7 +32,7 @@ export function CategoriesClient({
   const [deletingCategory, setDeletingCategory] = useState<CategoryWithCountResponse | null>(null);
   const [formLoading, setFormLoading] = useState(false);
 
-  const refresh = useCallback(async (): Promise<void> => {
+  async function refresh(): Promise<void> {
     setLoading(true);
     try {
       const [catRes, statsRes] = await Promise.all([
@@ -44,7 +44,7 @@ export function CategoriesClient({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }
 
   async function handleCreate(data: CategoryFormData): Promise<void> {
     setFormLoading(true);

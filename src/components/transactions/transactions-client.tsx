@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Plus, Trash2, FolderInput, ScanLine, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -68,12 +68,60 @@ function buildQueryString(
   return params.toString();
 }
 
+interface PageQuery {
+  filters: TransactionFilters;
+  sortBy: SortField;
+  sortOrder: SortOrder;
+  limit: number;
+  offset: number;
+}
+
+async function fetchTransactionsPage(
+  q: PageQuery,
+  signal: AbortSignal
+): Promise<PaginatedTransactionsResponse | null> {
+  const qs = buildQueryString(q.filters, q.sortBy, q.sortOrder, q.limit, q.offset);
+  const res = await fetch(`/api/transactions?${qs}`, { signal });
+  return res.ok ? ((await res.json()) as PaginatedTransactionsResponse) : null;
+}
+
+/**
+ * Loads a page into component state, aborting any request still in flight via
+ * `abortRef` so a slow earlier response can't overwrite a fresher one (whether
+ * triggered by a filter/sort change or a mutation-driven refresh). Returns the
+ * controller so an effect can also abort it on cleanup/unmount.
+ */
+function loadTransactionsPage(
+  q: PageQuery,
+  abortRef: React.RefObject<AbortController | null>,
+  setLoading: (loading: boolean) => void,
+  setData: (data: PaginatedTransactionsResponse) => void
+): AbortController {
+  abortRef.current?.abort();
+  const controller = new AbortController();
+  abortRef.current = controller;
+  setLoading(true);
+  void (async () => {
+    try {
+      const json = await fetchTransactionsPage(q, controller.signal);
+      if (json) setData(json);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+    }
+  })();
+  return controller;
+}
+
 export function TransactionsClient({
   initialData,
   categories,
 }: TransactionsClientProps): React.ReactElement {
   const searchParams = useSearchParams();
-  const initialFilters = useMemo((): TransactionFilters => {
+
+  const [data, setData] = useState<PaginatedTransactionsResponse>(initialData);
+  const [filters, setFilters] = useState<TransactionFilters>(() => {
     const categoryId = searchParams.get("categoryId");
     const recurringId = searchParams.get("recurringId");
     const dateFrom = searchParams.get("dateFrom");
@@ -84,10 +132,7 @@ export function TransactionsClient({
     if (dateFrom) overrides.dateFrom = dateFrom;
     if (dateTo) overrides.dateTo = dateTo;
     return { ...EMPTY_FILTERS, ...overrides };
-  }, [searchParams]);
-
-  const [data, setData] = useState<PaginatedTransactionsResponse>(initialData);
-  const [filters, setFilters] = useState<TransactionFilters>(initialFilters);
+  });
   const [recurringName, setRecurringName] = useState<string>("");
   const [sortBy, setSortBy] = useState<SortField>("date");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
@@ -107,40 +152,30 @@ export function TransactionsClient({
 
   const categoryMap = new Map<number, CategoryWithCountResponse>(categories.map((c) => [c.id, c]));
 
-  const fetchTransactions = useCallback(
-    async (
-      f: TransactionFilters,
-      sb: SortField,
-      so: SortOrder,
-      lim: number,
-      off: number
-    ): Promise<void> => {
-      setLoading(true);
-      try {
-        const qs = buildQueryString(f, sb, so, lim, off);
-        const res = await fetch(`/api/transactions?${qs}`);
-        if (res.ok) {
-          const json = (await res.json()) as PaginatedTransactionsResponse;
-          setData(json);
-        }
-      } finally {
-        setLoading(false);
-      }
-    },
-    []
-  );
+  const abortRef = useRef<AbortController | null>(null);
 
-  const refresh = useCallback(() => {
-    void fetchTransactions(filters, sortBy, sortOrder, limit, offset);
-  }, [fetchTransactions, filters, sortBy, sortOrder, limit, offset]);
+  function refresh(): void {
+    loadTransactionsPage(
+      { filters, sortBy, sortOrder, limit, offset },
+      abortRef,
+      setLoading,
+      setData
+    );
+  }
 
   const { formLoading, addTransaction, editTransaction, bulkDelete, recategorize } =
     useTransactionMutations(refresh);
 
   // Re-fetch when filters/sort/pagination change
   useEffect(() => {
-    void fetchTransactions(filters, sortBy, sortOrder, limit, offset);
-  }, [filters, sortBy, sortOrder, limit, offset, fetchTransactions]);
+    const controller = loadTransactionsPage(
+      { filters, sortBy, sortOrder, limit, offset },
+      abortRef,
+      setLoading,
+      setData
+    );
+    return () => controller.abort();
+  }, [filters, sortBy, sortOrder, limit, offset]);
 
   // Fetch recurring template name when recurringId filter is active
   useEffect(() => {

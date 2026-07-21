@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, MoreHorizontal, Pencil, Trash2, AlertTriangle, X } from "lucide-react";
@@ -65,7 +65,7 @@ export function AssetDetailClient({
   // tracking via the symbol map.
   const showTrackingSection = asset.type !== "deposit" || asset.currency !== getBaseCurrency();
 
-  const refresh = useCallback(async (): Promise<void> => {
+  async function refresh(): Promise<void> {
     setLoading(true);
     try {
       const [assetRes, lotsRes] = await Promise.all([
@@ -77,7 +77,7 @@ export function AssetDetailClient({
     } finally {
       setLoading(false);
     }
-  }, [asset.id]);
+  }
 
   async function handleEdit(data: {
     name: string;

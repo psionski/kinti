@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ValueChart } from "./value-chart";
 import { PriceChart } from "./price-chart";
@@ -22,32 +22,34 @@ export function AssetDetailCharts({
   const [history, setHistory] = useState<AssetHistoryResult | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const fetchHistory = useCallback(
-    async (w: Window): Promise<void> => {
-      setLoading(true);
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    void (async () => {
       try {
-        const res = await fetch(`/api/assets/${assetId}/history?window=${w}`);
+        const res = await fetch(`/api/assets/${assetId}/history?window=${window}`, {
+          signal: controller.signal,
+        });
         if (res.ok) {
           setHistory((await res.json()) as AssetHistoryResult);
         }
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
       } finally {
-        setLoading(false);
+        // A superseded request is aborted; its cleanup already started a fresh
+        // load, so don't clear the loading state on its behalf.
+        if (!controller.signal.aborted) setLoading(false);
       }
-    },
-    [assetId]
-  );
-
-  useEffect(() => {
-    void fetchHistory(window);
-  }, [fetchHistory, window]);
+    })();
+    return () => controller.abort();
+  }, [assetId, window]);
 
   // Derive price chart data from the history timeline (uses the unified price resolver)
-  const priceData = useMemo(() => {
-    if (!history) return [];
-    return history.timeline
-      .filter((p) => p.price !== null)
-      .map((p) => ({ pricePerUnit: p.price!, recordedAt: p.date }));
-  }, [history]);
+  const priceData = history
+    ? history.timeline
+        .filter((p) => p.price !== null)
+        .map((p) => ({ pricePerUnit: p.price!, recordedAt: p.date }))
+    : [];
 
   return (
     <div className="space-y-4">

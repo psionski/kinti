@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { setBaseCurrencyCache } from "@/lib/format";
 import type { BackupInfo } from "@/lib/services/backup";
@@ -104,17 +104,15 @@ export function SettingsClient({
   const allRevealed = onboardingStep === "done";
   const lastRevealedRef = useRef<HTMLDivElement>(null);
 
-  const scrollToRevealed = useCallback(() => {
-    if (lastRevealedRef.current) {
-      lastRevealedRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, []);
+  function scrollToRevealed(): void {
+    lastRevealedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   useEffect(() => {
     if (isFirstSetup && !allRevealed) {
-      scrollToRevealed();
+      lastRevealedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-  }, [onboardingStep, timezoneSaved, isFirstSetup, allRevealed, scrollToRevealed]);
+  }, [onboardingStep, timezoneSaved, isFirstSetup, allRevealed]);
 
   async function handleSaveTimezone(): Promise<void> {
     setSavingTz(true);

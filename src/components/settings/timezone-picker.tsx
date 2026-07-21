@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,19 +18,18 @@ export function TimezonePicker({ value, onChange }: TimezonePickerProps): React.
   const [search, setSearch] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleOpenChange = useCallback((next: boolean) => {
+  function handleOpenChange(next: boolean): void {
     setOpen(next);
     if (next) {
       setSearch("");
       setTimeout(() => inputRef.current?.focus(), 0);
     }
-  }, []);
+  }
 
-  const filtered = useMemo(() => {
-    if (!search) return ALL_TIMEZONES;
-    const lower = search.toLowerCase();
-    return ALL_TIMEZONES.filter((tz) => tz.toLowerCase().includes(lower));
-  }, [search]);
+  const lower = search.toLowerCase();
+  const filtered = search
+    ? ALL_TIMEZONES.filter((tz) => tz.toLowerCase().includes(lower))
+    : ALL_TIMEZONES;
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>

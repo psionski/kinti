@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import { Area, AreaChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from "recharts";
 import {
   ChartContainer,
@@ -26,24 +25,29 @@ interface RatePoint {
   rate: number;
 }
 
+function computeSavingsRateData(
+  incomeTrend: TrendPoint[],
+  expenseTrend: TrendPoint[]
+): RatePoint[] {
+  const expenseMap = new Map<string, number>();
+  for (const p of expenseTrend) {
+    expenseMap.set(p.month, p.total);
+  }
+
+  return incomeTrend
+    .map((p) => {
+      const expenses = expenseMap.get(p.month) ?? 0;
+      const rate = p.total > 0 ? ((p.total - expenses) / p.total) * 100 : 0;
+      return { month: p.month, rate: Math.round(rate * 10) / 10 };
+    })
+    .sort((a, b) => a.month.localeCompare(b.month));
+}
+
 export function SavingsRateChart({
   incomeTrend,
   expenseTrend,
 }: SavingsRateChartProps): React.ReactElement {
-  const chartData = useMemo((): RatePoint[] => {
-    const expenseMap = new Map<string, number>();
-    for (const p of expenseTrend) {
-      expenseMap.set(p.month, p.total);
-    }
-
-    return incomeTrend
-      .map((p) => {
-        const expenses = expenseMap.get(p.month) ?? 0;
-        const rate = p.total > 0 ? ((p.total - expenses) / p.total) * 100 : 0;
-        return { month: p.month, rate: Math.round(rate * 10) / 10 };
-      })
-      .sort((a, b) => a.month.localeCompare(b.month));
-  }, [incomeTrend, expenseTrend]);
+  const chartData = computeSavingsRateData(incomeTrend, expenseTrend);
 
   return (
     <Card className="flex h-full flex-col">

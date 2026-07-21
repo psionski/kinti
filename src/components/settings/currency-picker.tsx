@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,28 +90,24 @@ export function CurrencyPicker({
   const [search, setSearch] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleOpenChange = useCallback(
-    (next: boolean) => {
-      if (disabled) return;
-      setOpen(next);
-      if (next) {
-        setSearch("");
-        setTimeout(() => inputRef.current?.focus(), 0);
-      }
-    },
-    [disabled]
-  );
+  function handleOpenChange(next: boolean): void {
+    if (disabled) return;
+    setOpen(next);
+    if (next) {
+      setSearch("");
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }
 
-  const filtered = useMemo(() => {
-    if (!search) return CURRENCY_ENTRIES;
-    const lower = search.toLowerCase();
-    return CURRENCY_ENTRIES.filter(
-      (e) =>
-        e.code.toLowerCase().includes(lower) ||
-        e.name.toLowerCase().includes(lower) ||
-        e.symbol.toLowerCase().includes(lower)
-    );
-  }, [search]);
+  const lowerSearch = search.toLowerCase();
+  const filtered = search
+    ? CURRENCY_ENTRIES.filter(
+        (e) =>
+          e.code.toLowerCase().includes(lowerSearch) ||
+          e.name.toLowerCase().includes(lowerSearch) ||
+          e.symbol.toLowerCase().includes(lowerSearch)
+      )
+    : CURRENCY_ENTRIES;
 
   const selected = CURRENCY_BY_CODE.get(value);
 

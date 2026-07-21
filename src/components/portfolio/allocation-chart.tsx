@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Pie, PieChart, Cell, Tooltip } from "recharts";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,26 +44,19 @@ function CustomTooltip({
 export function AllocationChart({ data }: AllocationChartProps): React.ReactElement {
   const [view, setView] = useState<ViewMode>("asset");
 
-  const chartData = useMemo((): ChartEntry[] => {
-    const items =
-      view === "asset"
-        ? data.byAsset.map((a) => ({ name: a.name, value: a.currentValue, pct: a.pct }))
-        : data.byType.map((t) => ({ name: t.type, value: t.currentValue, pct: t.pct }));
+  const items =
+    view === "asset"
+      ? data.byAsset.map((a) => ({ name: a.name, value: a.currentValue, pct: a.pct }))
+      : data.byType.map((t) => ({ name: t.type, value: t.currentValue, pct: t.pct }));
+  const visible = items.filter((item) => item.value > 0).sort((a, b) => b.value - a.value);
+  const chartData: ChartEntry[] = visible.map((item, i) => ({
+    ...item,
+    color: fallbackColor(i, visible.length),
+  }));
 
-    const visible = items.filter((item) => item.value > 0).sort((a, b) => b.value - a.value);
-    return visible.map((item, i) => ({
-      ...item,
-      color: fallbackColor(i, visible.length),
-    }));
-  }, [data, view]);
-
-  const chartConfig = useMemo(
-    () =>
-      Object.fromEntries(
-        chartData.map((item) => [item.name, { label: item.name, color: item.color }])
-      ) satisfies ChartConfig,
-    [chartData]
-  );
+  const chartConfig = Object.fromEntries(
+    chartData.map((item) => [item.name, { label: item.name, color: item.color }])
+  ) satisfies ChartConfig;
 
   const hasData = chartData.length > 0;
 

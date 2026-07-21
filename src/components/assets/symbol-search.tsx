@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
 import { Search, X, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,66 +94,63 @@ export function SymbolSearchDialog({
     setResults([]);
   }
 
-  const doSearch = useCallback(
-    async (q: string): Promise<void> => {
-      if (q.trim().length < 2) {
-        setResults([]);
-        return;
-      }
-
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      setLoading(true);
+  async function doSearch(q: string): Promise<void> {
+    if (q.trim().length < 2) {
       setResults([]);
+      return;
+    }
 
-      const params = new URLSearchParams({ query: q.trim() });
-      if (assetType) params.set("assetType", assetType);
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
-      try {
-        const res = await fetch(`/api/financial/search-symbol?${params}`, {
-          signal: controller.signal,
-        });
-        if (!res.ok || !res.body) return;
+    setLoading(true);
+    setResults([]);
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
+    const params = new URLSearchParams({ query: q.trim() });
+    if (assetType) params.set("assetType", assetType);
 
-        for (;;) {
-          const { done, value: chunk } = await reader.read();
-          if (done) break;
+    try {
+      const res = await fetch(`/api/financial/search-symbol?${params}`, {
+        signal: controller.signal,
+      });
+      if (!res.ok || !res.body) return;
 
-          buffer += decoder.decode(chunk, { stream: true });
-          const parts = buffer.split("\n\n");
-          buffer = parts.pop() ?? "";
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
 
-          for (const part of parts) {
-            const lines = part.split("\n");
-            const eventLine = lines.find((l) => l.startsWith("event: "));
-            const dataLine = lines.find((l) => l.startsWith("data: "));
-            if (!eventLine || !dataLine) continue;
+      for (;;) {
+        const { done, value: chunk } = await reader.read();
+        if (done) break;
 
-            const eventType = eventLine.slice(7);
-            if (eventType === "done") break;
-            if (eventType !== "results") continue;
+        buffer += decoder.decode(chunk, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
 
-            const payload = JSON.parse(dataLine.slice(6)) as {
-              provider: string;
-              results: SymbolSearchResult[];
-            };
-            setResults((prev) => [...prev, ...payload.results]);
-          }
+        for (const part of parts) {
+          const lines = part.split("\n");
+          const eventLine = lines.find((l) => l.startsWith("event: "));
+          const dataLine = lines.find((l) => l.startsWith("data: "));
+          if (!eventLine || !dataLine) continue;
+
+          const eventType = eventLine.slice(7);
+          if (eventType === "done") break;
+          if (eventType !== "results") continue;
+
+          const payload = JSON.parse(dataLine.slice(6)) as {
+            provider: string;
+            results: SymbolSearchResult[];
+          };
+          setResults((prev) => [...prev, ...payload.results]);
         }
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") return;
-      } finally {
-        setLoading(false);
       }
-    },
-    [assetType]
-  );
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+    } finally {
+      setLoading(false);
+    }
+  }
 
   function handleInputChange(val: string): void {
     setQuery(val);

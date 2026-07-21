@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { NetWorthChart } from "./net-worth-chart";
 import { AllocationChart } from "./allocation-chart";
@@ -37,7 +37,7 @@ export function PortfolioReportsClient({
   const [window, setWindow] = useState<Window>(initialWindow);
   const [loading, setLoading] = useState(false);
 
-  const fetchAll = useCallback(async (w: Window): Promise<void> => {
+  async function fetchAll(w: Window): Promise<void> {
     setLoading(true);
     try {
       const [netWorthRes, perfRes, allocRes, currRes, pnlRes] = await Promise.all([
@@ -84,7 +84,7 @@ export function PortfolioReportsClient({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }
 
   function handleWindowChange(w: Window): void {
     setWindow(w);

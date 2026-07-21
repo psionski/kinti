@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState } from "react";
 import { Pie, PieChart, Cell, Label } from "recharts";
 import { ArrowLeft } from "lucide-react";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
@@ -28,6 +28,64 @@ interface ChartEntry {
   hasChildren: boolean;
 }
 
+/** Build the pie entries for the current hierarchy level. */
+function buildDonutData(
+  data: CategorySpendingItem[],
+  currentParentId: number | null,
+  parentIds: Set<number>
+): ChartEntry[] {
+  // Filter to items at the current hierarchy level
+  const levelItems = data.filter((item) => item.parentId === currentParentId);
+
+  // When drilled in, check if the parent has direct spend not covered by children
+  const entries: Array<{
+    name: string;
+    rawValue: number;
+    color: string | null;
+    categoryId: number | null;
+    hasChildren: boolean;
+  }> = [];
+
+  if (currentParentId !== null) {
+    const parent = data.find((item) => item.categoryId === currentParentId);
+    if (parent && parent.total > 0) {
+      entries.push({
+        name: `Direct`,
+        rawValue: parent.total,
+        color: null,
+        categoryId: null,
+        hasChildren: false,
+      });
+    }
+  }
+
+  for (const item of levelItems) {
+    const hasChildren = item.categoryId !== null && parentIds.has(item.categoryId);
+    entries.push({
+      name: item.categoryName ?? "Uncategorized",
+      rawValue: hasChildren ? item.rollupTotal : item.total,
+      color: item.color,
+      categoryId: item.categoryId,
+      hasChildren,
+    });
+  }
+
+  // Compute percentages from this level's total
+  const grandTotal = entries.reduce((s, e) => s + e.rawValue, 0);
+  const visible = entries.filter((e) => e.rawValue > 0).sort((a, b) => b.rawValue - a.rawValue);
+  const colorlessCount = visible.filter((e) => !e.color).length;
+  let fallbackIndex = 0;
+
+  return visible.map((entry) => ({
+    name: entry.name,
+    value: entry.rawValue,
+    percentage: grandTotal > 0 ? Math.round((entry.rawValue / grandTotal) * 10000) / 100 : 0,
+    color: entry.color ?? fallbackColor(fallbackIndex++, colorlessCount),
+    categoryId: entry.categoryId,
+    hasChildren: entry.hasChildren,
+  }));
+}
+
 export function CategoryDonutChart({
   data,
   monthLabel,
@@ -36,83 +94,22 @@ export function CategoryDonutChart({
   const currentParentId = breadcrumb[breadcrumb.length - 1]!.id;
 
   // Build a set of category IDs that have children in the dataset
-  const parentIds = useMemo(() => {
-    const set = new Set<number>();
-    for (const item of data) {
-      if (item.parentId !== null) set.add(item.parentId);
-    }
-    return set;
-  }, [data]);
+  const parentIds = new Set<number>();
+  for (const item of data) {
+    if (item.parentId !== null) parentIds.add(item.parentId);
+  }
 
-  const chartData = useMemo((): ChartEntry[] => {
-    // Filter to items at the current hierarchy level
-    const levelItems = data.filter((item) => item.parentId === currentParentId);
+  const chartData = buildDonutData(data, currentParentId, parentIds);
 
-    // When drilled in, check if the parent has direct spend not covered by children
-    const entries: Array<{
-      name: string;
-      rawValue: number;
-      color: string | null;
-      categoryId: number | null;
-      hasChildren: boolean;
-    }> = [];
+  const chartConfig = Object.fromEntries(
+    chartData.map((item) => [item.name, { label: item.name, color: item.color }])
+  ) satisfies ChartConfig;
 
-    if (currentParentId !== null) {
-      const parent = data.find((item) => item.categoryId === currentParentId);
-      if (parent && parent.total > 0) {
-        entries.push({
-          name: `Direct`,
-          rawValue: parent.total,
-          color: null,
-          categoryId: null,
-          hasChildren: false,
-        });
-      }
-    }
-
-    for (const item of levelItems) {
-      const hasChildren = item.categoryId !== null && parentIds.has(item.categoryId);
-      entries.push({
-        name: item.categoryName ?? "Uncategorized",
-        rawValue: hasChildren ? item.rollupTotal : item.total,
-        color: item.color,
-        categoryId: item.categoryId,
-        hasChildren,
-      });
-    }
-
-    // Compute percentages from this level's total
-    const grandTotal = entries.reduce((s, e) => s + e.rawValue, 0);
-    const visible = entries.filter((e) => e.rawValue > 0).sort((a, b) => b.rawValue - a.rawValue);
-    const colorlessCount = visible.filter((e) => !e.color).length;
-    let fallbackIndex = 0;
-
-    return visible.map((entry) => ({
-      name: entry.name,
-      value: entry.rawValue,
-      percentage: grandTotal > 0 ? Math.round((entry.rawValue / grandTotal) * 10000) / 100 : 0,
-      color: entry.color ?? fallbackColor(fallbackIndex++, colorlessCount),
-      categoryId: entry.categoryId,
-      hasChildren: entry.hasChildren,
-    }));
-  }, [data, currentParentId, parentIds]);
-
-  const chartConfig = useMemo(
-    () =>
-      Object.fromEntries(
-        chartData.map((item) => [item.name, { label: item.name, color: item.color }])
-      ) satisfies ChartConfig,
-    [chartData]
-  );
-
-  const handleClick = useCallback(
-    (_: unknown, index: number) => {
-      const entry = chartData[index];
-      if (!entry?.hasChildren || entry.categoryId === null) return;
-      setBreadcrumb((prev) => [...prev, { id: entry.categoryId!, name: entry.name }]);
-    },
-    [chartData]
-  );
+  function handleClick(_: unknown, index: number): void {
+    const entry = chartData[index];
+    if (!entry?.hasChildren || entry.categoryId === null) return;
+    setBreadcrumb((prev) => [...prev, { id: entry.categoryId!, name: entry.name }]);
+  }
 
   const isDrilledIn = breadcrumb.length > 1;
 

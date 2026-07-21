@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
   ChartContainer,
@@ -30,27 +29,32 @@ interface MergedPoint {
   expenses: number;
 }
 
+function mergeIncomeExpenseTrends(
+  incomeTrend: TrendPoint[],
+  expenseTrend: TrendPoint[]
+): MergedPoint[] {
+  const map = new Map<string, MergedPoint>();
+  for (const p of incomeTrend) {
+    map.set(p.month, { month: p.month, income: p.total, expenses: 0 });
+  }
+  for (const p of expenseTrend) {
+    const existing = map.get(p.month);
+    if (existing) {
+      existing.expenses = p.total;
+    } else {
+      map.set(p.month, { month: p.month, income: 0, expenses: p.total });
+    }
+  }
+  return [...map.values()].sort((a, b) => a.month.localeCompare(b.month));
+}
+
 export function IncomeExpensesCard({
   balance,
   incomeTrend,
   expenseTrend,
   showChart = true,
 }: IncomeExpensesCardProps): React.ReactElement {
-  const chartData = useMemo((): MergedPoint[] => {
-    const map = new Map<string, MergedPoint>();
-    for (const p of incomeTrend) {
-      map.set(p.month, { month: p.month, income: p.total, expenses: 0 });
-    }
-    for (const p of expenseTrend) {
-      const existing = map.get(p.month);
-      if (existing) {
-        existing.expenses = p.total;
-      } else {
-        map.set(p.month, { month: p.month, income: 0, expenses: p.total });
-      }
-    }
-    return [...map.values()].sort((a, b) => a.month.localeCompare(b.month));
-  }, [incomeTrend, expenseTrend]);
+  const chartData = mergeIncomeExpenseTrends(incomeTrend, expenseTrend);
 
   const netIsPositive = balance.netIncome >= 0;
 

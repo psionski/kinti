@@ -25,6 +25,7 @@ Kinti is an AI-powered personal finance tracker. Single-user (for now), self-hos
 | Language | TypeScript (strict) | End-to-end type safety |
 | Styling | Tailwind CSS 4 | Utility-first, fast iteration |
 | UI Components | shadcn/ui | Accessible, composable, Tailwind-native |
+| Optimization | React Compiler | Auto-memoization; enabled via `reactCompiler: true` in `next.config.mjs` |
 | Charts | Recharts (via shadcn/ui) | Chart primitives built on Recharts + Tailwind |
 | Database | SQLite (via better-sqlite3) | Single file, zero infra, perfect for personal use |
 | ORM | Drizzle ORM | Type-safe, SQL-like query builder, great SQLite support |
@@ -350,6 +351,14 @@ The same `currency` column lives on `recurring_transactions`. Generated transact
 - **Page pattern:** Server component fetches initial data via service layer, passes to a `"use client"` wrapper (e.g. `BudgetsClient`) as `initialData` props. Client component owns state, mutations, and dialogs.
 - **Domain components** go in `src/components/{domain}/` (e.g. `src/components/budgets/`). Dashboard widgets go in `src/components/dashboard/`.
 
+#### React Compiler — no manual memoization
+
+The **React Compiler is enabled** (`reactCompiler: true` in `next.config.mjs`), so it auto-memoizes components, derived values, and callbacks at build time. **Do not add `useMemo`, `useCallback`, or `React.memo` for performance.** Write derived values as plain `const`s (extract a module-level helper for multi-statement derivations) and event handlers as plain functions — the compiler handles memoization. The `eslint-plugin-react-hooks` (v7, `recommended-latest`) rule flags any component the compiler can't safely optimize; fix the flagged code rather than reaching for manual memoization.
+
+- **Keep manual memoization only when identity is load-bearing for correctness** — e.g. a value/callback passed to an identity-sensitive third-party hook (`useJoyride` in `interactive-tour.tsx`). Comment *why* when you do.
+- **Effects:** prefer inlining a derivation into the effect (so its deps stay primitive) over depending on a component-scoped function. This keeps `exhaustive-deps` clean without `useCallback`.
+- **Don't hand-edit vendored `src/components/ui/*` (shadcn) primitives** just to strip their memoization — keep them aligned with upstream.
+
 ## Testing
 
 ### Folder Structure
@@ -480,3 +489,4 @@ MCP tool schemas have two documentation surfaces — use each for the right kind
 - Don't over-engineer for hypothetical futures. Build what's needed now.
 - Don't add comments that restate what the code already says. Only comment non-obvious "why".
 - Don't create wrapper abstractions for things used in one place.
+- Don't add `useMemo`/`useCallback`/`React.memo` for performance — the React Compiler handles memoization (see *Components & UI → React Compiler*).
