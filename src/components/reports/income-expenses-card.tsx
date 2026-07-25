@@ -11,9 +11,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, formatMonth } from "@/lib/format";
 import type { TrendPoint, NetIncomeResult } from "@/lib/validators/reports";
 
+// Match the green/red semantics of the KPI labels above the chart
+// (text-green-600 / text-red-600) so the areas read as income vs. expenses.
 const chartConfig = {
-  income: { label: "Income", color: "var(--chart-2)" },
-  expenses: { label: "Expenses", color: "var(--chart-1)" },
+  income: { label: "Income", color: "var(--color-green-600)" },
+  expenses: { label: "Expenses", color: "var(--color-red-600)" },
 } satisfies ChartConfig;
 
 interface IncomeExpensesCardProps {
