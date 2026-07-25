@@ -10,6 +10,7 @@ import { getSettingsService } from "@/lib/api/services";
 import { TimezoneInit } from "@/components/timezone-init";
 import { BaseCurrencyInit } from "@/components/base-currency-init";
 import { RouteMemory } from "@/components/route-memory";
+import { buildRouteRestoreScript } from "@/lib/route-memory";
 import { setBaseCurrencyCache, getBaseCurrency } from "@/lib/format";
 import { SampleDataBar } from "@/components/sample-data-bar";
 import { LazyTour } from "@/components/tour/lazy-tour";
@@ -65,6 +66,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${geistSans.variable} ${geistMono.variable}`}>
       <body className="antialiased">
+        {/* Pre-hydration route restore for the installed PWA; see lib/route-memory. */}
+        <script dangerouslySetInnerHTML={{ __html: buildRouteRestoreScript() }} />
         <TimezoneInit timezone={timezone} />
         <BaseCurrencyInit currency={effectiveBaseCurrency} />
         <RouteMemory />
