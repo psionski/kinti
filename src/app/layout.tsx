@@ -9,6 +9,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { getSettingsService } from "@/lib/api/services";
 import { TimezoneInit } from "@/components/timezone-init";
 import { BaseCurrencyInit } from "@/components/base-currency-init";
+import { RouteMemory } from "@/components/route-memory";
 import { setBaseCurrencyCache, getBaseCurrency } from "@/lib/format";
 import { SampleDataBar } from "@/components/sample-data-bar";
 import { LazyTour } from "@/components/tour/lazy-tour";
@@ -66,6 +67,7 @@ export default function RootLayout({
       <body className="antialiased">
         <TimezoneInit timezone={timezone} />
         <BaseCurrencyInit currency={effectiveBaseCurrency} />
+        <RouteMemory />
         <LazyTour initialTutorial={tutorial} />
         <TooltipProvider>
           <SidebarProvider>
