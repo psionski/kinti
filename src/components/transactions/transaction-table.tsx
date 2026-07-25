@@ -164,7 +164,7 @@ export function TransactionTable({
               <TableCell className="hidden text-sm tabular-nums md:table-cell">
                 {formatDate(tx.date)}
               </TableCell>
-              <TableCell className="max-w-none md:max-w-[250px]">
+              <TableCell className="w-full max-w-0 md:w-auto md:max-w-[250px]">
                 <div className="flex items-center gap-1.5">
                   <span className="truncate">{tx.description}</span>
                   {tx.receiptId && (
@@ -175,7 +175,7 @@ export function TransactionTable({
                         e.stopPropagation();
                         onReceiptClick?.(tx.receiptId!);
                       }}
-                      className="text-muted-foreground hover:text-foreground"
+                      className="text-muted-foreground hover:text-foreground shrink-0"
                       aria-label="View receipt"
                     >
                       <Receipt className="size-3.5" />
