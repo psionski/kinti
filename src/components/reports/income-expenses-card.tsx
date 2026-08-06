@@ -11,11 +11,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, formatMonth } from "@/lib/format";
 import type { TrendPoint, NetIncomeResult } from "@/lib/validators/reports";
 
-// Match the green/red semantics of the KPI labels above the chart
-// (text-green-600 / text-red-600) so the areas read as income vs. expenses.
+// Match the app-wide income/expense convention: emerald for money in,
+// destructive (red) for money out — the same tokens used by the transactions
+// table, dashboard KPIs, and P&L displays. ChartStyle emits `--color-income`
+// and `--color-expenses` from the keys below, which the <Area> marks reference.
 const chartConfig = {
-  income: { label: "Income", color: "var(--color-green-600)" },
-  expenses: { label: "Expenses", color: "var(--color-red-600)" },
+  income: { label: "Income", color: "var(--color-emerald-600)" },
+  expenses: { label: "Expenses", color: "var(--color-destructive)" },
 } satisfies ChartConfig;
 
 interface IncomeExpensesCardProps {
@@ -70,20 +72,20 @@ export function IncomeExpensesCard({
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
             <p className="text-muted-foreground text-xs">Income</p>
-            <p className="text-lg font-semibold text-green-600">
+            <p className="text-lg font-semibold text-emerald-600">
               {formatCurrency(balance.totalIncome)}
             </p>
           </div>
           <div>
             <p className="text-muted-foreground text-xs">Expenses</p>
-            <p className="text-lg font-semibold text-red-600">
+            <p className="text-destructive text-lg font-semibold">
               {formatCurrency(balance.totalExpenses)}
             </p>
           </div>
           <div>
             <p className="text-muted-foreground text-xs">Net Income</p>
             <p
-              className={`text-lg font-semibold ${netIsPositive ? "text-green-600" : "text-red-600"}`}
+              className={`text-lg font-semibold ${netIsPositive ? "text-emerald-600" : "text-destructive"}`}
             >
               {netIsPositive ? "+" : ""}
               {formatCurrency(balance.netIncome)}
