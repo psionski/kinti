@@ -12,7 +12,7 @@ import { AssetFormDialog } from "./asset-form-dialog";
 import { BuySellDialog } from "./buy-sell-dialog";
 import { DepositWithdrawDialog } from "./deposit-withdraw-dialog";
 import { RecordPriceDialog } from "./record-price-dialog";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, holdingsUnit } from "@/lib/format";
 import type { AssetWithMetrics, PortfolioResponse } from "@/lib/validators/assets";
 
 interface AssetsClientProps {
@@ -252,8 +252,7 @@ export function AssetsClient({ initialAssets, portfolio }: AssetsClientProps): R
                     <div className="text-muted-foreground flex justify-between">
                       <span>Holdings</span>
                       <span className="font-mono">
-                        {asset.currentHoldings}{" "}
-                        {asset.type === "deposit" ? asset.currency : asset.name}
+                        {asset.currentHoldings} {holdingsUnit(asset)}
                       </span>
                     </div>
                     <div className="text-muted-foreground flex justify-between">
