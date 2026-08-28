@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "@/lib/db/schema";
-import { assets, assetLots, assetPrices, transactions } from "@/lib/db/schema";
+import { assets, assetLots, transactions } from "@/lib/db/schema";
 import { requireRow } from "@/lib/db/rows";
 import type {
   BuyAssetInput,
@@ -10,7 +10,7 @@ import type {
   AssetLotResponse,
 } from "@/lib/validators/assets";
 import type { TransactionResponse } from "@/lib/validators/transactions";
-import { localToUtc, utcToLocal } from "@/lib/date-ranges";
+import { utcToLocal } from "@/lib/date-ranges";
 import { getBaseCurrency, roundToCurrency } from "@/lib/format";
 import type { FinancialDataService } from "./financial-data";
 
@@ -45,18 +45,6 @@ export class AssetLotService {
     private db: Db,
     private financialData?: FinancialDataService
   ) {}
-
-  /** Record a price snapshot from a transaction — every buy/sell is a price observation. */
-  private recordPriceSnapshot(assetId: number, pricePerUnit: number, date: string): void {
-    this.db
-      .insert(assetPrices)
-      .values({
-        assetId,
-        pricePerUnit,
-        recordedAt: localToUtc(date + "T00:00:00"),
-      })
-      .run();
-  }
 
   /**
    * Deposit assets are 1-unit-per-unit-of-the-asset's-currency, regardless of
@@ -152,8 +140,6 @@ export class AssetLotService {
         "asset lot"
       );
 
-      this.recordPriceSnapshot(assetId, input.pricePerUnit, input.date);
-
       return { lot: parseLot(lotRow), transaction: parseTransaction(txRow) };
     });
   }
@@ -237,8 +223,6 @@ export class AssetLotService {
         "asset lot"
       );
 
-      this.recordPriceSnapshot(assetId, input.pricePerUnit, input.date);
-
       return { lot: parseLot(lotRow), transaction: parseTransaction(txRow) };
     });
   }
@@ -281,10 +265,6 @@ export class AssetLotService {
           .all(),
         "asset lot"
       );
-
-      if (input.pricePerUnit > 0) {
-        this.recordPriceSnapshot(assetId, input.pricePerUnit, input.date);
-      }
 
       return parseLot(lotRow);
     });

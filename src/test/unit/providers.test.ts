@@ -9,6 +9,7 @@ import { ExchangeRateApiProvider } from "@/lib/providers/exchangerate-api";
 import { TwelveDataProvider } from "@/lib/providers/twelve-data";
 import { FinnhubProvider } from "@/lib/providers/finnhub";
 import { CoinMarketCapProvider } from "@/lib/providers/coinmarketcap";
+import { ProviderError, ProviderRateLimitError } from "@/lib/providers/errors";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -266,6 +267,70 @@ describe("AlphaVantageProvider", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
     const result = await provider.getPrice("AAPL", "USD");
     expect(result).toBeNull();
+  });
+
+  // Alpha Vantage answers a throttled request with HTTP 200 and an envelope
+  // key. Returning null for those made an exhausted quota look exactly like a
+  // symbol that doesn't exist, so a nightly refresh could fail every asset and
+  // report nothing at all.
+  it("throws when the daily quota is exhausted", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          Information: "our standard API rate limit is 25 requests per day.",
+        }),
+      })
+    );
+
+    await expect(provider.getPrice("AAPL", "USD")).rejects.toThrow(ProviderRateLimitError);
+  });
+
+  it("throws on the legacy per-minute throttle note", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ Note: "Thank you for using Alpha Vantage!" }),
+      })
+    );
+
+    await expect(provider.getPrice("AAPL", "USD")).rejects.toThrow(ProviderRateLimitError);
+  });
+
+  it("throws a non-rate-limit error for a rejected request", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ "Error Message": "Invalid API call." }),
+      })
+    );
+
+    const err: unknown = await provider.getPrice("NOPE", "USD").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ProviderError);
+    expect(err).not.toBeInstanceOf(ProviderRateLimitError);
+  });
+
+  it("surfaces a throttled historical lookup too", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ Information: "rate limit" }) })
+    );
+
+    await expect(provider.getPrice("AAPL", "USD", "2020-01-15")).rejects.toThrow(
+      ProviderRateLimitError
+    );
+  });
+
+  it("surfaces a throttled symbol search", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ Information: "rate limit" }) })
+    );
+
+    await expect(provider.searchSymbol("apple")).rejects.toThrow(ProviderRateLimitError);
   });
 
   it("getPriceRange returns daily prices in date range", async () => {

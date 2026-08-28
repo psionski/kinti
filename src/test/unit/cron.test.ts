@@ -171,3 +171,126 @@ describe("runBackupJob", () => {
     errorSpy.mockRestore();
   });
 });
+
+describe("runMarketPriceJob", () => {
+  // A price refresh that fails silently is worse than one that fails loudly:
+  // the portfolio keeps showing the last price it had, which is indistinguishable
+  // from a price that simply didn't move. Every asset it can't price has to
+  // reach the log with its symbols attached.
+  interface PriceOutcome {
+    result?: { price: number; stale: boolean } | null;
+    error?: Error;
+  }
+
+  async function runWithAssets(outcomes: Record<string, PriceOutcome>): Promise<void> {
+    const { getDb } = await import("@/lib/db");
+    const { getFinancialDataService } = await import("@/lib/api/services");
+
+    const rows = Object.keys(outcomes).map((symbol, i) => ({
+      id: i + 1,
+      symbolMap: JSON.stringify({ "alpha-vantage": symbol }),
+      currency: "EUR",
+    }));
+
+    vi.mocked(getDb).mockReturnValue({
+      select: () => ({ from: () => ({ where: () => ({ all: () => rows }) }) }),
+    } as unknown as ReturnType<typeof getDb>);
+
+    vi.mocked(getFinancialDataService).mockReturnValue({
+      getPrice: vi.fn((map: Record<string, string>) => {
+        const outcome = outcomes[map["alpha-vantage"]!]!;
+        if (outcome.error) return Promise.reject(outcome.error);
+        return Promise.resolve(outcome.result ?? null);
+      }),
+      backfillTransactionRates: vi.fn().mockResolvedValue({ pairs: 0, fetched: 0 }),
+      backfillAssetCurrencyRates: vi.fn().mockResolvedValue({ currencies: 0, fetched: 0 }),
+    } as unknown as ReturnType<typeof getFinancialDataService>);
+
+    const { runMarketPriceJob } = await import("@/lib/cron");
+    await runMarketPriceJob();
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("names the assets no provider could price", async () => {
+    const { cronLogger } = await import("@/lib/logger");
+    const warnSpy = vi.spyOn(cronLogger, "warn");
+
+    await runWithAssets({
+      SXR8: { result: { price: 100, stale: false } },
+      WEBN: { result: null },
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        failures: expect.arrayContaining([
+          expect.objectContaining({ symbols: ["WEBN"], reason: "no data" }),
+        ]) as unknown,
+      }),
+      expect.stringContaining("could not be priced")
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("treats a stale-cache fallback as a failure, not a refresh", async () => {
+    const { cronLogger } = await import("@/lib/logger");
+    const infoSpy = vi.spyOn(cronLogger, "info");
+
+    // getPrice answers, but only by replaying an old cached row — the whole
+    // point of the run was to fetch something newer.
+    await runWithAssets({ WEBN: { result: { price: 12.76, stale: true } } });
+
+    expect(infoSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ warmed: 0, failed: 1, total: 1 }),
+      expect.stringContaining("Market price refresh complete")
+    );
+    infoSpy.mockRestore();
+  });
+
+  it("records why a provider threw", async () => {
+    const { ProviderRateLimitError } = await import("@/lib/providers/errors");
+    const { cronLogger } = await import("@/lib/logger");
+    const warnSpy = vi.spyOn(cronLogger, "warn");
+
+    await runWithAssets({
+      WEBN: { error: new ProviderRateLimitError("alpha-vantage", "25 requests per day") },
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        failures: expect.arrayContaining([
+          expect.objectContaining({
+            symbols: ["WEBN"],
+            reason: expect.stringContaining("25 requests per day") as unknown,
+          }),
+        ]) as unknown,
+      }),
+      expect.stringContaining("could not be priced")
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("reports a summary even when every asset refreshed cleanly", async () => {
+    const { cronLogger } = await import("@/lib/logger");
+    const infoSpy = vi.spyOn(cronLogger, "info");
+    const warnSpy = vi.spyOn(cronLogger, "warn");
+
+    await runWithAssets({
+      SXR8: { result: { price: 100, stale: false } },
+      WEBN: { result: { price: 12.816, stale: false } },
+    });
+
+    expect(infoSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ warmed: 2, failed: 0, total: 2 }),
+      expect.stringContaining("Market price refresh complete")
+    );
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining("could not be priced")
+    );
+    infoSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+});

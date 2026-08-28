@@ -120,6 +120,18 @@ function countDecimals(n: number): number {
   return dot === -1 ? 0 : s.length - dot - 1;
 }
 
+/**
+ * Unit label for an asset's holdings.
+ *
+ * A deposit's quantity *is* an amount of money, so it reads in the account's
+ * currency. Everything else is a count of shares, coins, or items — labelling
+ * those with a currency claims the position is cash, which is wrong by orders
+ * of magnitude for anything whose unit price isn't 1.
+ */
+export function holdingsUnit(asset: { type: string; currency: string; name: string }): string {
+  return asset.type === "deposit" ? asset.currency : asset.name;
+}
+
 /** Format a percentage with 1 decimal, e.g. 75.5 → "75.5%" */
 export function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;

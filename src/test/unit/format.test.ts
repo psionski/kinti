@@ -9,6 +9,7 @@ import {
   roundToCurrency,
   setBaseCurrencyCache,
   clearBaseCurrencyCache,
+  holdingsUnit,
 } from "@/lib/format";
 
 // ─── formatCurrency ──────────────────────────────────────────────────────────
@@ -234,5 +235,30 @@ describe("formatFrequency", () => {
         startDate: "2026-03-01",
       })
     ).toBe("biweekly");
+  });
+});
+
+// ─── holdingsUnit ────────────────────────────────────────────────────────────
+
+describe("holdingsUnit", () => {
+  it("labels a deposit's balance in its currency", () => {
+    expect(holdingsUnit({ type: "deposit", currency: "EUR", name: "Savings" })).toBe("EUR");
+  });
+
+  it("labels a foreign deposit in that account's currency, not the base", () => {
+    expect(holdingsUnit({ type: "deposit", currency: "USD", name: "US Account" })).toBe("USD");
+  });
+
+  it("labels shares by the holding, never by a currency", () => {
+    // "2695 EUR" for an ETF position reads as cash and is wrong by a factor of
+    // the unit price.
+    expect(
+      holdingsUnit({ type: "investment", currency: "EUR", name: "Amundi Prime World (WEBN)" })
+    ).toBe("Amundi Prime World (WEBN)");
+  });
+
+  it("labels crypto and other assets by the holding too", () => {
+    expect(holdingsUnit({ type: "crypto", currency: "EUR", name: "Bitcoin" })).toBe("Bitcoin");
+    expect(holdingsUnit({ type: "other", currency: "EUR", name: "Car" })).toBe("Car");
   });
 });
