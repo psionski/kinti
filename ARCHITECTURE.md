@@ -140,10 +140,18 @@ Schema defined in `src/lib/db/schema.ts` (Drizzle ORM). Migrations in `drizzle/`
 - **Recurring templates** define schedule + template fields; generated transactions are normal, independently editable rows linked via `recurring_id`.
 - **Settings** as a key-value store (timezone, API keys, preferences).
 - **Unified price cache** (`market_prices`): exchange rates stored as prices (e.g., symbol='USD', currency='EUR', price=0.92 means 1 USD = 0.92 EUR).
-- **Assets + lots model**: `assets` for metadata, `asset_lots` for buy/sell/deposit/withdrawal events (positive qty = buy, negative = sell), `asset_prices` for user-recorded or auto-fetched valuations.
+- **Assets + lots model**: `assets` for metadata, `asset_lots` for buy/sell/deposit/withdrawal events (positive qty = buy, negative = sell), `asset_prices` for prices the **user** recorded by hand ("Set Price") — never trade fills, which live in `asset_lots` and nowhere else.
 - **FTS5** virtual table for full-text search on transaction descriptions, merchants, and notes. Kept in sync via triggers (see migrations).
 
-**Price resolution order** (in `src/lib/services/price-resolver.ts`): user-recorded `asset_prices` → provider data in `market_prices` (via `symbolMap`) → lot cost basis → deposit identity (EUR deposits = €1.00).
+**Price resolution** (in `src/lib/services/price-resolver.ts`): a price is a **dated observation, and the most recent one wins**.
+
+1. Deposit identity — base-currency deposits are always 1.00.
+2. The later of {user mark in `asset_prices`, provider quote in `market_prices`}; a same-day tie goes to the user mark, since the user looked at the asset more recently than the provider did.
+3. Lot cost basis, only when neither exists.
+
+A fill price is **not** a valuation — it's a fact about a transaction — so it can never outrank a mark or a quote by being newer. That distinction is the whole design: mirroring fills into `asset_prices` (as `AssetLotService` once did) made every buy a permanent manual override, and the portfolio stayed marked at the price the user happened to trade at no matter how much fresh market data arrived.
+
+Ranking by date is what removes the need for staleness thresholds. A fresh quote beats an old mark; a mark entered today beats today's quote; an unlinked asset (a car, a flat) keeps its last mark indefinitely because nothing else ever values it; and a weekend needs no special case, because Friday's close is simply still the most recent observation on Sunday. `ResolvedPrice.asOf` carries the day the price is *for*, which is not necessarily the day that was requested.
 
 **`updated_at` management:** No triggers — services are the single mutation path and set `updated_at` explicitly on every UPDATE.
 
@@ -174,7 +182,7 @@ Three cron jobs run in-process via `node-cron`, started from `src/instrumentatio
 |------|-----|---------|
 | 02:00 | Recurring transaction generation | Creates pending transactions from active templates up to today |
 | 03:00 | SQLite backup | `.backup` to `data/backups/`, keeps last 7 daily |
-| 04:00 | Market price auto-fetch | For each asset with a `symbolMap`, fetches today's price from the linked provider |
+| 04:00 | Market price auto-fetch | For each asset with a `symbolMap`, fetches today's price from the linked provider. Every asset it can't price is logged with its symbols and a reason — a silent refresh failure is indistinguishable on screen from a price that didn't move |
 
 **Why in-process cron:** Kinti is self-hosted (long-lived Node.js process, not serverless). `instrumentation.ts` runs exactly once on server start — perfect for scheduling. A `globalThis` singleton guard prevents duplicate jobs from dev-mode hot-reload.
 

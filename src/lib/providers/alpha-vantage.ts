@@ -1,4 +1,5 @@
 import type { PriceResult, FinancialDataProvider, SymbolSearchResult } from "./types";
+import { ProviderError, ProviderRateLimitError } from "./errors";
 import { isoToday } from "@/lib/date-ranges";
 
 const BASE_URL = "https://www.alphavantage.co/query";
@@ -12,6 +13,29 @@ export class AlphaVantageProvider implements FinancialDataProvider {
   readonly name = "alpha-vantage";
 
   constructor(private apiKey: string) {}
+
+  /**
+   * Alpha Vantage reports quota exhaustion and bad requests with HTTP 200 and
+   * an envelope key instead of a status code:
+   *   - "Information" — daily limit reached, or a premium-only endpoint
+   *   - "Note"        — legacy per-minute throttle
+   *   - "Error Message" — malformed request or unknown symbol
+   *
+   * Every parse below looks for its payload key and gives up quietly when it's
+   * absent, so without this check a throttled response reads exactly like a
+   * symbol that doesn't exist. Throwing makes the difference visible in the
+   * logs and lets the nightly refresh report which assets it couldn't price.
+   */
+  private assertNoErrorEnvelope(data: AlphaVantageEnvelope): void {
+    const throttled = data.Information ?? data.Note;
+    if (typeof throttled === "string") {
+      throw new ProviderRateLimitError(this.name, throttled);
+    }
+    const message = data["Error Message"];
+    if (typeof message === "string") {
+      throw new ProviderError(this.name, message);
+    }
+  }
 
   async getPrice(symbol: string, currency = "USD", date?: string): Promise<PriceResult | null> {
     if (date && date < isoToday()) {
@@ -30,13 +54,19 @@ export class AlphaVantageProvider implements FinancialDataProvider {
     if (!res.ok) return null;
 
     const data = (await res.json()) as AlphaVantageQuoteResponse;
+    this.assertNoErrorEnvelope(data);
     const priceStr = data["Global Quote"]?.["05. price"];
     if (!priceStr) return null;
 
     const price = parseFloat(priceStr);
     if (isNaN(price)) return null;
 
-    // Alpha Vantage returns USD prices; note currency may not match
+    // GLOBAL_QUOTE carries no currency field, so the price is labelled with the
+    // currency the caller asked for — which is the asset's configured currency,
+    // pre-filled from SYMBOL_SEARCH's "8. currency" when the asset was created.
+    // That makes the currency a user-asserted fact: an asset configured with the
+    // wrong currency for its listing will cache a correctly-fetched price under
+    // the wrong denomination, and no response field can detect it.
     return {
       symbol,
       price,
@@ -61,6 +91,7 @@ export class AlphaVantageProvider implements FinancialDataProvider {
     if (!res.ok) return null;
 
     const data = (await res.json()) as AlphaVantageDailyResponse;
+    this.assertNoErrorEnvelope(data);
     const series = data["Time Series (Daily)"];
     if (!series) return null;
 
@@ -101,6 +132,7 @@ export class AlphaVantageProvider implements FinancialDataProvider {
     if (!res.ok) return [];
 
     const data = (await res.json()) as AlphaVantageDailyResponse;
+    this.assertNoErrorEnvelope(data);
     const series = data["Time Series (Daily)"];
     if (!series) return [];
 
@@ -133,6 +165,7 @@ export class AlphaVantageProvider implements FinancialDataProvider {
     if (!res.ok) return [];
 
     const data = (await res.json()) as AlphaVantageSearchResponse;
+    this.assertNoErrorEnvelope(data);
     if (!data.bestMatches?.length) return [];
 
     // Alpha Vantage SYMBOL_SEARCH responses include "8. currency" with the
@@ -163,14 +196,21 @@ export class AlphaVantageProvider implements FinancialDataProvider {
   }
 }
 
-interface AlphaVantageSearchResponse {
+/** Envelope keys Alpha Vantage returns instead of a payload. See assertNoErrorEnvelope. */
+interface AlphaVantageEnvelope {
+  Information?: unknown;
+  Note?: unknown;
+  "Error Message"?: unknown;
+}
+
+interface AlphaVantageSearchResponse extends AlphaVantageEnvelope {
   bestMatches?: Array<Record<string, string>>;
 }
 
-interface AlphaVantageQuoteResponse {
+interface AlphaVantageQuoteResponse extends AlphaVantageEnvelope {
   "Global Quote"?: Record<string, string>;
 }
 
-interface AlphaVantageDailyResponse {
+interface AlphaVantageDailyResponse extends AlphaVantageEnvelope {
   "Time Series (Daily)"?: Record<string, Record<string, string>>;
 }

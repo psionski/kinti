@@ -139,12 +139,17 @@ export class FinancialDataService {
       try {
         const result = await provider.getPrice?.(symbol, currency, priceDate);
         if (result) {
+          // Keep the provider's own as-of date. A Sunday lookup legitimately
+          // returns Friday's close; stamping it with `priceDate` would record a
+          // price for a day the market never traded, and callers that compare
+          // observation dates (the price resolver) would read it as fresher
+          // than it is.
           financialLogger.info(
-            { provider: providerName, symbol, currency, date: priceDate },
+            { provider: providerName, symbol, currency, requested: priceDate, asOf: result.date },
             "External price fetched"
           );
-          this.cachePrice({ ...result, date: priceDate });
-          return { ...result, date: priceDate, stale: false };
+          this.cachePrice(result);
+          return { ...result, stale: false };
         }
       } catch (err) {
         financialLogger.warn(
@@ -163,7 +168,10 @@ export class FinancialDataService {
       return { ...toPriceResult(staleEntry), stale: true };
     }
 
-    financialLogger.warn({ currency, date: priceDate }, "All providers failed, no cached data");
+    financialLogger.warn(
+      { symbols: entries.map(([, symbol]) => symbol), currency, date: priceDate },
+      "All providers failed, no cached data"
+    );
     return null;
   }
 

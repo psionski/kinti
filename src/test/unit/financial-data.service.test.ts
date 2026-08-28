@@ -839,3 +839,52 @@ describe("backfillAssetCurrencyRates", () => {
     expect(provider.getPrice).not.toHaveBeenCalled();
   });
 });
+
+// ─── As-of dates ──────────────────────────────────────────────────────────────
+
+describe("getPrice — as-of dates", () => {
+  /**
+   * Ask on a day the market didn't trade and the provider answers with the
+   * previous close. Stamping that with the requested date would invent a
+   * price for a non-trading day, and the price resolver — which ranks
+   * observations by date — would read the quote as fresher than it is.
+   */
+  function makeBackdatedProvider(name: ProviderName, price: number, actualDate: string) {
+    return {
+      name,
+      getPrice: vi.fn(
+        async (symbol: string, currency: string): Promise<PriceResult | null> => ({
+          symbol,
+          price,
+          currency,
+          date: actualDate,
+          provider: name,
+        })
+      ),
+    };
+  }
+
+  it("keeps the provider's own date when it differs from the requested one", async () => {
+    const db = makeTestDb();
+    const provider = makeBackdatedProvider("alpha-vantage", 12.9, "2026-08-21");
+    const svc = new FinancialDataService(db, new SettingsService(db), mockFactory(provider));
+
+    // 2026-08-23 is a Sunday; the answer belongs to Friday the 21st.
+    const result = await svc.getPrice({ "alpha-vantage": "WEBN" }, "EUR", "2026-08-23");
+
+    expect(result?.price).toBeCloseTo(12.9);
+    expect(result?.date).toBe("2026-08-21");
+  });
+
+  it("caches it under the day it belongs to, not the day it was asked for", async () => {
+    const db = makeTestDb();
+    const provider = makeBackdatedProvider("alpha-vantage", 12.9, "2026-08-21");
+    const svc = new FinancialDataService(db, new SettingsService(db), mockFactory(provider));
+
+    await svc.getPrice({ "alpha-vantage": "WEBN" }, "EUR", "2026-08-23");
+
+    const rows = db.select().from(schema.marketPrices).all();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.date).toBe("2026-08-21");
+  });
+});

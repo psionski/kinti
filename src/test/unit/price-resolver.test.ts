@@ -102,20 +102,21 @@ describe("resolvePrice", async () => {
     expect(result!.price).toBe(90000);
   });
 
-  it("uses buy-time price snapshot when no later user prices exist", async () => {
+  it("treats a buy price as cost basis, not as a user override", async () => {
     const asset = assetService.create({ name: "ETF", type: "investment", currency: "EUR" });
     await lotService.buy(asset.id, { quantity: 5, pricePerUnit: 100, date: "2026-01-15" });
 
-    // buy() records a price snapshot, so the user price persists forward
+    // buy() records a lot and nothing else — a fill is what you paid, not a
+    // statement about what the asset is worth, so it resolves as "lot" and
+    // stays outranked by any quote or hand-entered mark.
     const result = resolvePrice(db, asset, "2026-06-15");
     expect(result).not.toBeNull();
-    expect(result!.source).toBe("user");
+    expect(result!.source).toBe("lot");
     expect(result!.price).toBe(100);
   });
 
   it("falls back to lot cost basis when no user prices exist", async () => {
     const asset = assetService.create({ name: "ETF", type: "investment", currency: "EUR" });
-    // Create a lot directly without a price snapshot
     db.insert(assetLots)
       .values({ assetId: asset.id, quantity: 5, pricePerUnit: 100, date: "2026-01-15" })
       .run();

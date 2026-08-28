@@ -60,7 +60,7 @@ export function initCronJobs(): void {
  * yet cached — keeps historical aggregations accurate as users add new
  * currencies.
  */
-async function runMarketPriceJob(): Promise<void> {
+export async function runMarketPriceJob(): Promise<void> {
   try {
     const db = getDb();
     const fds = getFinancialDataService();
@@ -76,21 +76,44 @@ async function runMarketPriceJob(): Promise<void> {
       .where(isNotNull(assets.symbolMap))
       .all();
 
+    // Individual assets are allowed to fail without aborting the run, but a
+    // failure has to be *reported*: a provider that quietly returns no data
+    // leaves the portfolio marked at whatever price it last had, which looks
+    // identical to a price that simply hasn't moved.
     let warmed = 0;
+    const failures: Array<{ assetId: number; symbols: string[]; reason: string }> = [];
+
     for (const asset of symbolAssets) {
       if (!asset.symbolMap) continue;
       const map = JSON.parse(asset.symbolMap) as SymbolMap;
+      // Parsed from stored JSON, so a partial record can hold explicit
+      // `undefined` values even though the type widens them away.
+      const symbols = (Object.values(map) as Array<string | undefined>).filter(
+        (symbol): symbol is string => symbol !== undefined
+      );
 
       try {
         const result = await fds.getPrice(map, asset.currency, today);
-        if (result) warmed++;
-      } catch {
-        // Continue with next asset — individual failures are non-fatal
+        if (result && !result.stale) {
+          warmed++;
+        } else {
+          failures.push({
+            assetId: asset.id,
+            symbols,
+            reason: result ? "served stale cache — no provider returned fresh data" : "no data",
+          });
+        }
+      } catch (err) {
+        failures.push({ assetId: asset.id, symbols, reason: String(err) });
       }
     }
 
-    if (warmed > 0) {
-      cronLogger.info({ warmed, total: symbolAssets.length }, "Warmed market prices");
+    cronLogger.info(
+      { warmed, failed: failures.length, total: symbolAssets.length },
+      "Market price refresh complete"
+    );
+    if (failures.length > 0) {
+      cronLogger.warn({ failures }, "Some assets could not be priced");
     }
 
     // Backfill any missing FX rates for foreign-currency transactions.
