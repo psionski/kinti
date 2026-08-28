@@ -326,6 +326,64 @@ describe("Story: upgrading an install that already has trade snapshots", () => {
     expect(remaining.every((r) => !r.at.startsWith("2026-08-20"))).toBe(true);
   });
 
+  it("keeps a mark I typed the day after a trade at the same price", () => {
+    // Friday's fill, then on Saturday the user sets the price to the same
+    // number by hand. A snapshot's instant is never *later* than its lot's
+    // local date, so this can only be a real mark — and it isn't redundant:
+    // with Friday's close cached at a different price, dropping the mark would
+    // change the number on screen.
+    const etf = linkedEtf();
+    db.insert(schema.assetLots)
+      .values({ assetId: etf.id, quantity: 10, pricePerUnit: 12.77, date: "2026-08-21" })
+      .run();
+    db.insert(assetPrices)
+      .values({ assetId: etf.id, pricePerUnit: 12.77, recordedAt: "2026-08-22T08:00:00Z" })
+      .run();
+
+    db.run(sql.raw(MIGRATION));
+
+    expect(db.select().from(assetPrices).all()).toHaveLength(1);
+  });
+
+  it("keeps an evening mark from a western timezone", () => {
+    // 21:00 in New York on the 21st is stored as 01:00Z on the 22nd, so this
+    // row's UTC date is a day *later* than the local day it belongs to — the
+    // direction the one-sided window can't see. The midnight test is what
+    // excludes it: a mark taken "now" carries sub-second precision, a snapshot
+    // never does.
+    const etf = linkedEtf();
+    db.insert(schema.assetLots)
+      .values({ assetId: etf.id, quantity: 10, pricePerUnit: 12.77, date: "2026-08-22" })
+      .run();
+    db.insert(assetPrices)
+      .values({
+        assetId: etf.id,
+        pricePerUnit: 12.77,
+        recordedAt: "2026-08-22T01:00:03.918274611Z",
+      })
+      .run();
+
+    db.run(sql.raw(MIGRATION));
+
+    expect(db.select().from(assetPrices).all()).toHaveLength(1);
+  });
+
+  it("still clears a snapshot whose instant lands on the day before its lot", () => {
+    // The eastern-timezone shape: local midnight of 2026-08-21 at UTC+3 is
+    // 2026-08-20T21:00:00Z. This one must go.
+    const etf = linkedEtf();
+    db.insert(schema.assetLots)
+      .values({ assetId: etf.id, quantity: 10, pricePerUnit: 12.77, date: "2026-08-21" })
+      .run();
+    db.insert(assetPrices)
+      .values({ assetId: etf.id, pricePerUnit: 12.77, recordedAt: "2026-08-20T21:00:00Z" })
+      .run();
+
+    db.run(sql.raw(MIGRATION));
+
+    expect(db.select().from(assetPrices).all()).toHaveLength(0);
+  });
+
   it("leaves an install that never traded completely untouched", () => {
     const car = assets.create({ name: "Car", type: "other", currency: "EUR" });
     db.insert(assetPrices)
