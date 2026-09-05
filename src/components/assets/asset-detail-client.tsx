@@ -284,6 +284,7 @@ export function AssetDetailClient({
             {asset.latestPrice !== null && (
               <p className="text-muted-foreground mt-0.5 text-xs">
                 @ {formatPrice(asset.latestPrice)} {asset.currency}
+                <PriceProvenance source={asset.priceSource} asOf={asset.priceAsOf} />
               </p>
             )}
           </CardContent>
@@ -499,5 +500,41 @@ export function AssetDetailClient({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Says where the displayed price came from, when that is not "a quote from
+ * today". A cost-basis fallback is the important case: it is what the user
+ * paid, not what the asset is worth, and rendered bare it is indistinguishable
+ * from a live quote — which is exactly how a dead price feed stays invisible.
+ */
+function PriceProvenance({
+  source,
+  asOf,
+}: {
+  source: AssetWithMetrics["priceSource"];
+  asOf: AssetWithMetrics["priceAsOf"];
+}) {
+  // A base-currency deposit is 1:1 by definition; there is no provenance to
+  // report, and a date would imply a valuation that never happened.
+  if (source === null || source === "deposit") return null;
+
+  const today = new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD, local
+  if (source === "market" && asOf === today) return null;
+
+  const label =
+    source === "lot"
+      ? "purchase price — no quote available"
+      : source === "user"
+        ? "set by you"
+        : "last quote";
+
+  return (
+    <span className={source === "lot" ? "text-amber-600 dark:text-amber-500" : undefined}>
+      {" · "}
+      {label}
+      {asOf !== null && ` (${asOf})`}
+    </span>
   );
 }

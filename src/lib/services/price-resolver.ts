@@ -5,7 +5,7 @@ import { assetPrices, assetLots } from "@/lib/db/schema";
 import type { AssetResponse } from "@/lib/validators/assets";
 import { isoToday, offsetDate, localToUtc, utcToLocal } from "@/lib/date-ranges";
 import { getBaseCurrency } from "@/lib/format";
-import { findCachedPrice } from "./financial-data";
+import { findLatestQuote } from "./financial-data";
 
 type Db = BetterSQLite3Database<typeof schema>;
 
@@ -145,7 +145,15 @@ function findMarketPrice(
   return null;
 }
 
-/** Latest cached quote for any of `symbols` in `currency`, on or before `date`. */
+/**
+ * Latest cached quote for any of `symbols` in `currency`, on or before `date`.
+ *
+ * No staleness window: a quote is discarded by being *outranked*, never by
+ * being old. `resolvePrice` compares what this returns against the other
+ * observations by date, so a stale quote already loses to any newer mark — and
+ * when it is the newest thing available, it is still a better answer than a
+ * fill price from further back.
+ */
 function latestQuote(
   db: Db,
   symbols: string[],
@@ -154,7 +162,7 @@ function latestQuote(
 ): Observation | null {
   let best: schema.MarketPrice | null = null;
   for (const symbol of symbols) {
-    const row = findCachedPrice(db, symbol, currency, date);
+    const row = findLatestQuote(db, symbol, currency, date);
     if (row && (best === null || row.date > best.date)) best = row;
   }
   return best ? { price: best.price, asOf: best.date } : null;

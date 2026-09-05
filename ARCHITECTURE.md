@@ -153,6 +153,21 @@ A fill price is **not** a valuation — it's a fact about a transaction — so i
 
 Ranking by date is what removes the need for staleness thresholds. A fresh quote beats an old mark; a mark entered today beats today's quote; an unlinked asset (a car, a flat) keeps its last mark indefinitely because nothing else ever values it; and a weekend needs no special case, because Friday's close is simply still the most recent observation on Sunday. `ResolvedPrice.asOf` carries the day the price is *for*, which is not necessarily the day that was requested.
 
+Because there are no thresholds, the resolver must not inherit one from the cache layer. `market_prices` has **two** read paths, and they answer different questions:
+
+| Helper | Window | Question |
+| --- | --- | --- |
+| `findCachedPrice` | 7 days | "What was this worth on day *D*?" — approximates a requested day, so Sunday resolves to Friday's close. Past a week the feed is broken rather than closed, and returning an arbitrarily old row would misstate which day the number belongs to. |
+| `findLatestQuote` | unbounded | "What is the latest thing anyone observed?" — used by the resolver, which ranks the result against the other observations itself. |
+
+Routing the resolver through the windowed query is what produced the WEBN regression: with the feed dead for ten days, the last quote fell outside the window, and a **fifteen**-day-old fill price won by default — the asset page showed a €34,415 position marked at exactly what the user paid. Discarding a quote for being stale never makes a fresher one appear; it only hands the question to a worse source. So an old quote is discarded by being *outranked*, never by being old, and `priceSource` + `priceAsOf` are surfaced on `AssetWithMetrics` so the UI can show a fallback as a fallback instead of dressing cost basis up as a live quote.
+
+The other half of that failure was refresh, not resolution: `runMarketPriceJob` made one attempt per asset per day, so a single bad response left an asset mispriced for 24 hours and, eventually, indefinitely.
+
+The observed failure was time-of-day dependent, not quota. At 04:00 local (01:00 UTC) Alpha Vantage returned HTTP 200 with an empty `Global Quote` for two thinly traded XETRA listings — `WEBN.DEX` and `2B76.DEX` — every day for ten days, while `SXR8.DEX` on the same key in the same run succeeded 160/160. The same two symbols answer normally a few hours later. Quota exhaustion looks different in the logs: it arrives as an `Information` envelope, which `assertNoErrorEnvelope` turns into a thrown `ProviderRateLimitError`, so it is recorded with the provider's message rather than as `"no data"`.
+
+`runMarketPriceRetry` therefore re-runs at 10:00/16:00/22:00 for assets that still have no quote dated today, skipping the rest without touching a provider — on a normal day it makes no requests at all, which matters because retries share Alpha Vantage's 25 requests/day with the user's own lookups. It deliberately does not branch on *why* a fetch missed: asking again later is the remedy for an empty early-morning response and for an exhausted budget alike.
+
 **`updated_at` management:** No triggers — services are the single mutation path and set `updated_at` explicitly on every UPDATE.
 
 **SQLite PRAGMAs** (set on every connection in `src/lib/db/index.ts`): WAL mode, foreign keys ON, 64MB cache, 5s busy timeout.

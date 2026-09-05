@@ -101,6 +101,23 @@ export const AssetWithMetricsSchema = AssetResponseSchema.extend({
         "Null when currentValueBase is null."
     ),
   latestPrice: z.number().nullable(),
+  priceSource: z
+    .enum(["user", "market", "lot", "deposit"])
+    .nullable()
+    .describe(
+      "Where latestPrice came from. 'market' is a provider quote, 'user' a hand-entered " +
+        "mark, 'deposit' the 1:1 identity for base-currency deposits, and 'lot' the cost " +
+        "basis of the last trade — a fallback used only when nothing has ever valued the " +
+        "asset, so it is what you paid rather than what it is worth."
+    ),
+  priceAsOf: z
+    .string()
+    .nullable()
+    .describe(
+      "The day latestPrice belongs to, which is not necessarily today: a Monday lookup " +
+        "legitimately resolves to Friday's close, and a dead price feed resolves to the " +
+        "last day it returned data. Compare against today to judge staleness."
+    ),
 });
 export type AssetWithMetrics = z.infer<typeof AssetWithMetricsSchema>;
 

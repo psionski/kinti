@@ -180,6 +180,8 @@ export class AssetService {
       pnl,
       pnlBase,
       latestPrice: pricePerUnit,
+      priceSource: resolved?.source ?? null,
+      priceAsOf: resolved?.asOf ?? null,
     };
   }
 }
