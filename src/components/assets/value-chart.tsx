@@ -1,66 +1,52 @@
 "use client";
 
-import { Area, Line, ComposedChart, CartesianGrid, XAxis, YAxis, ReferenceDot } from "recharts";
+import { Area, ComposedChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-  ChartLegend,
-  ChartLegendContent,
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { AssetHistoryResult } from "@/lib/validators/portfolio-reports";
 import { Temporal } from "@js-temporal/polyfill";
 import { formatCurrency, formatCurrencyCompact } from "@/lib/format";
+import { ChartStats, seriesExtremes } from "./chart-stats";
 
+/** Value only — price per unit has its own card and its own scale. */
 const chartConfig = {
   value: {
     label: "Value",
     color: "var(--chart-1)",
-  },
-  price: {
-    label: "Price / Unit",
-    color: "var(--chart-2)",
   },
 } satisfies ChartConfig;
 
 interface ValueChartProps {
   data: AssetHistoryResult;
   currency: string;
+  /** Names the span high/low were taken over, e.g. "6M" or "All-time". */
+  rangeLabel: string;
 }
 
 interface ChartPoint {
   date: string;
   value: number;
-  price: number | null;
 }
 
 function formatShortMonth(date: string): string {
   return Temporal.PlainDate.from(date.slice(0, 10)).toLocaleString("en-US", { month: "short" });
 }
 
-export function ValueChart({ data, currency }: ValueChartProps): React.ReactElement {
+export function ValueChart({ data, currency, rangeLabel }: ValueChartProps): React.ReactElement {
   const chartData: ChartPoint[] = data.timeline
     .filter((p) => p.value !== null)
     .map((p) => ({
       date: p.date,
       value: p.value!,
-      price: p.price,
     }));
 
-  // Build a date->value lookup for placing lot markers on the value axis
-  const valueByDate = new Map<string, number>(chartData.map((p) => [p.date, p.value]));
-
-  const lotMarkers = data.lots
-    .filter((lot) => valueByDate.has(lot.date))
-    .map((lot) => ({
-      date: lot.date,
-      value: valueByDate.get(lot.date)!,
-      type: lot.type,
-      quantity: lot.quantity,
-      pricePerUnit: lot.pricePerUnit,
-    }));
+  const stats = seriesExtremes(chartData.map((p) => p.value));
+  const amount = (value: number): string => formatCurrency(value, currency);
 
   return (
     <Card>
@@ -69,7 +55,10 @@ export function ValueChart({ data, currency }: ValueChartProps): React.ReactElem
       </CardHeader>
       <CardContent>
         {chartData.length > 0 ? (
-          <ChartContainer config={chartConfig} className="min-h-[250px] w-full">
+          <ChartContainer
+            config={chartConfig}
+            className="aspect-auto h-[260px] w-full sm:h-[300px]"
+          >
             <ComposedChart data={chartData} accessibilityLayer>
               <CartesianGrid vertical={false} />
               <XAxis
@@ -83,14 +72,12 @@ export function ValueChart({ data, currency }: ValueChartProps): React.ReactElem
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(v: number) => formatCurrencyCompact(v, currency)}
+                width={64} // Recharts' 60px default clips six-figure labels.
               />
               <ChartTooltip
                 content={
                   <ChartTooltipContent
-                    formatter={(value, name) => {
-                      const label = name === "value" ? "Value" : "Price / Unit";
-                      return `${label}: ${formatCurrency(value as number, currency)}`;
-                    }}
+                    formatter={(value) => `Value: ${formatCurrency(value as number, currency)}`}
                     labelFormatter={(label) => {
                       return Temporal.PlainDate.from((label as string).slice(0, 10)).toLocaleString(
                         "en-US",
@@ -104,7 +91,6 @@ export function ValueChart({ data, currency }: ValueChartProps): React.ReactElem
                   />
                 }
               />
-              <ChartLegend content={<ChartLegendContent />} />
               <Area
                 dataKey="value"
                 type="monotone"
@@ -113,30 +99,19 @@ export function ValueChart({ data, currency }: ValueChartProps): React.ReactElem
                 stroke="var(--color-value)"
                 strokeWidth={2}
               />
-              <Line
-                dataKey="price"
-                type="monotone"
-                stroke="var(--color-price)"
-                strokeWidth={2}
-                strokeDasharray="5 3"
-                dot={false}
-                connectNulls
-              />
-              {lotMarkers.map((marker, i) => (
-                <ReferenceDot
-                  key={`lot-${marker.date}-${marker.type}-${i}`}
-                  x={marker.date}
-                  y={marker.value}
-                  r={5}
-                  fill={marker.type === "buy" ? "#10b981" : "#ef4444"}
-                  stroke={marker.type === "buy" ? "#10b981" : "#ef4444"}
-                  strokeWidth={2}
-                />
-              ))}
             </ComposedChart>
           </ChartContainer>
         ) : (
           <p className="text-muted-foreground py-10 text-center text-sm">Not enough data yet.</p>
+        )}
+        {stats && (
+          <ChartStats
+            stats={[
+              { label: "Current", value: amount(stats.current) },
+              { label: `${rangeLabel} high`, value: amount(stats.high) },
+              { label: `${rangeLabel} low`, value: amount(stats.low) },
+            ]}
+          />
         )}
       </CardContent>
     </Card>

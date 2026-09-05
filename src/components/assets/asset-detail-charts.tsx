@@ -9,6 +9,11 @@ import type { AssetHistoryResult } from "@/lib/validators/portfolio-reports";
 const WINDOWS = ["3m", "6m", "12m", "all"] as const;
 type Window = (typeof WINDOWS)[number];
 
+/** Names the selected range, so "high" and "low" state what they span. */
+function rangeLabel(w: Window): string {
+  return w === "all" ? "All-time" : w.toUpperCase();
+}
+
 interface AssetDetailChartsProps {
   assetId: number;
   currency: string;
@@ -68,8 +73,10 @@ export function AssetDetailCharts({
 
       <div className={loading ? "pointer-events-none opacity-60" : ""}>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {history && <ValueChart data={history} currency={currency} />}
-          <PriceChart data={priceData} currency={currency} />
+          {history && (
+            <ValueChart data={history} currency={currency} rangeLabel={rangeLabel(window)} />
+          )}
+          <PriceChart data={priceData} currency={currency} rangeLabel={rangeLabel(window)} />
         </div>
       </div>
     </div>

@@ -9,7 +9,8 @@ import {
 } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Temporal } from "@js-temporal/polyfill";
-import { formatPrice } from "@/lib/format";
+import { formatAxisTick, formatUnitPrice } from "@/lib/format";
+import { ChartStats, seriesExtremes } from "./chart-stats";
 
 interface PricePoint {
   pricePerUnit: number;
@@ -19,6 +20,8 @@ interface PricePoint {
 interface PriceChartProps {
   data: PricePoint[];
   currency: string;
+  /** Names the span high/low were taken over, e.g. "6M" or "All-time". */
+  rangeLabel: string;
 }
 
 const chartConfig = {
@@ -35,7 +38,10 @@ function formatDate(dateStr: string): string {
   });
 }
 
-export function PriceChart({ data, currency }: PriceChartProps): React.ReactElement {
+export function PriceChart({ data, currency, rangeLabel }: PriceChartProps): React.ReactElement {
+  const stats = seriesExtremes(data.map((point) => point.pricePerUnit));
+  const price = (value: number): string => formatUnitPrice(value, currency);
+
   if (data.length < 2) {
     return (
       <Card>
@@ -44,6 +50,8 @@ export function PriceChart({ data, currency }: PriceChartProps): React.ReactElem
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground py-10 text-center text-sm">Not enough price data.</p>
+          {/* A lone observation can't be charted but is still the current price. */}
+          {stats && <ChartStats stats={[{ label: "Current", value: price(stats.current) }]} />}
         </CardContent>
       </Card>
     );
@@ -60,7 +68,7 @@ export function PriceChart({ data, currency }: PriceChartProps): React.ReactElem
         <CardTitle>Price History</CardTitle>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="min-h-[250px] w-full">
+        <ChartContainer config={chartConfig} className="aspect-auto h-[260px] w-full sm:h-[300px]">
           <LineChart data={chartData} accessibilityLayer>
             <CartesianGrid vertical={false} />
             <XAxis
@@ -73,13 +81,16 @@ export function PriceChart({ data, currency }: PriceChartProps): React.ReactElem
             <YAxis
               tickLine={false}
               axisLine={false}
-              tickFormatter={(value: number) => `${currency} ${value}`}
+              // Unit prices span everything from six figures to sub-cent coins;
+              // significant digits cover both ends where fraction digits can't.
+              tickFormatter={formatAxisTick}
+              width={72}
             />
             <ChartTooltip
               content={
                 <ChartTooltipContent
                   labelFormatter={(label) => formatDate(label as string)}
-                  formatter={(value) => `${currency} ${formatPrice(value as number)}`}
+                  formatter={(value) => formatUnitPrice(value as number, currency)}
                 />
               }
             />
@@ -92,6 +103,15 @@ export function PriceChart({ data, currency }: PriceChartProps): React.ReactElem
             />
           </LineChart>
         </ChartContainer>
+        {stats && (
+          <ChartStats
+            stats={[
+              { label: "Current", value: price(stats.current) },
+              { label: `${rangeLabel} high`, value: price(stats.high) },
+              { label: `${rangeLabel} low`, value: price(stats.low) },
+            ]}
+          />
+        )}
       </CardContent>
     </Card>
   );

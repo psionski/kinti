@@ -1,15 +1,19 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
+  clearBaseCurrencyCache,
+  formatAxisTick,
   formatCurrency,
-  formatPercent,
-  formatMonth,
   formatDate,
   formatFrequency,
+  formatMonth,
+  formatPercent,
+  formatQuantity,
+  formatUnitPrice,
+  holdingsUnit,
+  priceInputValue,
   roundToCurrency,
   setBaseCurrencyCache,
-  clearBaseCurrencyCache,
-  holdingsUnit,
 } from "@/lib/format";
 
 // ─── formatCurrency ──────────────────────────────────────────────────────────
@@ -86,6 +90,103 @@ describe("roundToCurrency", () => {
 });
 
 // ─── formatPercent ───────────────────────────────────────────────────────────
+
+describe("priceInputValue", () => {
+  // The parseable form: it is written into number inputs, so no symbol, no
+  // grouping, and always `.` as the decimal separator.
+  it("keeps at least two decimals", () => {
+    expect(priceInputValue(345.6)).toBe("345.60");
+    expect(priceInputValue(12)).toBe("12.00");
+  });
+
+  it("keeps the extra precision a price actually has", () => {
+    expect(priceInputValue(0.86768)).toBe("0.86768");
+  });
+
+  it("switches to significant digits below a cent", () => {
+    expect(priceInputValue(0.00000514)).toBe("0.00000514");
+  });
+
+  it("stays parseable for large values", () => {
+    const s = priceInputValue(89000);
+    expect(s).toBe("89000.00");
+    expect(parseFloat(s)).toBe(89000);
+  });
+
+  it("formats zero", () => {
+    expect(priceInputValue(0)).toBe("0.00");
+  });
+});
+
+describe("formatUnitPrice", () => {
+  // Intl separates the amount and symbol with a non-breaking space, so these
+  // assert on the parts rather than an exact string.
+  it("uses the display locale and the currency symbol", () => {
+    expect(formatUnitPrice(89000, "EUR")).toContain("89.000,00");
+    expect(formatUnitPrice(89000, "EUR")).toContain("€");
+    expect(formatUnitPrice(12.94, "EUR")).toContain("12,94");
+  });
+
+  it("keeps sub-cent precision that the currency's own scale would round away", () => {
+    // formatCurrency would render this 0,00 € — the whole reason this exists.
+    expect(formatUnitPrice(0.00000514, "EUR")).toContain("0,00000514");
+  });
+
+  it("keeps the extra precision a price actually has", () => {
+    expect(formatUnitPrice(0.86768, "EUR")).toContain("0,86768");
+  });
+
+  it("respects the cached base currency when none is passed", () => {
+    setBaseCurrencyCache("USD");
+    expect(formatUnitPrice(12.5)).toContain("$");
+  });
+});
+
+describe("formatAxisTick", () => {
+  // A price axis has to span whatever the asset trades at, so both ends matter.
+  it("keeps six-figure prices short", () => {
+    expect(formatAxisTick(89000)).toBe("89.000");
+    expect(formatAxisTick(1000000)).toContain("Mio");
+  });
+
+  it("keeps sub-cent prices legible instead of collapsing them to zero", () => {
+    expect(formatAxisTick(0.0000001)).toBe("0,0000001");
+    expect(formatAxisTick(0.00000514)).toBe("0,00000514");
+  });
+
+  it("keeps ordinary prices exact", () => {
+    expect(formatAxisTick(12.94)).toBe("12,94");
+    expect(formatAxisTick(715.3)).toBe("715,3");
+  });
+
+  it("carries no currency symbol", () => {
+    expect(formatAxisTick(12.94)).not.toContain("€");
+  });
+});
+
+describe("formatQuantity", () => {
+  it("groups thousands", () => {
+    expect(formatQuantity(2695)).toBe("2.695");
+    expect(formatQuantity(89000)).toBe("89.000");
+  });
+
+  it("keeps a holding exact right up to the abbreviation threshold", () => {
+    // Compact notation would round this to "12.350", which in a "."-grouping
+    // locale reads as a precise 12,350 — a different number of units.
+    expect(formatQuantity(12345)).toBe("12.345");
+    expect(formatQuantity(999999)).toBe("999.999");
+  });
+
+  it("abbreviates past a million, where the suffix makes rounding explicit", () => {
+    expect(formatQuantity(1234567)).toContain("Mio");
+    expect(formatQuantity(5000000000)).toContain("Mrd");
+  });
+
+  it("keeps fractional holdings to the precision they are stored at", () => {
+    expect(formatQuantity(0.01305)).toBe("0,01305");
+    expect(formatQuantity(0.00000001)).toBe("0,00000001");
+  });
+});
 
 describe("formatPercent", () => {
   it("formats with 1 decimal place", () => {

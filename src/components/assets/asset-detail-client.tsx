@@ -22,7 +22,13 @@ import { SymbolSearchDialog } from "./symbol-search";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { AssetDetailCharts } from "./asset-detail-charts";
 import { LotHistoryTable } from "./lot-history-table";
-import { formatCurrency, formatPrice, getBaseCurrency, holdingsUnit } from "@/lib/format";
+import {
+  formatCurrency,
+  formatQuantity,
+  formatUnitPrice,
+  getBaseCurrency,
+  holdingsUnit,
+} from "@/lib/format";
 import { PROVIDER_LABELS } from "@/lib/providers/labels";
 import type { AssetWithMetrics, AssetLotResponse, SymbolMap } from "@/lib/validators/assets";
 
@@ -242,7 +248,7 @@ export function AssetDetailClient({
           </CardHeader>
           <CardContent>
             <p className="font-mono text-xl font-bold">
-              {asset.currentHoldings}{" "}
+              {formatQuantity(asset.currentHoldings)}{" "}
               <span className="text-muted-foreground text-sm font-normal">
                 {holdingsUnit(asset)}
               </span>
@@ -283,7 +289,7 @@ export function AssetDetailClient({
             )}
             {asset.latestPrice !== null && (
               <p className="text-muted-foreground mt-0.5 text-xs">
-                @ {formatPrice(asset.latestPrice)} {asset.currency}
+                @ {formatUnitPrice(asset.latestPrice, asset.currency)}
                 <PriceProvenance source={asset.priceSource} asOf={asset.priceAsOf} />
               </p>
             )}
@@ -412,7 +418,7 @@ export function AssetDetailClient({
               <span>
                 This asset still has{" "}
                 <strong>
-                  {asset.currentHoldings} {holdingsUnit(asset)}
+                  {formatQuantity(asset.currentHoldings)} {holdingsUnit(asset)}
                 </strong>{" "}
                 in holdings
                 {asset.currentValue !== null && (

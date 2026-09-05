@@ -1,5 +1,5 @@
 import { EmptyState } from "@/components/shared/empty-state";
-import { formatCurrency, formatPrice } from "@/lib/format";
+import { formatCurrency, formatQuantity, formatUnitPrice } from "@/lib/format";
 import type { AssetLotResponse } from "@/lib/validators/assets";
 
 interface LotHistoryTableProps {
@@ -55,10 +55,10 @@ export function LotHistoryTable({
                 </td>
                 <td className="py-2 pr-4 text-right font-mono">
                   {isBuy ? "+" : "−"}
-                  {Math.abs(lot.quantity)}
+                  {formatQuantity(Math.abs(lot.quantity))}
                 </td>
                 <td className="hidden py-2 pr-4 text-right font-mono md:table-cell">
-                  {formatPrice(lot.pricePerUnit)} {currency}
+                  {formatUnitPrice(lot.pricePerUnit, currency)}
                 </td>
                 <td className="py-2 text-right font-mono">{formatCurrency(Math.round(total))}</td>
               </tr>
