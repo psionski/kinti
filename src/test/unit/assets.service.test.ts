@@ -444,6 +444,23 @@ describe("AssetPriceService", async () => {
     expect(price.assetId).toBe(asset.id);
     expect(price.recordedAt).toBe("2026-03-20T12:00:00");
   });
+
+  // `resolvePrice` answers 1 for any deposit without consulting asset_prices,
+  // so a mark stored here could never be read back. Reject it rather than
+  // accept a write that silently does nothing.
+  it("record throws for a deposit, whose unit price is 1 by definition", async () => {
+    const asset = assetService.create({ name: "Savings", type: "deposit", currency: "EUR" });
+    expect(() =>
+      priceService.record(asset.id, { pricePerUnit: 1.5, recordedAt: "2026-03-20T12:00:00Z" })
+    ).toThrow("always 1 EUR");
+  });
+
+  it("record throws for a foreign deposit too, naming its own currency", async () => {
+    const asset = assetService.create({ name: "USD Fund", type: "deposit", currency: "USD" });
+    expect(() =>
+      priceService.record(asset.id, { pricePerUnit: 0.92, recordedAt: "2026-03-20T12:00:00Z" })
+    ).toThrow("always 1 USD");
+  });
 });
 
 // ─── PortfolioService ─────────────────────────────────────────────────────────

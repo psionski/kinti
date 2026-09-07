@@ -84,7 +84,10 @@ export const AssetWithMetricsSchema = AssetResponseSchema.extend({
   currentValue: z
     .number()
     .nullable()
-    .describe("Current value (currentHoldings × latestPrice) in the asset's native currency"),
+    .describe(
+      "Current value (currentHoldings × latestPrice) in the asset's native currency. " +
+        "No FX applied — see currentValueBase for the converted figure."
+    ),
   currentValueBase: z
     .number()
     .nullable()
@@ -100,15 +103,22 @@ export const AssetWithMetricsSchema = AssetResponseSchema.extend({
       "currentValueBase − costBasisBase. The total P&L in base currency, including FX effects. " +
         "Null when currentValueBase is null."
     ),
-  latestPrice: z.number().nullable(),
+  latestPrice: z
+    .number()
+    .nullable()
+    .describe(
+      "Price of one unit, always in the asset's native currency. Always 1 for a deposit, " +
+        "whose unit is its own currency — what a foreign balance is worth in base moves " +
+        "with its exchange rate, which is applied to currentValueBase, not to this."
+    ),
   priceSource: z
     .enum(["user", "market", "lot", "deposit"])
     .nullable()
     .describe(
       "Where latestPrice came from. 'market' is a provider quote, 'user' a hand-entered " +
-        "mark, 'deposit' the 1:1 identity for base-currency deposits, and 'lot' the cost " +
-        "basis of the last trade — a fallback used only when nothing has ever valued the " +
-        "asset, so it is what you paid rather than what it is worth."
+        "mark, 'deposit' the 1:1 identity every deposit has in its own currency, and 'lot' " +
+        "the cost basis of the last trade — a fallback used only when nothing has ever " +
+        "valued the asset, so it is what you paid rather than what it is worth."
     ),
   priceAsOf: z
     .string()

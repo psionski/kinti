@@ -37,7 +37,7 @@ function toAssetResponse(
   return {
     id: row.id,
     name: row.name,
-    type: row.type as AssetResponse["type"],
+    type: row.type,
     currency: row.currency,
     symbolMap,
     icon: row.icon,
@@ -108,7 +108,10 @@ describe("triggerSymbolBackfill", () => {
     expect(call[2]).toBe(call[3]); // from === to
   });
 
-  it("backfills EUR exchange rate for non-EUR deposit assets", async () => {
+  // A foreign deposit's series is its rate against the base — the only thing
+  // that changes what the balance is worth. Fetching USD in USD as well would
+  // ask providers for a rate of 1 and cache it under a key nothing reads.
+  it("backfills only the base-currency rate for a non-EUR deposit", async () => {
     const asset = insertAsset({
       type: "deposit",
       currency: "USD",
@@ -119,17 +122,10 @@ describe("triggerSymbolBackfill", () => {
     triggerSymbolBackfill(db, fds, toAssetResponse(asset, { frankfurter: "USD" }));
 
     await vi.waitFor(() => {
-      expect(fds.ensurePriceHistory).toHaveBeenCalledTimes(2);
+      expect(fds.ensurePriceHistory).toHaveBeenCalled();
     });
 
-    // First call: symbol priced in asset's own currency (USD)
-    expect(fds.ensurePriceHistory).toHaveBeenCalledWith(
-      { frankfurter: "USD" },
-      "USD",
-      expect.any(String),
-      expect.any(String)
-    );
-    // Second call: exchange rate to EUR
+    expect(fds.ensurePriceHistory).toHaveBeenCalledTimes(1);
     expect(fds.ensurePriceHistory).toHaveBeenCalledWith(
       { frankfurter: "USD" },
       "EUR",
@@ -138,7 +134,7 @@ describe("triggerSymbolBackfill", () => {
     );
   });
 
-  it("does not backfill EUR exchange rate for EUR deposit assets", async () => {
+  it("fetches nothing for a base-currency deposit", async () => {
     const asset = insertAsset({
       type: "deposit",
       currency: "EUR",
@@ -148,12 +144,10 @@ describe("triggerSymbolBackfill", () => {
 
     triggerSymbolBackfill(db, fds, toAssetResponse(asset, { frankfurter: "EUR" }));
 
-    await vi.waitFor(() => {
-      expect(fds.ensurePriceHistory).toHaveBeenCalled();
-    });
-
-    // Should only have been called once (no EUR→EUR exchange rate backfill)
-    expect(fds.ensurePriceHistory).toHaveBeenCalledTimes(1);
+    // Its price is 1 and it has no rate to itself, so there is no series to
+    // populate. Give the fire-and-forget task a turn to prove it stays idle.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(fds.ensurePriceHistory).not.toHaveBeenCalled();
   });
 
   it("handles ensurePriceHistory failure gracefully", async () => {

@@ -186,7 +186,11 @@ export const assets = sqliteTable(
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
-    type: text("type").notNull(), // 'deposit' | 'investment' | 'crypto' | 'other'
+    // `enum` is a TypeScript-level refinement only — the emitted DDL is still
+    // plain `text`, and the check constraint below is what enforces it in the
+    // database. Stating it here means a query projection carries the union
+    // instead of `string`, so callers like `quoteCurrencyFor` can demand it.
+    type: text("type", { enum: ["deposit", "investment", "crypto", "other"] }).notNull(),
     currency: text("currency").notNull().default("EUR"),
     symbolMap: text("symbol_map"), // JSON: {"coingecko":"bitcoin","alpha-vantage":"BTC"}. NULL = manual pricing
     icon: text("icon"),

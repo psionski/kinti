@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "@/lib/db/schema";
 import { findCachedPrice } from "@/lib/services/financial-data";
+import { quoteCurrencyFor } from "@/lib/services/price-resolver";
 import { assets } from "@/lib/db/schema";
 import { isNotNull } from "drizzle-orm";
 import { cronLogger } from "@/lib/logger";
@@ -119,9 +120,12 @@ async function sweepMarketPrices(onlyMissing: boolean): Promise<PriceSweepResult
   const fds = getFinancialDataService();
   const today = isoToday();
 
+  const baseCurrency = getBaseCurrency();
+
   const symbolAssets = db
     .select({
       id: assets.id,
+      type: assets.type,
       symbolMap: assets.symbolMap,
       currency: assets.currency,
     })
@@ -152,13 +156,23 @@ async function sweepMarketPrices(onlyMissing: boolean): Promise<PriceSweepResult
       continue;
     }
 
-    if (onlyMissing && hasQuoteForToday(db, map, asset.currency, today)) {
+    // A deposit's symbols are quoted against the base currency, not against
+    // the deposit's own — see `quoteCurrencyFor`. A base-currency deposit has
+    // nothing to fetch, and asking anyway would report it as a failure every
+    // night for a rate that is 1 by definition.
+    const quoteCurrency = quoteCurrencyFor(asset, baseCurrency);
+    if (quoteCurrency === null) {
+      skipped++;
+      continue;
+    }
+
+    if (onlyMissing && hasQuoteForToday(db, map, quoteCurrency, today)) {
       skipped++;
       continue;
     }
 
     try {
-      const result = await fds.getPrice(map, asset.currency, today);
+      const result = await fds.getPrice(map, quoteCurrency, today);
       if (result && !result.stale) {
         warmed++;
       } else {

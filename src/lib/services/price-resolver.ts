@@ -2,9 +2,8 @@ import { and, eq, lt, lte, desc } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "@/lib/db/schema";
 import { assetPrices, assetLots } from "@/lib/db/schema";
-import type { AssetResponse } from "@/lib/validators/assets";
+import type { AssetResponse, AssetType } from "@/lib/validators/assets";
 import { isoToday, offsetDate, localToUtc, utcToLocal } from "@/lib/date-ranges";
-import { getBaseCurrency } from "@/lib/format";
 import { findLatestQuote } from "./financial-data";
 
 type Db = BetterSQLite3Database<typeof schema>;
@@ -43,6 +42,11 @@ interface Observation {
  * today. It is therefore a last resort, used only when nothing has ever valued
  * the asset — never something that can outrank a mark or a quote by being newer.
  *
+ * **Every observation is denominated in `asset.currency`**, and callers rely on
+ * that: they multiply by holdings to get a native value and convert that once,
+ * via `findCachedFxRate`, to reach base. A price in any other unit silently
+ * corrupts every figure downstream of it, so no branch here may return one.
+ *
  * This ordering falls out of the model rather than being configured, which is
  * why it needs no staleness thresholds:
  *
@@ -54,22 +58,27 @@ interface Observation {
  *   the most recent observation on Sunday.
  *
  * Resolution:
- * 1. Deposit identity — base-currency deposits are always 1, no lookup needed
+ * 1. Deposit identity — a deposit is always 1, in any currency, no lookup needed
  * 2. The later of {user mark, market quote}; ties go to the user mark
  * 3. Lot cost basis, only when neither exists
  */
 export function resolvePrice(db: Db, asset: AssetResponse, date?: string): ResolvedPrice | null {
   const effectiveDate = date ?? isoToday();
-  const baseCurrency = getBaseCurrency();
 
-  // Step 1: base-currency deposits are 1 unit/unit by definition — skip SQL
-  if (asset.type === "deposit" && asset.currency === baseCurrency) {
+  // Step 1: a deposit is worth exactly one unit of its own currency, on every
+  // date, whatever the base currency happens to be — holding 800 USD is 800 USD
+  // by definition. The base currency enters only when that native value is
+  // converted for a cross-currency total, which is the caller's job and happens
+  // exactly once. Resolving a foreign deposit through its FX rate instead would
+  // return EUR-per-USD here and hand the caller a number it would convert a
+  // second time.
+  if (asset.type === "deposit") {
     return { price: 1, source: "deposit", asOf: effectiveDate };
   }
 
   // Step 2: the most recent valuation, whoever made it
   const user = findUserPrice(db, asset.id, effectiveDate);
-  const market = findMarketPrice(db, asset, effectiveDate, baseCurrency);
+  const market = findMarketPrice(db, asset, effectiveDate);
 
   if (user && market) {
     return user.asOf >= market.asOf ? { ...user, source: "user" } : { ...market, source: "market" };
@@ -85,6 +94,29 @@ export function resolvePrice(db: Db, asset: AssetResponse, date?: string): Resol
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * The currency an asset's symbols should be quoted in when refreshing
+ * `market_prices` — the key `findMarketPrice` and `findCachedFxRate` read back.
+ *
+ * For anything but a deposit that's the asset's own currency: the resolver
+ * hands back a native price, and one FX conversion turns it into base.
+ *
+ * A deposit's symbol *is* a currency code, so quoting it in its own currency
+ * asks a provider for the rate from USD to USD — which every provider path
+ * skips, leaving the nightly sweep to log the asset as unpriceable while the
+ * rate that actually matters goes unrefreshed. What makes a foreign deposit
+ * convertible is its rate against the base, so that is what gets fetched. A
+ * base-currency deposit needs nothing at all: it has no rate to itself, hence
+ * the null.
+ */
+export function quoteCurrencyFor(
+  asset: { type: AssetType; currency: string },
+  baseCurrency: string
+): string | null {
+  if (asset.type !== "deposit") return asset.currency;
+  return asset.currency === baseCurrency ? null : baseCurrency;
+}
 
 /**
  * Most recent user-recorded mark on or before `date`.
@@ -114,18 +146,19 @@ function findUserPrice(db: Db, assetId: number, date: string): Observation | nul
  * Most recent cached provider quote on or before `date`, across every
  * (provider, symbol) pair in the asset's symbolMap.
  *
- * Quotes denominated in the asset's own currency are preferred outright. A row
- * keyed by the *base* currency for the same symbol is an exchange rate, not a
- * price — that's how foreign-currency deposits are valued (symbol=EUR/USD/…,
- * currency=<base>) — so it only applies when the asset has no native quote.
- * Mixing the two tiers by date could hand back a rate as if it were a price.
+ * Only quotes denominated in the asset's own currency count, because that is
+ * the unit `resolvePrice` promises its callers. `market_prices` also holds rows
+ * keyed by the *base* currency for the same symbol — `(USD, EUR, 0.86)` is an
+ * exchange rate, not a price — and reading one here would return EUR-per-unit
+ * from a function whose result is about to be multiplied by holdings and
+ * converted to base again. Exchange rates have their own read path,
+ * `findCachedFxRate`, and that is the only place they belong.
+ *
+ * `quoteCurrencyFor` keeps the write side consistent: the nightly sweep caches
+ * a non-deposit asset's quotes under `asset.currency`, which is the key this
+ * reads back.
  */
-function findMarketPrice(
-  db: Db,
-  asset: AssetResponse,
-  date: string,
-  baseCurrency: string
-): Observation | null {
+function findMarketPrice(db: Db, asset: AssetResponse, date: string): Observation | null {
   if (!asset.symbolMap) return null;
 
   // Partial records can hold explicit `undefined` values at runtime even though
@@ -134,15 +167,7 @@ function findMarketPrice(
     .map(([, symbol]) => symbol)
     .filter((symbol): symbol is string => symbol !== undefined);
 
-  const native = latestQuote(db, symbols, asset.currency, date);
-  if (native) return native;
-
-  if (asset.currency !== baseCurrency) {
-    const rate = latestQuote(db, symbols, baseCurrency, date);
-    if (rate) return rate;
-  }
-
-  return null;
+  return latestQuote(db, symbols, asset.currency, date);
 }
 
 /**

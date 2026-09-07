@@ -66,6 +66,7 @@ export function AssetFormDialog({
   const [symbolMap, setSymbolMap] = useState<SymbolMap>(initSymbolMap(initialData));
   const [icon, setIcon] = useState(initialData?.icon ?? "");
   const [error, setError] = useState("");
+  const [listingCurrency, setListingCurrency] = useState("");
 
   /**
    * Auto-fill the currency field from a symbol search result, but only if the
@@ -74,10 +75,32 @@ export function AssetFormDialog({
    * can override.
    */
   function handleCurrencyHint(hinted: string): void {
+    const code = hinted.toUpperCase();
+    setListingCurrency(code);
     if (!isEdit && !currencyDirty) {
-      setCurrency(hinted.toUpperCase());
+      setCurrency(code);
     }
   }
+
+  /**
+   * An asset's currency is what its quotes are read back in, and some providers
+   * can't contradict it: Alpha Vantage's GLOBAL_QUOTE carries no currency
+   * field, so it labels the number with whatever was asked for. Configure AAPL
+   * as EUR and its dollar price gets cached as euros — correctly fetched, wrong
+   * denomination, undetectable from the response. The search result knows the
+   * listing currency, so say so here rather than let it surface as a position
+   * silently off by an exchange rate.
+   *
+   * This catches it only at the moment a symbol is picked, because that search
+   * result is the sole place the listing currency is ever known — it is not
+   * stored on the asset, and re-deriving it on edit would mean a provider
+   * search per dialog open, against a 25-request daily quota shared with the
+   * price sweep. An asset already saved with the wrong currency stays wrong and
+   * silent; fixing that needs the listing currency persisted alongside the
+   * symbol map.
+   */
+  const currencyMismatch =
+    listingCurrency !== "" && listingCurrency !== currency.trim().toUpperCase();
 
   function handleSubmit(e: React.SyntheticEvent): void {
     e.preventDefault();
@@ -163,6 +186,22 @@ export function AssetFormDialog({
                 disabled={loading}
                 assetType={type as AssetType}
               />
+              {currencyMismatch && (
+                <p className="text-xs text-amber-600 dark:text-amber-500">
+                  {type === "deposit" ? (
+                    <>
+                      This tracks the {listingCurrency} rate, but the account holds {currency}. Pick
+                      the {currency} symbol so the balance converts at its own rate.
+                    </>
+                  ) : (
+                    <>
+                      This symbol is listed in {listingCurrency}, but the asset is set to {currency}
+                      . Its quotes will be recorded as {currency} — set the currency to{" "}
+                      {listingCurrency} unless you know the provider converts.
+                    </>
+                  )}
+                </p>
+              )}
             </div>
           )}
           <div className="space-y-1">

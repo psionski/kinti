@@ -4,6 +4,8 @@ import { CategoryService } from "@/lib/services/categories";
 import { ReportService } from "@/lib/services/reports";
 import { BudgetService } from "@/lib/services/budgets";
 import { RecurringService } from "@/lib/services/recurring";
+import { AssetService } from "@/lib/services/assets";
+import { AssetPriceService } from "@/lib/services/asset-prices";
 import type { AppDb } from "@/lib/db";
 
 /**
@@ -25,6 +27,8 @@ export function setupTestServices(): { getDb: () => AppDb } {
       getReportService: () => new ReportService(db),
       getBudgetService: () => new BudgetService(db, new ReportService(db)),
       getRecurringService: () => new RecurringService(db),
+      getAssetService: () => new AssetService(db),
+      getAssetPriceService: () => new AssetPriceService(db),
     }));
 
     // Also mock getDb for the receipt route which imports it directly

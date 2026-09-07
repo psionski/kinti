@@ -21,7 +21,18 @@ export default async function AssetDetailPage({ params }: PageProps): Promise<Re
   const reportService = getPortfolioReportService();
   const realizedPnlResult = reportService.getRealizedPnL();
   const assetRealizedPnl = realizedPnlResult.items.find((item) => item.assetId === id);
+  // Both denominations travel: the P&L card reports in base (so it agrees with
+  // the asset list and with every portfolio total), and keeps the native figure
+  // for the tooltip.
   const realizedPnl = assetRealizedPnl?.realizedPnl ?? null;
+  const realizedPnlBase = assetRealizedPnl?.realizedPnlBase ?? null;
 
-  return <AssetDetailClient initialAsset={asset} initialLots={lots} realizedPnl={realizedPnl} />;
+  return (
+    <AssetDetailClient
+      initialAsset={asset}
+      initialLots={lots}
+      realizedPnl={realizedPnl}
+      realizedPnlBase={realizedPnlBase}
+    />
+  );
 }

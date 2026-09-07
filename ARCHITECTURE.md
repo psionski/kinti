@@ -145,9 +145,15 @@ Schema defined in `src/lib/db/schema.ts` (Drizzle ORM). Migrations in `drizzle/`
 
 **Price resolution** (in `src/lib/services/price-resolver.ts`): a price is a **dated observation, and the most recent one wins**.
 
-1. Deposit identity — base-currency deposits are always 1.00.
+1. Deposit identity — a deposit is always 1.00, in **any** currency.
 2. The later of {user mark in `asset_prices`, provider quote in `market_prices`}; a same-day tie goes to the user mark, since the user looked at the asset more recently than the provider did.
 3. Lot cost basis, only when neither exists.
+
+**Every price the resolver returns is denominated in `asset.currency`.** Callers depend on it: they multiply by holdings for a native value and convert that *once*, through `findCachedFxRate`, to reach base. A price in any other unit corrupts every figure downstream, so no branch may return one.
+
+That invariant is what makes deposit identity currency-agnostic. Holding 800 USD is worth 800 USD whatever the base currency is; the euro only enters at the conversion step, which is the caller's job. The resolver used to special-case *base-currency* deposits and value a foreign one through its exchange rate instead — reading the `(USD, EUR, 0.86)` row from `market_prices` as if it were a price. That row is a rate, and returning it meant `800 USD` resolved to `0.86`: the asset page rendered "$688.35" for a $800 balance and then converted it again to €592.28, while net worth, allocation and currency exposure all computed `holdings × price × rate` and undercounted the account by the rate squared. Exchange rates have their own read path and belong nowhere near this one.
+
+`quoteCurrencyFor(asset, base)` keeps the write side pointed at the same key. For anything but a deposit that is `asset.currency`. A deposit's symbol *is* a currency code, so quoting it in its own currency asks a provider for the rate from USD to USD — a pair every provider path skips, which had the nightly sweep reporting foreign accounts as unpriceable while the rate they actually need went unrefreshed. Deposits are therefore quoted against the base, and a base-currency deposit is skipped outright (`null`) since it has no rate to itself. `AssetPriceService.record` rejects deposits for the same reason: a hand-entered mark on one could never be read back.
 
 A fill price is **not** a valuation — it's a fact about a transaction — so it can never outrank a mark or a quote by being newer. That distinction is the whole design: mirroring fills into `asset_prices` (as `AssetLotService` once did) made every buy a permanent manual override, and the portfolio stayed marked at the price the user happened to trade at no matter how much fresh market data arrived.
 
@@ -197,7 +203,7 @@ Three cron jobs run in-process via `node-cron`, started from `src/instrumentatio
 |------|-----|---------|
 | 02:00 | Recurring transaction generation | Creates pending transactions from active templates up to today |
 | 03:00 | SQLite backup | `.backup` to `data/backups/`, keeps last 7 daily |
-| 04:00 | Market price auto-fetch | For each asset with a `symbolMap`, fetches today's price from the linked provider. Every asset it can't price is logged with its symbols and a reason — a silent refresh failure is indistinguishable on screen from a price that didn't move |
+| 04:00 | Market price auto-fetch | For each asset with a `symbolMap`, fetches today's price from the linked provider, in the currency `quoteCurrencyFor` names — the asset's own for a stock or coin, the base for a foreign deposit, nothing at all for a base-currency one. Every asset it can't price is logged with its symbols and a reason — a silent refresh failure is indistinguishable on screen from a price that didn't move |
 
 **Why in-process cron:** Kinti is self-hosted (long-lived Node.js process, not serverless). `instrumentation.ts` runs exactly once on server start — perfect for scheduling. A `globalThis` singleton guard prevents duplicate jobs from dev-mode hot-reload.
 
@@ -219,7 +225,13 @@ Components live in `src/components/{domain}/`; see the README and the pages them
 - **Categories (`/categories`)** — hierarchical tree with per-category spend/budget, CRUD, merge.
 - **Budgets (`/budgets`)** — monthly budgets per category, progress bars, copy-from-previous-month, adherence history.
 - **Recurring (`/recurring`)** — template list + create/edit form, active toggle, generated-transaction view.
-- **Assets (`/assets`, `/assets/[id]`)** — summary cards, performance table, allocation/exposure charts; detail page with value/lot/price history.
+- **Assets (`/assets`, `/assets/[id]`)** — summary cards, performance table, allocation/exposure charts; detail page with value/lot/price history. Which second chart the detail page draws follows from the deposit invariant: a deposit's unit price is pinned at 1, so plotting it draws a flat line that says nothing. A **foreign** deposit gets an *Exchange Rate* card instead (the `rate` series on `AssetHistoryPoint`, quoted in base) — the only thing that changes what the balance is worth — and a **base-currency** deposit gets no second card at all, leaving the value chart full width. "Set Price" and the per-unit price readouts are hidden for deposits for the same reason.
+
+  The same invariant thins the asset **cards**. Every card is the one stat table (`AssetStats`); the rows it draws are the ones the asset has something to say with. A deposit's unit price is 1, so its holdings line *is* its balance — a Price row would read `1,00 €` forever and a Current value row would repeat the line above it — leaving a base-currency account a single row. A foreign account adds the two facts that are genuinely its own: the balance converted (`In <base>`) and an `FX`-labelled P&L, since every unit of a deposit's gain is the rate moving. Cost basis is absent everywhere — for a deposit it is the balance again, and for a position the P&L row already prices the gap against it, with the figure itself on the detail page. That keeps a position's four rows within sight of a deposit's one instead of five against two.
+
+  Each card emphasises exactly one money figure, and it is always the **native** one: a position's `Current value`, a deposit's `Holdings` line — which is its balance, not a share count. Converted figures stay muted (`In <base>` here, the `≈ base` line on the detail page, the base tooltip on a position row), matching native-leads everywhere else in the app.
+
+  Because each history point carries its date's `rate`, the **value chart** reads in either denomination for a foreign asset — a toggle switches between the asset's own currency and base. It is the base curve that answers "what is this worth to me", and for a foreign holding the two genuinely differ: a US position can climb in dollars while a strengthening euro flattens it. Points with no cached rate are dropped from the base series rather than carried through unconverted, matching the rule the cross-currency totals follow.
 - **Cash Flow (`/reports/cash-flow`)** — spending by category, trends, merchants, budget vs actual, income vs expenses. (`/reports` redirects here.)
 - **Portfolio (`/reports/portfolio`)** — net worth over time, allocation, performance ranking, realized vs unrealized P&L, transfer flow.
 - **Settings (`/settings`)** — timezone selector (onboarding gate) + provider API-key management.
@@ -338,6 +350,7 @@ The same `currency` column lives on `recurring_transactions`. Generated transact
 **Boundaries — convert at the edges:**
 - **Write time:** `TransactionService.create/update/createBatch/updateBatch` and `AssetLotService.buy/sell` are async and consult `FinancialDataService.convertToBase()` to compute `amount_base`. The write fails if no provider can resolve the rate.
 - **Read time:** Aggregations sum `amount_base` directly. Per-row display uses `formatCurrency(tx.amount, tx.currency)` for the native value, with `formatCurrency(tx.amountBase)` shown in a tooltip when the row is in a foreign currency.
+- **P&L is reported in base, everywhere.** `PnlDisplay` calls `formatCurrency` with no currency argument, so it renders whatever it is given under the *base* symbol — hand it a native figure and a dollar amount appears with a euro sign. Base is also the only denomination under which the asset list, the detail page and the portfolio totals agree, and the only one that says anything at all about a foreign deposit, whose native P&L is always zero. Pass `pnlBase` / `realizedPnlBase`; the native figure belongs in the tooltip.
 - **Format:** Never hardcode a currency symbol or `Math.round(x * 100) / 100` — Intl handles per-currency precision (JPY has 0 decimals, BHD has 3). The formatters live in `src/lib/format.ts`; each omits its `currency` argument to default to the cached base currency:
 
 | Function | Use for | Example output |
@@ -380,6 +393,7 @@ Pair it with `useYAxisWidth()` (`src/hooks/use-y-axis-width.ts`), which every ch
 - Validate at system boundaries (API input, MCP tool input, user-submitted forms). Trust internal code.
 - Return structured error responses from API routes (consistent shape with `error` field).
 - Don't over-catch. Let unexpected errors propagate to the framework's error handler.
+- **A rejected input is not a server fault.** When a service refuses a request the domain forbids — "you cannot set a price on a deposit" — throw `ValidationError` from `src/lib/errors.ts`. `handleServiceError` maps it to a 400 with `VALIDATION_ERROR` and logs it at warn; a plain `Error` stays a 500 logged at error. Without the distinction a deliberate guard is indistinguishable from a crashed query, both on the wire (an MCP client retries a request that can never succeed) and in the logs.
 
 ### Components & UI
 

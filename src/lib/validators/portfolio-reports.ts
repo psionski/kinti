@@ -198,9 +198,27 @@ export type AssetHistoryLot = z.infer<typeof AssetHistoryLotSchema>;
 
 export const AssetHistoryPointSchema = z.object({
   date: z.string(),
-  price: z.number().nullable(),
+  price: z
+    .number()
+    .nullable()
+    .describe(
+      "Price per unit in the asset's native currency. Always 1 for a deposit, " +
+        "whose unit is its own currency. Null when nothing has ever priced the asset."
+    ),
   quantity: z.number(),
-  value: z.number().nullable(),
+  value: z
+    .number()
+    .nullable()
+    .describe("quantity × price, in the asset's native currency. Null when price is null."),
+  rate: z
+    .number()
+    .nullable()
+    .describe(
+      "Exchange rate from the asset's native currency to the base currency on this " +
+        "date — 1 when they are the same. Multiply `value` by it to get the base-currency " +
+        "value. Null when no rate is cached within the 7-day lookback, which is the same " +
+        "condition that drops the asset from cross-currency totals on that date."
+    ),
 });
 export type AssetHistoryPoint = z.infer<typeof AssetHistoryPointSchema>;
 

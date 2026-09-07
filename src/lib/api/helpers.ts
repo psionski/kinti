@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ZodError, type ZodType } from "zod";
 import type { ErrorCode, ErrorResponse } from "@/lib/validators/common";
+import { ValidationError } from "@/lib/errors";
 import { apiLogger } from "@/lib/logger";
 
 /** Return a structured JSON error response. */
@@ -88,6 +89,13 @@ export function handleServiceError(
   foreignKeyMessage = "Referenced entity not found"
 ): NextResponse<ErrorResponse> {
   const message = err instanceof Error ? err.message : "Internal error";
+  // A rejected input is the caller's problem, not a server fault: 400, and a
+  // warn rather than an error, so a deliberate guard firing doesn't read as an
+  // outage in the logs.
+  if (err instanceof ValidationError) {
+    apiLogger.warn({ err }, "Rejected by a service guard");
+    return errorResponse(message, "VALIDATION_ERROR", 400);
+  }
   if (message.includes("FOREIGN KEY")) {
     apiLogger.warn({ err, context: foreignKeyMessage }, "Foreign key violation");
     return errorResponse(foreignKeyMessage, "NOT_FOUND", 404);

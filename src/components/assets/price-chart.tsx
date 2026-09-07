@@ -20,9 +20,23 @@ interface PricePoint {
 
 interface PriceChartProps {
   data: PricePoint[];
+  /**
+   * Unit the plotted values are in — the asset's own currency for a price
+   * series, the *base* currency for an exchange-rate one.
+   */
   currency: string;
   /** Names the span high/low were taken over, e.g. "6M" or "All-time". */
   rangeLabel: string;
+  /**
+   * Card heading. Defaults to "Price History"; an exchange-rate series passes
+   * its own, since "the price of one USD" reads as a rate to everyone but the
+   * cache that stores it.
+   */
+  title?: string;
+  /** Optional line under the heading naming what one unit is, e.g. "1 USD in EUR". */
+  caption?: string;
+  /** Shown when there aren't two points to draw a line between. */
+  emptyMessage?: string;
 }
 
 const chartConfig = {
@@ -39,19 +53,30 @@ function formatDate(dateStr: string): string {
   });
 }
 
-export function PriceChart({ data, currency, rangeLabel }: PriceChartProps): React.ReactElement {
+export function PriceChart({
+  data,
+  currency,
+  rangeLabel,
+  title = "Price History",
+  caption,
+  emptyMessage = "Not enough price data.",
+}: PriceChartProps): React.ReactElement {
   const [chartRef, yAxisWidth] = useYAxisWidth();
   const stats = seriesExtremes(data.map((point) => point.pricePerUnit));
   const price = (value: number): string => formatUnitPrice(value, currency);
+  const heading = (
+    <CardHeader>
+      <CardTitle>{title}</CardTitle>
+      {caption && <p className="text-muted-foreground text-xs">{caption}</p>}
+    </CardHeader>
+  );
 
   if (data.length < 2) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle>Price History</CardTitle>
-        </CardHeader>
+        {heading}
         <CardContent>
-          <p className="text-muted-foreground py-10 text-center text-sm">Not enough price data.</p>
+          <p className="text-muted-foreground py-10 text-center text-sm">{emptyMessage}</p>
           {/* A lone observation can't be charted but is still the current price. */}
           {stats && <ChartStats stats={[{ label: "Current", value: price(stats.current) }]} />}
         </CardContent>
@@ -66,9 +91,7 @@ export function PriceChart({ data, currency, rangeLabel }: PriceChartProps): Rea
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Price History</CardTitle>
-      </CardHeader>
+      {heading}
       <CardContent>
         <ChartContainer
           ref={chartRef}

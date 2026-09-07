@@ -196,6 +196,7 @@ describe("runMarketPriceJob", () => {
 
     const rows = Object.keys(outcomes).map((symbol, i) => ({
       id: i + 1,
+      type: "investment",
       symbolMap: JSON.stringify({ "alpha-vantage": symbol }),
       currency: "EUR",
     }));
@@ -278,6 +279,53 @@ describe("runMarketPriceJob", () => {
       expect.stringContaining("could not be priced")
     );
     warnSpy.mockRestore();
+  });
+
+  // Regression: the sweep asked for every asset's quote in its *own* currency,
+  // which for a deposit means the rate from USD to USD. Every provider path
+  // skips that pair, so the run reported the account as unpriceable every
+  // night while the USD→EUR rate the account actually needs went unrefreshed.
+  it("fetches a foreign deposit's rate against the base, not against itself", async () => {
+    const { getDb } = await import("@/lib/db");
+    const { getFinancialDataService } = await import("@/lib/api/services");
+
+    vi.mocked(getDb).mockReturnValue({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            all: () => [
+              {
+                id: 1,
+                type: "deposit",
+                symbolMap: JSON.stringify({ frankfurter: "USD" }),
+                currency: "USD",
+              },
+              // A base-currency deposit has no rate to itself, so it should
+              // never reach a provider at all.
+              {
+                id: 2,
+                type: "deposit",
+                symbolMap: JSON.stringify({ frankfurter: "EUR" }),
+                currency: "EUR",
+              },
+            ],
+          }),
+        }),
+      }),
+    } as unknown as ReturnType<typeof getDb>);
+
+    const getPrice = vi.fn().mockResolvedValue({ price: 0.92, stale: false });
+    vi.mocked(getFinancialDataService).mockReturnValue({
+      getPrice,
+      backfillTransactionRates: vi.fn().mockResolvedValue({ pairs: 0, fetched: 0 }),
+      backfillAssetCurrencyRates: vi.fn().mockResolvedValue({ currencies: 0, fetched: 0 }),
+    } as unknown as ReturnType<typeof getFinancialDataService>);
+
+    const { runMarketPriceJob } = await import("@/lib/cron");
+    await runMarketPriceJob();
+
+    expect(getPrice).toHaveBeenCalledTimes(1);
+    expect(getPrice).toHaveBeenCalledWith({ frankfurter: "USD" }, "EUR", expect.any(String));
   });
 
   it("reports a summary even when every asset refreshed cleanly", async () => {

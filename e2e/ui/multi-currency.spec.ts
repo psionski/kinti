@@ -242,12 +242,11 @@ test.describe.serial("Multi-currency", () => {
     await dialog.getByRole("button", { name: "Deposit", exact: true }).click();
     await expect(dialog).not.toBeVisible({ timeout: 10_000 });
 
-    // Holdings card shows the native USD balance directly. Use a strict
-    // selector so we don't accidentally match the cost-basis card below.
-    const holdingsCard = page
-      .locator("div")
-      .filter({ has: page.getByText("Holdings", { exact: true }) })
-      .first();
+    // Holdings card shows the native USD balance directly. Addressed by test
+    // id: `locator("div").filter({has})` resolves to the outermost matching
+    // div — the page wrapper — so those assertions would pass on text from
+    // anywhere on the page.
+    const holdingsCard = page.getByTestId("metric-holdings");
     await expect(holdingsCard).toContainText("500");
     await expect(holdingsCard).toContainText("USD");
 
@@ -256,14 +255,36 @@ test.describe.serial("Multi-currency", () => {
     // was created with pricePerUnit=1 (so native cost basis = quantity = 500
     // USD) AND that pricePerUnitBase was snapshotted via the FX chain (so
     // the "≈ €..." line shows up at all).
-    const costBasisCard = page
-      .locator("div")
-      .filter({ has: page.getByText("Cost Basis", { exact: true }) })
-      .first();
+    const costBasisCard = page.getByTestId("metric-cost-basis");
     await expect(costBasisCard).toContainText("500,00");
     await expect(costBasisCard).toContainText("$");
     await expect(costBasisCard).toContainText("≈");
     await expect(costBasisCard).toContainText("€");
+
+    // Regression: the balance is 500 USD whatever the euro does. Resolving a
+    // foreign deposit through its exchange rate made this card read "$430,00"
+    // for a $500 account and then convert that a second time for the ≈ line.
+    // The native figure carries no FX at all — only the ≈ line below does.
+    const currentValueCard = page.getByTestId("metric-current-value");
+    await expect(currentValueCard).toContainText("500,00");
+    await expect(currentValueCard).toContainText("$");
+    await expect(currentValueCard).toContainText("≈");
+    await expect(currentValueCard).toContainText("€");
+    // A deposit's unit price is 1 by definition, so the page states neither an
+    // "@ 1,00 $" readout nor a price chart — the rate is what moves, and it
+    // gets the Exchange Rate card instead.
+    await expect(currentValueCard).not.toContainText("@");
+    await expect(page.getByRole("button", { name: "Set Price" })).toHaveCount(0);
+    await expect(page.getByText("Price History")).toHaveCount(0);
+    await expect(page.getByText("Exchange Rate", { exact: true })).toBeVisible();
+    await expect(page.getByText("1 USD in EUR")).toBeVisible();
+
+    // The value chart reads in either denomination. For a foreign account the
+    // base curve is the one that answers "what is this worth to me", and it is
+    // drawable only because each history point now carries its date's rate.
+    const chartCurrency = page.getByRole("group", { name: "Chart currency" });
+    await expect(chartCurrency.getByRole("button", { name: "USD" })).toBeVisible();
+    await expect(chartCurrency.getByRole("button", { name: "EUR" })).toBeVisible();
   });
 
   test("buy USD asset shows native + base preview and persists base cost basis", async ({
@@ -296,10 +317,7 @@ test.describe.serial("Multi-currency", () => {
     // native USD total (10 × $100 = "1.000,00 $"), with the base-currency
     // equivalent rendered as a smaller "≈ €..." line beneath. Both
     // assertions verify the column-pair: native and base side-by-side.
-    const costBasisCard = page
-      .locator("div")
-      .filter({ has: page.getByText("Cost Basis", { exact: true }) })
-      .first();
+    const costBasisCard = page.getByTestId("metric-cost-basis");
     await expect(costBasisCard).toContainText("1.000,00");
     await expect(costBasisCard).toContainText("$");
     // The base-currency line is only rendered when costBasisBase !==

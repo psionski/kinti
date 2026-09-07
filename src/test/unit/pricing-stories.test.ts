@@ -445,3 +445,70 @@ describe("Story: the price shown has a date I can check", () => {
     expect(resolvePrice(db, car)!.asOf).toBe(daysAgo(50));
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("Story: I keep an account in another currency", () => {
+  /** A USD account with the rate the nightly refresh would have cached. */
+  function usdAccount(rate: number | null = 0.92): Promise<AssetResponse> {
+    const account = assets.create({
+      name: "USD Travel Fund",
+      type: "deposit",
+      currency: "USD",
+      symbolMap: { frankfurter: "USD" },
+    });
+    if (rate !== null) quote("USD", rate, TODAY, "EUR");
+    return lots
+      .buy(account.id, { quantity: 800, pricePerUnit: 1, date: daysAgo(30) })
+      .then(() => account);
+  }
+
+  it("says the balance is 800 dollars, whatever the euro is doing", async () => {
+    const account = await usdAccount();
+
+    expect(resolvePrice(db, account)).toMatchObject({ price: 1, source: "deposit" });
+    expect(assets.getById(account.id)?.currentValue).toBe(800);
+  });
+
+  it("converts to euros exactly once", async () => {
+    const account = await usdAccount();
+
+    // Not 800 × 0.92 × 0.92 = 677.12, which is what valuing the deposit at its
+    // own exchange rate used to produce.
+    expect(assets.getById(account.id)?.currentValueBase).toBeCloseTo(736, 2);
+  });
+
+  it("shows no gain in dollars, because none of it is a gain in dollars", async () => {
+    const account = await usdAccount();
+
+    expect(assets.getById(account.id)?.pnl).toBe(0);
+  });
+
+  it("refuses a hand-entered price, since the balance is what changes", async () => {
+    const account = await usdAccount();
+
+    expect(() => prices.record(account.id, { pricePerUnit: 0.92 })).toThrow("always 1 USD");
+  });
+
+  it("still knows the balance when no rate has ever been cached", async () => {
+    const account = await usdAccount(null);
+
+    // The account is worth 800 USD with or without a feed. Only the euro
+    // figure needs a rate, and it is the one that goes missing.
+    const metrics = assets.getById(account.id);
+    expect(metrics?.currentValue).toBe(800);
+    expect(metrics?.currentValueBase).toBeNull();
+  });
+
+  it("carries the rate on the history, which is the series that moves", async () => {
+    const account = await usdAccount();
+
+    const history = reports.getAssetHistory(account.id, "3m");
+    const latest = history?.timeline[history.timeline.length - 1];
+    // Price pinned at 1 forever; the rate is the only thing that changes what
+    // the balance is worth, which is why the detail page charts it instead.
+    expect(latest?.price).toBe(1);
+    expect(latest?.value).toBe(800);
+    expect(latest?.rate).toBeCloseTo(0.92, 4);
+  });
+});

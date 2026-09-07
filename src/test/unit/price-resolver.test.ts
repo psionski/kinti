@@ -7,7 +7,7 @@ import { AssetPriceService } from "@/lib/services/asset-prices";
 import { FinancialDataService } from "@/lib/services/financial-data";
 import { SettingsService } from "@/lib/services/settings";
 import { resolvePrice } from "@/lib/services/price-resolver";
-import { assetLots, marketPrices } from "@/lib/db/schema";
+import { assetLots, assetPrices, marketPrices } from "@/lib/db/schema";
 import { isoToday } from "@/lib/date-ranges";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "@/lib/db/schema";
@@ -216,7 +216,11 @@ describe("resolvePrice", async () => {
     expect(result!.price).toBe(82000);
   });
 
-  it("resolves foreign currency deposit via market_prices", async () => {
+  // Regression: a `(USD, EUR, 0.86)` row is an exchange rate, not the price of
+  // the deposit. Returning it here made `800 USD` resolve to `0.86`, which
+  // callers rendered as "$688.35" and then converted to base a *second* time,
+  // landing on €592.28 for a balance worth €688.35.
+  it("prices a foreign deposit at 1 even when an exchange rate is cached", async () => {
     const asset = assetService.create({
       name: "USD Savings",
       type: "deposit",
@@ -236,11 +240,13 @@ describe("resolvePrice", async () => {
 
     const result = resolvePrice(db, asset, "2026-03-20");
     expect(result).not.toBeNull();
-    expect(result!.source).toBe("market");
-    expect(result!.price).toBe(0.92);
+    expect(result!.source).toBe("deposit");
+    expect(result!.price).toBe(1);
   });
 
-  it("exchange rate uses cached price regardless of provider", async () => {
+  // A native-currency quote for a deposit symbol would be a rate of USD to USD.
+  // Nothing writes one, but the identity has to hold if something ever did.
+  it("prices a foreign deposit at 1 even against a same-currency quote", async () => {
     const asset = assetService.create({
       name: "USD Savings",
       type: "deposit",
@@ -248,20 +254,29 @@ describe("resolvePrice", async () => {
       symbolMap: { frankfurter: "USD" },
     });
 
-    // Rate cached by ECB — still valid since cache key is (symbol, currency, date)
     db.insert(marketPrices)
       .values({
         symbol: "USD",
-        currency: "EUR",
-        price: 0.92,
+        currency: "USD",
+        price: 1.07,
         date: "2026-03-20",
-        provider: "ecb",
+        provider: "frankfurter",
       })
       .run();
 
-    const result = resolvePrice(db, asset, "2026-03-20");
-    expect(result?.source).toBe("market");
-    expect(result?.price).toBe(0.92);
+    expect(resolvePrice(db, asset, "2026-03-20")).toMatchObject({ price: 1, source: "deposit" });
+  });
+
+  // A mark on a deposit is rejected at the service boundary, but rows predating
+  // that guard survive in the table. The identity outranks them.
+  it("prices a deposit at 1 even with a hand-entered mark on file", async () => {
+    const asset = assetService.create({ name: "Savings", type: "deposit", currency: "EUR" });
+
+    db.insert(assetPrices)
+      .values({ assetId: asset.id, pricePerUnit: 1.5, recordedAt: "2026-03-20T10:00:00Z" })
+      .run();
+
+    expect(resolvePrice(db, asset, "2026-03-20")).toMatchObject({ price: 1, source: "deposit" });
   });
 });
 
@@ -302,7 +317,7 @@ describe("resolvePrice (no date — defaults to today)", async () => {
     expect(result!.price).toBe(85000);
   });
 
-  it("returns exchange rate for foreign currency deposit", async () => {
+  it("prices a tracked foreign deposit at 1, not at its exchange rate", async () => {
     const today = isoToday();
     const asset = assetService.create({
       name: "GBP Savings",
@@ -323,8 +338,8 @@ describe("resolvePrice (no date — defaults to today)", async () => {
 
     const result = resolvePrice(db, asset);
     expect(result).not.toBeNull();
-    expect(result!.source).toBe("market");
-    expect(result!.price).toBe(1.17);
+    expect(result!.source).toBe("deposit");
+    expect(result!.price).toBe(1);
   });
 
   it("returns deposit fallback for EUR deposits", async () => {
@@ -334,9 +349,11 @@ describe("resolvePrice (no date — defaults to today)", async () => {
     expect(result!.source).toBe("deposit");
   });
 
-  it("returns null for foreign currency deposit without symbolMap", async () => {
+  // Previously null, which made an untracked foreign account show no value at
+  // all. Its balance is knowable without any feed — 800 USD is 800 USD; only
+  // the conversion *to base* needs a rate, and that is a separate lookup.
+  it("prices a foreign deposit at 1 without a symbolMap", async () => {
     const asset = assetService.create({ name: "USD Fund", type: "deposit", currency: "USD" });
-    const result = resolvePrice(db, asset);
-    expect(result).toBeNull();
+    expect(resolvePrice(db, asset)).toMatchObject({ price: 1, source: "deposit" });
   });
 });

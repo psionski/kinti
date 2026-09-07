@@ -13,7 +13,13 @@ import { AssetFormDialog } from "./asset-form-dialog";
 import { BuySellDialog } from "./buy-sell-dialog";
 import { DepositWithdrawDialog } from "./deposit-withdraw-dialog";
 import { RecordPriceDialog } from "./record-price-dialog";
-import { formatCurrency, formatQuantity, formatUnitPrice, holdingsUnit } from "@/lib/format";
+import {
+  formatCurrency,
+  formatQuantity,
+  formatUnitPrice,
+  getBaseCurrency,
+  holdingsUnit,
+} from "@/lib/format";
 import type { AssetWithMetrics, PortfolioResponse } from "@/lib/validators/assets";
 
 interface AssetsClientProps {
@@ -27,6 +33,129 @@ const TYPE_LABELS: Record<string, string> = {
   crypto: "Crypto",
   other: "Other",
 };
+
+/**
+ * An asset card's stat table. Every card uses the same shape; which rows appear
+ * depends on what the asset actually has to say.
+ *
+ * A deposit's unit price is 1, so its holdings line *is* its balance — a Price
+ * row would read "1,00 €" forever and a Current value row would repeat the
+ * number above it. A base-currency account therefore has one row, because it
+ * has one fact. A foreign one has two more that are genuinely its own: what the
+ * balance converts to today, and how much of that is the rate moving rather
+ * than money arriving.
+ *
+ * Cost basis is deliberately absent everywhere. For a deposit it is the balance
+ * again; for a position the P&L row already prices the gap against it, and the
+ * detail page carries the figure itself. Dropping it brings a position's four
+ * rows nearer a deposit's one without losing anything the card was saying.
+ */
+function AssetStats({ asset }: { asset: AssetWithMetrics }): React.ReactElement {
+  const baseCurrency = getBaseCurrency();
+  const isDeposit = asset.type === "deposit";
+  const isForeign = asset.currency !== baseCurrency;
+
+  return (
+    <div className="space-y-1 text-sm">
+      {/* A deposit's holdings line *is* its balance — the figure the card
+          exists to show — so it takes the emphasis a position gets on its
+          Current value row. A position's quantity is a share count rather than
+          money, and stays muted under the value below it. */}
+      <div className="flex justify-between gap-2">
+        <span className="text-muted-foreground shrink-0">Holdings</span>
+        <span
+          className={`truncate text-right font-mono ${
+            isDeposit ? "font-medium" : "text-muted-foreground"
+          }`}
+        >
+          {formatQuantity(asset.currentHoldings)} {holdingsUnit(asset)}
+        </span>
+      </div>
+
+      {!isDeposit && (
+        <div className="text-muted-foreground flex justify-between">
+          <span>Price</span>
+          <span className="font-mono">
+            {asset.latestPrice !== null ? formatUnitPrice(asset.latestPrice, asset.currency) : "—"}
+            {asset.priceSource === "lot" && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  {/* A button, not a bare glyph: `title` is hover-only
+                      and does nothing on touch. */}
+                  <button
+                    type="button"
+                    aria-label="Why this price is an estimate"
+                    className="px-1 py-0.5 text-amber-600 dark:text-amber-500"
+                  >
+                    *
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 text-xs" align="end">
+                  Cost basis of the last trade — no market quote available.
+                </PopoverContent>
+              </Popover>
+            )}
+          </span>
+        </div>
+      )}
+
+      {!isDeposit && (
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Current value</span>
+          <span
+            className="font-mono font-medium"
+            title={
+              asset.currentValueBase !== null
+                ? `≈ ${formatCurrency(asset.currentValueBase)} (base)`
+                : undefined
+            }
+          >
+            {asset.currentValue !== null ? formatCurrency(asset.currentValue, asset.currency) : "—"}
+          </span>
+        </div>
+      )}
+
+      {/* A foreign account's balance is worth stating twice: in its own
+          currency, and in the one everything else is counted in. The converted
+          figure stays muted — native leads everywhere in this app (the detail
+          page's `≈ base` line, a position row's base tooltip), so each card
+          carries exactly one emphasised money figure. */}
+      {isDeposit && isForeign && (
+        <div className="text-muted-foreground flex justify-between">
+          <span>In {baseCurrency}</span>
+          <span className="font-mono">
+            {asset.currentValueBase !== null ? formatCurrency(asset.currentValueBase) : "—"}
+          </span>
+        </div>
+      )}
+
+      {/* Every unit of a foreign account's P&L is the exchange rate moving, so
+          the row is named for what it is rather than shown as a bare gain. A
+          base-currency account has no such row: its P&L is always zero. */}
+      {isDeposit ? (
+        isForeign && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">FX</span>
+            <PnlDisplay pnl={asset.pnlBase} size="sm" />
+          </div>
+        )
+      ) : (
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">P&amp;L</span>
+          <PnlDisplay
+            pnl={asset.pnlBase}
+            size="sm"
+            title={
+              asset.pnl !== null
+                ? `Native: ${asset.pnl >= 0 ? "+" : ""}${formatCurrency(asset.pnl, asset.currency)}`
+                : undefined
+            }
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function SummaryCards({ portfolio }: { portfolio: PortfolioResponse }): React.ReactElement {
   const { netWorth, cashBalance, totalAssetValue, pnl } = portfolio;
@@ -253,79 +382,15 @@ export function AssetsClient({ initialAssets, portfolio }: AssetsClientProps): R
                     </Link>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="space-y-1 text-sm">
-                    <div className="text-muted-foreground flex justify-between gap-2">
-                      <span className="shrink-0">Holdings</span>
-                      <span className="min-w-0 truncate font-mono">
-                        {formatQuantity(asset.currentHoldings)} {holdingsUnit(asset)}
-                      </span>
-                    </div>
-                    <div className="text-muted-foreground flex justify-between">
-                      <span>Price</span>
-                      <span className="font-mono">
-                        {asset.latestPrice !== null
-                          ? formatUnitPrice(asset.latestPrice, asset.currency)
-                          : "—"}
-                        {asset.priceSource === "lot" && (
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              {/* A button, not a bare glyph: `title` is hover-only
-                                  and does nothing on touch. */}
-                              <button
-                                type="button"
-                                aria-label="Why this price is an estimate"
-                                className="px-1 py-0.5 text-amber-600 dark:text-amber-500"
-                              >
-                                *
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-56 text-xs" align="end">
-                              Cost basis of the last trade — no market quote available.
-                            </PopoverContent>
-                          </Popover>
-                        )}
-                      </span>
-                    </div>
-                    <div className="text-muted-foreground flex justify-between">
-                      <span>Cost basis</span>
-                      <span
-                        className="font-mono"
-                        title={`≈ ${formatCurrency(asset.costBasisBase)} (base)`}
-                      >
-                        {formatCurrency(asset.costBasis, asset.currency)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Current value</span>
-                      <span
-                        className="font-mono font-medium"
-                        title={
-                          asset.currentValueBase !== null
-                            ? `≈ ${formatCurrency(asset.currentValueBase)} (base)`
-                            : undefined
-                        }
-                      >
-                        {asset.currentValue !== null
-                          ? formatCurrency(asset.currentValue, asset.currency)
-                          : "—"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">P&amp;L</span>
-                      <PnlDisplay
-                        pnl={asset.pnlBase}
-                        size="sm"
-                        title={
-                          asset.pnl !== null
-                            ? `Native: ${asset.pnl >= 0 ? "+" : ""}${formatCurrency(asset.pnl, asset.currency)}`
-                            : undefined
-                        }
-                      />
-                    </div>
-                  </div>
+                {/* Cards in a row stretch to the tallest, but their content
+                    does not — a deposit's table is shorter than a position's,
+                    so without this its actions would float up mid-card. Grow
+                    the content and push the action row down so every card's
+                    buttons share a baseline. */}
+                <CardContent className="flex grow flex-col gap-3">
+                  <AssetStats asset={asset} />
 
-                  <div className="flex flex-wrap gap-2 pt-1">
+                  <div className="mt-auto flex flex-wrap gap-2 pt-1">
                     {asset.type === "deposit" ? (
                       <>
                         <Button
@@ -365,9 +430,13 @@ export function AssetsClient({ initialAssets, portfolio }: AssetsClientProps): R
                         </Button>
                       </>
                     )}
-                    <Button size="sm" variant="outline" onClick={() => setPricingAsset(asset)}>
-                      Set Price
-                    </Button>
+                    {/* A deposit's unit price is 1 by definition — the service
+                        rejects a mark on one, so don't offer the button. */}
+                    {asset.type !== "deposit" && (
+                      <Button size="sm" variant="outline" onClick={() => setPricingAsset(asset)}>
+                        Set Price
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>

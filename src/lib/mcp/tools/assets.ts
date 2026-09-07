@@ -47,7 +47,9 @@ export function registerAssetTools(server: McpServer): void {
     {
       description:
         "List all assets with current holdings, cost basis, current value, and P&L. " +
-        "currentValue is null if no price has been recorded (deposits assume 1 unit = 1 unit of the asset's currency). " +
+        "currentValue is in the asset's native currency and is null if no price has been recorded; " +
+        "a deposit is always 1 unit of its own currency, so it is never null. " +
+        "currentValueBase applies the exchange rate — never apply it yourself to currentValue. " +
         "pnl = currentValue - costBasis.",
       inputSchema: z.object({}),
     },
@@ -151,7 +153,9 @@ export function registerAssetTools(server: McpServer): void {
       description:
         "Record a current price snapshot for an asset. " +
         "Use get_price first to fetch the latest market price, then call this to persist it. " +
-        "Updates the asset's current value and P&L.",
+        "Updates the asset's current value and P&L. " +
+        "Rejects 'deposit' assets: one unit of a deposit is one unit of its currency by " +
+        "definition, in any base currency. Use buy_asset/sell_asset to change the balance.",
       inputSchema: IdSchema.extend(RecordPriceSchema.shape),
     },
     (input) => {

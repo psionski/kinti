@@ -6,6 +6,7 @@ import { assets, assetPrices } from "@/lib/db/schema";
 import type { RecordPriceInput, AssetPriceResponse } from "@/lib/validators/assets";
 import { utcToLocal, localToUtc, isoToday, offsetDate } from "@/lib/date-ranges";
 import { requireRow } from "@/lib/db/rows";
+import { ValidationError } from "@/lib/errors";
 
 type Db = BetterSQLite3Database<typeof schema>;
 
@@ -25,14 +26,26 @@ export class AssetPriceService {
    * Record a user-provided price for an asset.
    * If a price already exists for the same asset on the same calendar date,
    * it is updated instead of creating a duplicate.
+   *
+   * Deposits are rejected: one unit of a deposit is one unit of its currency by
+   * definition, so `resolvePrice` answers 1 without consulting this table and a
+   * mark stored here could never be read back. Failing loudly beats accepting a
+   * write that would silently do nothing. What a foreign deposit is worth in
+   * base moves with its exchange rate, which is FX data, not a mark.
    */
   record(assetId: number, input: RecordPriceInput): AssetPriceResponse {
     const asset = this.db
-      .select({ id: assets.id })
+      .select({ id: assets.id, type: assets.type, currency: assets.currency })
       .from(assets)
       .where(eq(assets.id, assetId))
       .get();
     if (!asset) throw new Error(`Asset ${assetId} not found`);
+    if (asset.type === "deposit") {
+      throw new ValidationError(
+        `Cannot set a price on a deposit: 1 unit is always 1 ${asset.currency}. ` +
+          `Use deposit/withdraw to change the balance.`
+      );
+    }
 
     const recordedAt = input.recordedAt
       ? localToUtc(input.recordedAt)

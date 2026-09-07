@@ -187,4 +187,110 @@ describe("Multi-currency end-to-end", () => {
     expect(stockPerf?.fxPnlBase).toBeCloseTo(0, 2);
     expect(stockPerf?.pnlBase).toBeCloseTo(0, 2);
   });
+
+  // Regression: a foreign deposit tracked against an FX provider used to
+  // resolve to its *rate* (0.92) instead of its price (1). Every consumer then
+  // computed `holdings × price × rate`, converting to base twice: 800 USD came
+  // out as "$736.00 ≈ €677.12" instead of "$800.00 ≈ €736.00". The rate belongs
+  // to the conversion step alone, and this test pins each figure to the step it
+  // comes from.
+  it("USD deposit with exchange-rate tracking → converted to base exactly once", async () => {
+    const travelFund = assetService.create({
+      name: "USD Travel Fund",
+      type: "deposit",
+      currency: "USD",
+      symbolMap: { frankfurter: "USD" },
+    });
+
+    await lotService.buy(travelFund.id, {
+      quantity: 800,
+      pricePerUnit: 1, // deposit invariant
+      date: "2026-03-01",
+    });
+
+    // The rate the whole scenario turns on, cached the way the 04:00 cron
+    // caches it: symbol=USD, currency=EUR — an exchange rate, not a price.
+    db.insert(marketPrices)
+      .values({
+        symbol: "USD",
+        currency: "EUR",
+        price: USD_TO_EUR,
+        date: isoToday(),
+        provider: "frankfurter",
+      })
+      .run();
+
+    const asset = assetService.getById(travelFund.id);
+    // The balance is 800 USD whatever the euro does — a deposit's unit price is
+    // its own currency, so the rate never touches the native figure.
+    expect(asset?.latestPrice).toBe(1);
+    expect(asset?.priceSource).toBe("deposit");
+    expect(asset?.currentHoldings).toBe(800);
+    expect(asset?.currentValue).toBe(800);
+    // …and exactly one conversion reaches base. Under the old resolver this
+    // was 800 × 0.92 × 0.92 = 677.12.
+    expect(asset?.currentValueBase).toBeCloseTo(736, 2);
+
+    // No native P&L: 800 USD cost 800 USD. The euro-side movement is nil here
+    // because the lot booked at the same rate it is valued at.
+    expect(asset?.pnl).toBe(0);
+    expect(asset?.pnlBase).toBeCloseTo(0, 2);
+
+    // Every cross-currency aggregate reads through the same resolver, so each
+    // one carried the same doubled conversion.
+    const portfolio = portfolioService.getPortfolio();
+    expect(portfolio.totalAssetValue).toBeCloseTo(736, 2);
+
+    const exposure = portfolioReports.getCurrencyExposure();
+    expect(exposure.find((e) => e.currency === "USD")?.value).toBeCloseTo(736, 2);
+
+    const allocation = portfolioReports.getAllocation();
+    expect(allocation.byAsset.find((a) => a.assetId === travelFund.id)?.currentValue).toBeCloseTo(
+      736,
+      2
+    );
+
+    const netWorth = portfolioReports.getNetWorthTimeSeries("3m", "daily");
+    expect(netWorth[netWorth.length - 1]?.assets).toBeCloseTo(736, 2);
+  });
+
+  // The history feed behind the asset detail charts. A deposit's price series
+  // is a flat 1 by construction, so the series worth drawing is `rate` — which
+  // is why the UI swaps the price card for an exchange-rate one.
+  it("USD deposit history → flat unit price, exchange rate carried alongside", async () => {
+    const travelFund = assetService.create({
+      name: "USD Travel Fund",
+      type: "deposit",
+      currency: "USD",
+    });
+    await lotService.buy(travelFund.id, { quantity: 800, pricePerUnit: 1, date: "2026-03-01" });
+
+    db.insert(marketPrices)
+      .values({
+        symbol: "USD",
+        currency: "EUR",
+        price: USD_TO_EUR,
+        date: isoToday(),
+        provider: "frankfurter",
+      })
+      .run();
+
+    const history = portfolioReports.getAssetHistory(travelFund.id, "3m");
+    const latest = history?.timeline[history.timeline.length - 1];
+    expect(latest?.price).toBe(1);
+    expect(latest?.value).toBe(800);
+    expect(latest?.rate).toBeCloseTo(USD_TO_EUR, 4);
+  });
+
+  // The base-currency counterpart: rate is a constant 1, so the detail page
+  // has nothing to plot but value.
+  it("EUR deposit history → rate is 1, needing no cached FX row", async () => {
+    const savings = assetService.create({ name: "Savings", type: "deposit", currency: "EUR" });
+    await lotService.buy(savings.id, { quantity: 500, pricePerUnit: 1, date: "2026-03-01" });
+
+    const history = portfolioReports.getAssetHistory(savings.id, "3m");
+    const latest = history?.timeline[history.timeline.length - 1];
+    expect(latest?.price).toBe(1);
+    expect(latest?.rate).toBe(1);
+  });
 });

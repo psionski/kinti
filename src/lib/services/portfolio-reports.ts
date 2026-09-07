@@ -527,6 +527,8 @@ export class PortfolioReportService {
       .orderBy(asc(assetLots.date), asc(assetLots.id))
       .all();
 
+    const fx = makeFxLookup(this.db, getBaseCurrency());
+
     let lotIdx = 0;
     let cumulativeQty = 0;
     const timeline: AssetHistoryPoint[] = datePoints.map((date) => {
@@ -540,7 +542,12 @@ export class PortfolioReportService {
       // Single-asset history is always rendered in the asset's native currency,
       // so per-currency rounding is correct here even for non-base assets.
       const value = price !== null ? roundToCurrency(qty * price, asset.currency) : null;
-      return { date, price, quantity: qty, value };
+      // The rate travels alongside rather than being folded into `value`, which
+      // keeps the series native while still describing what moved. For a
+      // foreign deposit it *is* the interesting series: the price is pinned at
+      // 1 forever, so the only thing that changes what the balance is worth is
+      // the exchange rate.
+      return { date, price, quantity: qty, value, rate: fx(asset.currency, date) };
     });
 
     return { lots: lotHistory, timeline };

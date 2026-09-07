@@ -37,17 +37,20 @@ interface AssetDetailClientProps {
   initialAsset: AssetWithMetrics;
   initialLots: AssetLotResponse[];
   realizedPnl: number | null;
+  realizedPnlBase: number | null;
 }
 
 export function AssetDetailClient({
   initialAsset,
   initialLots,
   realizedPnl: initialRealizedPnl,
+  realizedPnlBase: initialRealizedPnlBase,
 }: AssetDetailClientProps): React.ReactElement {
   const router = useRouter();
   const [asset, setAsset] = useState(initialAsset);
   const [lots, setLots] = useState(initialLots);
   const [realizedPnl] = useState(initialRealizedPnl);
+  const [realizedPnlBase] = useState(initialRealizedPnlBase);
   const [loading, setLoading] = useState(false);
 
   // Dialog states
@@ -60,12 +63,24 @@ export function AssetDetailClient({
   const [showPrice, setShowPrice] = useState(false);
   const [showTracking, setShowTracking] = useState(false);
 
+  // `PnlDisplay` formats in the base currency, so everything handed to it must
+  // already be in base — a native figure there renders a dollar amount under a
+  // euro sign. Base is also the denomination that makes the card agree with the
+  // asset list and with every portfolio total, and it is the only one that says
+  // anything at all about a foreign deposit, whose native P&L is always 0.
+  const unrealizedPnlBase =
+    asset.pnlBase !== null && realizedPnlBase !== null
+      ? asset.pnlBase - realizedPnlBase
+      : asset.pnlBase;
+
+  /** The same figure in the asset's own currency, for the tooltips. */
+  function nativeHint(native: number | null, base: number | null): string | undefined {
+    if (native === null || base === null || native === base) return undefined;
+    return `${native >= 0 ? "+" : ""}${formatCurrency(native, asset.currency)} in ${asset.currency}`;
+  }
+
   const unrealizedPnl =
     asset.pnl !== null && realizedPnl !== null ? asset.pnl - realizedPnl : asset.pnl;
-
-  // Realized P&L is recorded against transfer transactions whose amount is in
-  // the asset's native currency, so the unrealized derivation works in native
-  // units. The base-currency PnlDisplay below uses pnlBase directly.
 
   // Pure base-currency deposits don't need an FX feed; everything else (foreign
   // deposit, investment, crypto) benefits from external price/exchange-rate
@@ -216,9 +231,13 @@ export function AssetDetailClient({
               </Button>
             </>
           )}
-          <Button size="sm" variant="outline" onClick={() => setShowPrice(true)}>
-            Set Price
-          </Button>
+          {/* A deposit's unit price is 1 by definition, so a mark on it would be
+              rejected by the service and could never be read back anyway. */}
+          {asset.type !== "deposit" && (
+            <Button size="sm" variant="outline" onClick={() => setShowPrice(true)}>
+              Set Price
+            </Button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon-xs">
@@ -241,7 +260,7 @@ export function AssetDetailClient({
 
       {/* Metrics */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Card>
+        <Card data-testid="metric-holdings">
           <CardHeader className="pb-1">
             <CardTitle className="text-muted-foreground text-xs font-medium uppercase">
               Holdings
@@ -256,7 +275,7 @@ export function AssetDetailClient({
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card data-testid="metric-cost-basis">
           <CardHeader className="pb-1">
             <CardTitle className="text-muted-foreground text-xs font-medium uppercase">
               Cost Basis
@@ -271,7 +290,7 @@ export function AssetDetailClient({
             )}
           </CardContent>
         </Card>
-        <Card>
+        <Card data-testid="metric-current-value">
           <CardHeader className="pb-1">
             <CardTitle className="text-muted-foreground text-xs font-medium uppercase">
               Current Value
@@ -288,7 +307,9 @@ export function AssetDetailClient({
                 ≈ {formatCurrency(asset.currentValueBase)}
               </p>
             )}
-            {asset.latestPrice !== null && (
+            {/* "@ 1,00 $" restates the deposit invariant and nothing else; the
+                ≈ base line above already shows what the balance is worth. */}
+            {asset.latestPrice !== null && asset.type !== "deposit" && (
               <p className="text-muted-foreground mt-0.5 text-xs">
                 @ {formatUnitPrice(asset.latestPrice, asset.currency)}
                 <PriceProvenance source={asset.priceSource} asOf={asset.priceAsOf} />
@@ -296,7 +317,7 @@ export function AssetDetailClient({
             )}
           </CardContent>
         </Card>
-        <Card>
+        <Card data-testid="metric-pnl">
           <CardHeader className="pb-1">
             <CardTitle className="text-muted-foreground text-xs font-medium uppercase">
               P&amp;L
@@ -304,24 +325,23 @@ export function AssetDetailClient({
           </CardHeader>
           <CardContent className="space-y-1">
             <p className="text-xl font-bold">
-              <PnlDisplay
-                pnl={asset.pnl}
-                title={
-                  asset.pnlBase !== null && asset.pnlBase !== asset.pnl
-                    ? `≈ ${asset.pnlBase >= 0 ? "+" : ""}${formatCurrency(asset.pnlBase)} (base)`
-                    : undefined
-                }
-              />
+              <PnlDisplay pnl={asset.pnlBase} title={nativeHint(asset.pnl, asset.pnlBase)} />
             </p>
             <div className="space-y-0.5 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground text-xs">Unrealized</span>
-                <PnlDisplay pnl={unrealizedPnl} />
+                <PnlDisplay
+                  pnl={unrealizedPnlBase}
+                  title={nativeHint(unrealizedPnl, unrealizedPnlBase)}
+                />
               </div>
-              {realizedPnl !== null && (
+              {realizedPnlBase !== null && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground text-xs">Realized</span>
-                  <PnlDisplay pnl={realizedPnl} />
+                  <PnlDisplay
+                    pnl={realizedPnlBase}
+                    title={nativeHint(realizedPnl, realizedPnlBase)}
+                  />
                 </div>
               )}
             </div>
@@ -381,7 +401,12 @@ export function AssetDetailClient({
       )}
 
       {/* Charts */}
-      <AssetDetailCharts assetId={asset.id} currency={asset.currency} />
+      <AssetDetailCharts
+        assetId={asset.id}
+        type={asset.type}
+        currency={asset.currency}
+        tracked={asset.symbolMap !== null && Object.keys(asset.symbolMap).length > 0}
+      />
 
       {/* Lot history */}
       <Card>
@@ -527,8 +552,10 @@ function PriceProvenance({
   source: AssetWithMetrics["priceSource"];
   asOf: AssetWithMetrics["priceAsOf"];
 }) {
-  // A base-currency deposit is 1:1 by definition; there is no provenance to
-  // report, and a date would imply a valuation that never happened.
+  // A deposit is 1:1 in its own currency by definition, in any base currency;
+  // there is no provenance to report, and a date would imply a valuation that
+  // never happened. The caller already hides the price line for deposits, so
+  // this is a belt-and-braces guard rather than a reachable branch.
   if (source === null || source === "deposit") return null;
 
   const today = new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD, local

@@ -11,7 +11,7 @@ export function parseAssetRow(row: schema.Asset): AssetResponse {
   return {
     id: row.id,
     name: row.name,
-    type: row.type as AssetResponse["type"],
+    type: row.type,
     currency: row.currency,
     symbolMap: row.symbolMap ? (JSON.parse(row.symbolMap) as Record<string, string>) : null,
     icon: row.icon,
