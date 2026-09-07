@@ -8,11 +8,12 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AssetFormDialog } from "./asset-form-dialog";
 import { BuySellDialog } from "./buy-sell-dialog";
 import { DepositWithdrawDialog } from "./deposit-withdraw-dialog";
 import { RecordPriceDialog } from "./record-price-dialog";
-import { formatCurrency, holdingsUnit } from "@/lib/format";
+import { formatCurrency, formatQuantity, formatUnitPrice, holdingsUnit } from "@/lib/format";
 import type { AssetWithMetrics, PortfolioResponse } from "@/lib/validators/assets";
 
 interface AssetsClientProps {
@@ -225,7 +226,12 @@ export function AssetsClient({ initialAssets, portfolio }: AssetsClientProps): R
 
           <div
             data-tour="asset-cards"
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            // Columns are sized by content, not viewport: a deposit's action
+            // row needs ~272px, so a column never goes below 280px. The inner
+            // `max` caps the grid at three columns by making each at least a
+            // third of the row; the outer `min` keeps a single column from
+            // overflowing a screen narrower than 280px.
+            className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,max(280px,calc((100%_-_2rem)/3))),1fr))] gap-4"
           >
             {assets.map((asset) => (
               <Card key={asset.id}>
@@ -249,10 +255,36 @@ export function AssetsClient({ initialAssets, portfolio }: AssetsClientProps): R
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="space-y-1 text-sm">
+                    <div className="text-muted-foreground flex justify-between gap-2">
+                      <span className="shrink-0">Holdings</span>
+                      <span className="min-w-0 truncate font-mono">
+                        {formatQuantity(asset.currentHoldings)} {holdingsUnit(asset)}
+                      </span>
+                    </div>
                     <div className="text-muted-foreground flex justify-between">
-                      <span>Holdings</span>
+                      <span>Price</span>
                       <span className="font-mono">
-                        {asset.currentHoldings} {holdingsUnit(asset)}
+                        {asset.latestPrice !== null
+                          ? formatUnitPrice(asset.latestPrice, asset.currency)
+                          : "—"}
+                        {asset.priceSource === "lot" && (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              {/* A button, not a bare glyph: `title` is hover-only
+                                  and does nothing on touch. */}
+                              <button
+                                type="button"
+                                aria-label="Why this price is an estimate"
+                                className="px-1 py-0.5 text-amber-600 dark:text-amber-500"
+                              >
+                                *
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-56 text-xs" align="end">
+                              Cost basis of the last trade — no market quote available.
+                            </PopoverContent>
+                          </Popover>
+                        )}
                       </span>
                     </div>
                     <div className="text-muted-foreground flex justify-between">
@@ -293,7 +325,7 @@ export function AssetsClient({ initialAssets, portfolio }: AssetsClientProps): R
                     </div>
                   </div>
 
-                  <div className="flex gap-2 pt-1">
+                  <div className="flex flex-wrap gap-2 pt-1">
                     {asset.type === "deposit" ? (
                       <>
                         <Button

@@ -58,6 +58,15 @@ type MarketPriceRow = typeof schema.marketPrices.$inferSelect;
 /**
  * Find a cached price in market_prices with a 7-day lookback window.
  * No provider filter — cache key is (symbol, currency, date).
+ *
+ * The window exists to *approximate a requested day*: asking for Sunday should
+ * get Friday's close, and asking for a bank holiday should get the day before.
+ * Past a week with no data the feed is broken rather than closed, and handing
+ * back an arbitrarily old row as though it answered the question would be a
+ * lie about which day the number belongs to.
+ *
+ * That makes this the wrong query for "what is this asset worth now" — see
+ * `findLatestQuote`, which asks a different question and needs no window.
  */
 export function findCachedPrice(
   db: Db,
@@ -76,6 +85,44 @@ export function findCachedPrice(
           eq(marketPrices.symbol, symbol),
           eq(marketPrices.currency, currency),
           gte(marketPrices.date, weekBefore),
+          lte(marketPrices.date, date)
+        )
+      )
+      .orderBy(desc(marketPrices.date))
+      .limit(1)
+      .get() ?? null
+  );
+}
+
+/**
+ * Most recent cached quote for `symbol` in `currency` on or before `date`,
+ * however old it is.
+ *
+ * Deliberately unbounded, unlike `findCachedPrice`. Valuation asks "what is the
+ * latest thing anyone observed about this asset", and the answer to that is
+ * never improved by discarding the only observation there is: dropping a quote
+ * for being old doesn't make a fresher one appear, it just hands the question
+ * to a worse source. The price resolver ranks what comes back by `date` against
+ * the other observations it has, so an old quote still loses to anything newer
+ * — it only wins when the alternative is older still.
+ *
+ * Callers must therefore treat the returned `date` as load-bearing and show it
+ * to the user, rather than presenting the price as current.
+ */
+export function findLatestQuote(
+  db: Db,
+  symbol: string,
+  currency: string,
+  date: string
+): MarketPriceRow | null {
+  return (
+    db
+      .select()
+      .from(marketPrices)
+      .where(
+        and(
+          eq(marketPrices.symbol, symbol),
+          eq(marketPrices.currency, currency),
           lte(marketPrices.date, date)
         )
       )

@@ -101,12 +101,40 @@ export function roundToCurrency(amount: number, currency: string = getBaseCurren
   return Math.round(amount * factor) / factor;
 }
 
-/**
- * Format a unit price with appropriate precision.
- * Shows at least 2 decimals, but extends to show significant digits for small values.
- * e.g. 345.63 → "345.63", 0.86768 → "0.86768", 0.00000514 → "0.00000514"
+// ─── Prices ───────────────────────────────────────────────────────────────────
+
+/*
+ * Three formatters cover money. Picking the wrong one is a correctness bug, not
+ * a cosmetic one:
+ *
+ *   formatCurrency(amount, currency?)  — an amount of money: totals, balances,
+ *       cost basis, P&L. Uses the currency's own precision, via Intl (2 for
+ *       EUR, 0 for JPY, 3 for BHD).
+ *
+ *   formatUnitPrice(price, currency?)  — the price of one unit: quotes, manual
+ *       marks, lot fills. Presented like formatCurrency, but with variable
+ *       precision, because a unit price can be finer than its currency's scale.
+ *
+ *   priceInputValue(price)             — the value of a number <input>. Bare
+ *       digits, "." decimal separator, no symbol or grouping. Never render it
+ *       as text: it ignores the display locale.
+ *
+ * The last two must not be swapped. `parseFloat("89.000,00 €")` is 89, not
+ * 89000 — parseFloat stops at the first "." and reads it as the decimal point —
+ * so a display string in an input silently books a value off by 1000×, and the
+ * input rejects it outright as non-numeric. A raw string in the UI is merely
+ * ugly: "89000.00" sitting beside "628,00 €".
  */
-export function formatPrice(price: number): string {
+
+/**
+ * A price as the value of a number `<input>` — see the note above.
+ *
+ * At least 2 decimals, extended to keep the significant digits of small values.
+ * e.g. 345.63 → "345.63", 0.86768 → "0.86768", 0.00000514 → "0.00000514".
+ * Below ~1e-6 the result is exponential ("5.14e-7"); `parseFloat` and
+ * `<input type="number">` both accept that.
+ */
+export function priceInputValue(price: number): string {
   if (price === 0) return "0.00";
   if (price >= 0.01) return price.toFixed(Math.max(2, countDecimals(price)));
   // For very small prices, show all significant digits
@@ -118,6 +146,86 @@ function countDecimals(n: number): number {
   const s = n.toString();
   const dot = s.indexOf(".");
   return dot === -1 ? 0 : s.length - dot - 1;
+}
+
+const axisTickFormatter = new Intl.NumberFormat(DISPLAY_LOCALE, {
+  notation: "compact",
+  maximumSignificantDigits: 4,
+});
+
+/**
+ * A number for a chart axis tick: compact, at most four significant digits, and
+ * no currency symbol — the gutter has no room for one, and the chart's stats row
+ * and tooltip both name the currency.
+ *
+ * A price axis has to span the whole range an asset can trade at, and significant
+ * digits are what cover both ends: 89000 → "89.000", 1e-7 → "0,0000001".
+ * `formatCurrencyCompact` caps at one fraction digit, so it renders every tick
+ * under 0.05 as "0 €". Use that one for axes whose values are amounts of money
+ * (a position's value), and this one for axes of unit prices.
+ */
+export function formatAxisTick(value: number): string {
+  return axisTickFormatter.format(value);
+}
+
+const unitPriceFormatterCache = new Map<string, Intl.NumberFormat>();
+
+/**
+ * A unit price for display — see the note above. Carries `priceInputValue`'s
+ * precision rule with `formatCurrency`'s presentation; `formatCurrency` alone
+ * cannot, because the currency's fixed scale rounds a 0,00000514 € coin to
+ * 0,00 €.
+ *
+ * e.g. 89000 → "89.000,00 €", 12.94 → "12,94 €", 0.00000514 → "0,00000514 €"
+ */
+export function formatUnitPrice(price: number, currency: string = getBaseCurrency()): string {
+  const tiny = price !== 0 && Math.abs(price) < 0.01;
+  // Fraction digits are capped: `countDecimals` reads a float's decimal
+  // expansion, which can run to 17 digits, and Intl rejects more than 20.
+  const digits = tiny ? 3 : Math.min(8, Math.max(2, countDecimals(price)));
+  const key = `${currency}:${tiny ? "s" : "f"}${digits}`;
+
+  let formatter = unitPriceFormatterCache.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(DISPLAY_LOCALE, {
+      style: "currency",
+      currency,
+      ...(tiny
+        ? { maximumSignificantDigits: digits }
+        : { minimumFractionDigits: 2, maximumFractionDigits: digits }),
+    });
+    unitPriceFormatterCache.set(key, formatter);
+  }
+  return formatter.format(price);
+}
+
+const quantityFormatter = new Intl.NumberFormat(DISPLAY_LOCALE, { maximumFractionDigits: 8 });
+
+const quantityCompactFormatter = new Intl.NumberFormat(DISPLAY_LOCALE, {
+  notation: "compact",
+  maximumFractionDigits: 3,
+});
+
+/** Above this, a holding's exact digits stop being worth the width. */
+const QUANTITY_COMPACT_FROM = 1_000_000;
+
+/**
+ * A holdings count: grouped, and abbreviated once it passes a million
+ * ("2.695", "0,01305", "1,235 Mio.", "5 Mrd.").
+ *
+ * Eight decimals matches the precision holdings are stored at
+ * (`AssetService` rounds them with `toFixed(8)`), so this never invents or
+ * hides a digit below the abbreviation threshold.
+ *
+ * Abbreviating only above a million is deliberate. Compact notation rounds to a
+ * few significant digits, and in a locale where "." groups thousands the result
+ * is ambiguous: 12345 compacts to "12.350", which reads as a *precise* 12,350.
+ * Past a million the suffix ("Mio.", "Mrd.") makes the approximation explicit.
+ */
+export function formatQuantity(value: number): string {
+  return Math.abs(value) >= QUANTITY_COMPACT_FROM
+    ? quantityCompactFormatter.format(value)
+    : quantityFormatter.format(value);
 }
 
 /**

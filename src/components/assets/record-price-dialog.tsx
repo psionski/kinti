@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { isoToday } from "@/lib/date-ranges";
-import { formatPrice } from "@/lib/format";
+import { formatUnitPrice } from "@/lib/format";
 import type { AssetWithMetrics } from "@/lib/validators/assets";
 
 interface RecordPriceDialogProps {
@@ -33,7 +33,7 @@ export function RecordPriceDialog({
 }: RecordPriceDialogProps): React.ReactElement {
   const currentDisplay =
     asset.latestPrice !== null
-      ? `Current price: ${formatPrice(asset.latestPrice)} ${asset.currency} per unit`
+      ? `Current price: ${formatUnitPrice(asset.latestPrice, asset.currency)} per unit`
       : "No price recorded yet";
 
   const today = isoToday();

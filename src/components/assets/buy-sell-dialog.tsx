@@ -2,7 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { isoToday } from "@/lib/date-ranges";
-import { formatCurrency, formatPrice, getBaseCurrency, holdingsUnit } from "@/lib/format";
+import {
+  formatCurrency,
+  formatQuantity,
+  getBaseCurrency,
+  holdingsUnit,
+  priceInputValue,
+} from "@/lib/format";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,7 +75,7 @@ export function BuySellDialog({
         const res = await fetch(`/api/financial/price?${params}`);
         if (!run.cancelled && res.ok) {
           const data = (await res.json()) as { price: number };
-          setPrice(formatPrice(data.price));
+          setPrice(priceInputValue(data.price));
         }
       } finally {
         if (!run.cancelled) setFetchingPrice(false);
@@ -146,7 +152,7 @@ export function BuySellDialog({
   const desc =
     mode === "buy"
       ? `Record a purchase. Creates a transfer transaction (cash out) + asset lot.`
-      : `Record a sale. Creates a transfer transaction (cash in) + negative lot. Current holdings: ${asset.currentHoldings} ${holdingsUnit(asset)}`;
+      : `Record a sale. Creates a transfer transaction (cash in) + negative lot. Current holdings: ${formatQuantity(asset.currentHoldings)} ${holdingsUnit(asset)}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

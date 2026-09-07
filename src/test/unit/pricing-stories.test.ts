@@ -223,13 +223,36 @@ describe("Story: the market is closed", () => {
     expect(resolvePrice(db, etf)).toMatchObject({ price: 12.9, source: "market" });
   });
 
-  it("stops trusting a quote once it ages out of the lookback window", async () => {
+  it("keeps using the last quote even after the feed has been dead for weeks", async () => {
     const etf = linkedEtf();
     await lots.buy(etf.id, { quantity: 10, pricePerUnit: 12.0, date: daysAgo(30) });
     quote("WEBN", 12.9, daysAgo(8));
 
-    // Eight days with no data is a broken feed, not a long weekend.
-    expect(resolvePrice(db, etf)).toMatchObject({ price: 12.0, source: "lot" });
+    // A broken feed is not a reason to reach for the fill price: the quote is
+    // still the most recent thing anyone observed, and the purchase price is
+    // both older and not a valuation at all. Discarding it would replace a
+    // stale-but-real number with a wrong one.
+    expect(resolvePrice(db, etf)).toMatchObject({ price: 12.9, source: "market" });
+  });
+
+  it("reports the quote's real date so a stale price can be shown as stale", async () => {
+    const etf = linkedEtf();
+    await lots.buy(etf.id, { quantity: 10, pricePerUnit: 12.0, date: daysAgo(30) });
+    quote("WEBN", 12.9, daysAgo(40));
+
+    expect(resolvePrice(db, etf)).toMatchObject({ asOf: daysAgo(40), source: "market" });
+  });
+
+  // The live regression: WEBN's feed stopped updating, its last quote aged past
+  // the old 7-day cache window, and the asset page silently switched to the
+  // price of the last buy — showing a €34,415 position as though the market had
+  // moved to exactly what the user paid.
+  it("does not let a newer purchase displace an older quote", async () => {
+    const etf = linkedEtf();
+    quote("WEBN", 12.816, daysAgo(10));
+    await lots.buy(etf.id, { quantity: 10, pricePerUnit: 12.77, date: daysAgo(15) });
+
+    expect(resolvePrice(db, etf)).toMatchObject({ price: 12.816, source: "market" });
   });
 });
 

@@ -22,7 +22,13 @@ import { SymbolSearchDialog } from "./symbol-search";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { AssetDetailCharts } from "./asset-detail-charts";
 import { LotHistoryTable } from "./lot-history-table";
-import { formatCurrency, formatPrice, getBaseCurrency, holdingsUnit } from "@/lib/format";
+import {
+  formatCurrency,
+  formatQuantity,
+  formatUnitPrice,
+  getBaseCurrency,
+  holdingsUnit,
+} from "@/lib/format";
 import { PROVIDER_LABELS } from "@/lib/providers/labels";
 import type { AssetWithMetrics, AssetLotResponse, SymbolMap } from "@/lib/validators/assets";
 
@@ -242,7 +248,7 @@ export function AssetDetailClient({
           </CardHeader>
           <CardContent>
             <p className="font-mono text-xl font-bold">
-              {asset.currentHoldings}{" "}
+              {formatQuantity(asset.currentHoldings)}{" "}
               <span className="text-muted-foreground text-sm font-normal">
                 {holdingsUnit(asset)}
               </span>
@@ -283,7 +289,8 @@ export function AssetDetailClient({
             )}
             {asset.latestPrice !== null && (
               <p className="text-muted-foreground mt-0.5 text-xs">
-                @ {formatPrice(asset.latestPrice)} {asset.currency}
+                @ {formatUnitPrice(asset.latestPrice, asset.currency)}
+                <PriceProvenance source={asset.priceSource} asOf={asset.priceAsOf} />
               </p>
             )}
           </CardContent>
@@ -411,7 +418,7 @@ export function AssetDetailClient({
               <span>
                 This asset still has{" "}
                 <strong>
-                  {asset.currentHoldings} {holdingsUnit(asset)}
+                  {formatQuantity(asset.currentHoldings)} {holdingsUnit(asset)}
                 </strong>{" "}
                 in holdings
                 {asset.currentValue !== null && (
@@ -499,5 +506,41 @@ export function AssetDetailClient({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Says where the displayed price came from, when that is not "a quote from
+ * today". A cost-basis fallback is the important case: it is what the user
+ * paid, not what the asset is worth, and rendered bare it is indistinguishable
+ * from a live quote — which is exactly how a dead price feed stays invisible.
+ */
+function PriceProvenance({
+  source,
+  asOf,
+}: {
+  source: AssetWithMetrics["priceSource"];
+  asOf: AssetWithMetrics["priceAsOf"];
+}) {
+  // A base-currency deposit is 1:1 by definition; there is no provenance to
+  // report, and a date would imply a valuation that never happened.
+  if (source === null || source === "deposit") return null;
+
+  const today = new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD, local
+  if (source === "market" && asOf === today) return null;
+
+  const label =
+    source === "lot"
+      ? "purchase price — no quote available"
+      : source === "user"
+        ? "set by you"
+        : "last quote";
+
+  return (
+    <span className={source === "lot" ? "text-amber-600 dark:text-amber-500" : undefined}>
+      {" · "}
+      {label}
+      {asOf !== null && ` (${asOf})`}
+    </span>
   );
 }

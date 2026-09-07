@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { formatCurrency, getBaseCurrency } from "@/lib/format";
+import { formatCurrency, formatQuantity, getBaseCurrency } from "@/lib/format";
 import type { AssetWithMetrics } from "@/lib/validators/assets";
 
 interface DepositWithdrawDialogProps {
@@ -123,7 +123,7 @@ export function DepositWithdrawDialog({
   const desc =
     mode === "deposit"
       ? "Record a deposit."
-      : `Record a withdrawal. Current balance: ${asset.currentHoldings} ${asset.currency}`;
+      : `Record a withdrawal. Current balance: ${formatQuantity(asset.currentHoldings)} ${asset.currency}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
