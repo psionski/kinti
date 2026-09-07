@@ -10,7 +10,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency, formatCurrencyCompact, formatMonth } from "@/lib/format";
+import { formatAxisTick, formatCurrency, formatMonth } from "@/lib/format";
+import { useYAxisWidth } from "@/hooks/use-y-axis-width";
 import { fallbackColor } from "@/lib/chart-colors";
 import type { CategoryTrendsResult } from "@/lib/validators/reports";
 
@@ -19,6 +20,7 @@ interface CategoryTrendsChartProps {
 }
 
 export function CategoryTrendsChart({ data }: CategoryTrendsChartProps): React.ReactElement {
+  const [chartRef, yAxisWidth] = useYAxisWidth();
   const chartConfig: ChartConfig = {};
   const fallbackCount = data.series.filter((s) => !s.color).length;
   let fallbackIndex = 0;
@@ -44,7 +46,11 @@ export function CategoryTrendsChart({ data }: CategoryTrendsChartProps): React.R
       </CardHeader>
       <CardContent>
         {data.series.length > 0 ? (
-          <ChartContainer config={chartConfig} className="max-h-[350px] min-h-[250px] w-full">
+          <ChartContainer
+            ref={chartRef}
+            config={chartConfig}
+            className="max-h-[350px] min-h-[250px] w-full"
+          >
             <AreaChart data={chartData} accessibilityLayer>
               <CartesianGrid vertical={false} />
               <XAxis
@@ -57,7 +63,10 @@ export function CategoryTrendsChart({ data }: CategoryTrendsChartProps): React.R
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(value: number) => formatCurrencyCompact(value)}
+                // Bare numbers, in a gutter sized to them: the tooltip names
+                // the currency.
+                tickFormatter={formatAxisTick}
+                width={yAxisWidth}
               />
               <ChartTooltip
                 content={

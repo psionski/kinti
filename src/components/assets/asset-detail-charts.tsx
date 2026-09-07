@@ -73,10 +73,10 @@ export function AssetDetailCharts({
 
       <div className={loading ? "pointer-events-none opacity-60" : ""}>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <PriceChart data={priceData} currency={currency} rangeLabel={rangeLabel(window)} />
           {history && (
             <ValueChart data={history} currency={currency} rangeLabel={rangeLabel(window)} />
           )}
-          <PriceChart data={priceData} currency={currency} rangeLabel={rangeLabel(window)} />
         </div>
       </div>
     </div>

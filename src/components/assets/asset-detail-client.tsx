@@ -8,6 +8,7 @@ import { PnlDisplay } from "@/components/shared/pnl-display";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -514,6 +515,10 @@ export function AssetDetailClient({
  * today". A cost-basis fallback is the important case: it is what the user
  * paid, not what the asset is worth, and rendered bare it is indistinguishable
  * from a live quote — which is exactly how a dead price feed stays invisible.
+ *
+ * A marker rather than a sentence, matching the asset cards: the provenance is
+ * an exception worth noticing, not something to read past on every visit. Amber
+ * only for the cost-basis case, which is the one that is not a valuation at all.
  */
 function PriceProvenance({
   source,
@@ -529,18 +534,32 @@ function PriceProvenance({
   const today = new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD, local
   if (source === "market" && asOf === today) return null;
 
-  const label =
+  const dated = (text: string): string => (asOf === null ? text : `${text} (${asOf})`);
+  const explanation =
     source === "lot"
-      ? "purchase price — no quote available"
+      ? dated("Cost basis of the last trade — no market quote available.")
       : source === "user"
-        ? "set by you"
-        : "last quote";
+        ? dated("Price set by you.")
+        : dated("Most recent market quote — none since.");
 
   return (
-    <span className={source === "lot" ? "text-amber-600 dark:text-amber-500" : undefined}>
-      {" · "}
-      {label}
-      {asOf !== null && ` (${asOf})`}
-    </span>
+    <Popover>
+      <PopoverTrigger asChild>
+        {/* A button, not a bare glyph: `title` is hover-only and does nothing
+            on touch. */}
+        <button
+          type="button"
+          aria-label="Where this price came from"
+          className={
+            source === "lot" ? "px-1 py-0.5 text-amber-600 dark:text-amber-500" : "px-1 py-0.5"
+          }
+        >
+          *
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 text-xs" align="start">
+        {explanation}
+      </PopoverContent>
+    </Popover>
   );
 }

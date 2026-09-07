@@ -10,7 +10,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { AssetHistoryResult } from "@/lib/validators/portfolio-reports";
 import { Temporal } from "@js-temporal/polyfill";
-import { formatCurrency, formatCurrencyCompact } from "@/lib/format";
+import { formatAxisTick, formatCurrency } from "@/lib/format";
+import { useYAxisWidth } from "@/hooks/use-y-axis-width";
 import { ChartStats, seriesExtremes } from "./chart-stats";
 
 /** Value only — price per unit has its own card and its own scale. */
@@ -38,6 +39,7 @@ function formatShortMonth(date: string): string {
 }
 
 export function ValueChart({ data, currency, rangeLabel }: ValueChartProps): React.ReactElement {
+  const [chartRef, yAxisWidth] = useYAxisWidth();
   const chartData: ChartPoint[] = data.timeline
     .filter((p) => p.value !== null)
     .map((p) => ({
@@ -56,6 +58,7 @@ export function ValueChart({ data, currency, rangeLabel }: ValueChartProps): Rea
       <CardContent>
         {chartData.length > 0 ? (
           <ChartContainer
+            ref={chartRef}
             config={chartConfig}
             className="aspect-auto h-[260px] w-full sm:h-[300px]"
           >
@@ -71,8 +74,10 @@ export function ValueChart({ data, currency, rangeLabel }: ValueChartProps): Rea
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(v: number) => formatCurrencyCompact(v, currency)}
-                width={64} // Recharts' 60px default clips six-figure labels.
+                // Bare numbers, in a gutter sized to them: the stats row and
+                // the tooltip below both name the currency.
+                tickFormatter={formatAxisTick}
+                width={yAxisWidth}
               />
               <ChartTooltip
                 content={

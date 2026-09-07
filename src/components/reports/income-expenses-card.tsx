@@ -8,7 +8,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency, formatMonth } from "@/lib/format";
+import { formatAxisTick, formatCurrency, formatMonth } from "@/lib/format";
+import { useYAxisWidth } from "@/hooks/use-y-axis-width";
 import type { TrendPoint, NetIncomeResult } from "@/lib/validators/reports";
 
 // Match the app-wide income/expense convention: emerald for money in,
@@ -58,6 +59,7 @@ export function IncomeExpensesCard({
   expenseTrend,
   showChart = true,
 }: IncomeExpensesCardProps): React.ReactElement {
+  const [chartRef, yAxisWidth] = useYAxisWidth();
   const chartData = mergeIncomeExpenseTrends(incomeTrend, expenseTrend);
 
   const netIsPositive = balance.netIncome >= 0;
@@ -95,7 +97,11 @@ export function IncomeExpensesCard({
 
         {/* Dual area chart */}
         {showChart && chartData.length > 0 ? (
-          <ChartContainer config={chartConfig} className="min-h-[200px] w-full flex-1">
+          <ChartContainer
+            ref={chartRef}
+            config={chartConfig}
+            className="min-h-[200px] w-full flex-1"
+          >
             <AreaChart data={chartData} accessibilityLayer>
               <CartesianGrid vertical={false} />
               <XAxis
@@ -108,7 +114,11 @@ export function IncomeExpensesCard({
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(value: number) => `€${value}`}
+                // Bare numbers, in a gutter sized to them: the tooltip names
+                // the currency, which a hardcoded symbol would get wrong for
+                // any base currency that is not the euro.
+                tickFormatter={formatAxisTick}
+                width={yAxisWidth}
               />
               <ChartTooltip
                 content={

@@ -1,6 +1,6 @@
 "use client";
 
-import { Line, LineChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { Area, ComposedChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
   ChartContainer,
   ChartTooltip,
@@ -10,6 +10,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Temporal } from "@js-temporal/polyfill";
 import { formatAxisTick, formatUnitPrice } from "@/lib/format";
+import { useYAxisWidth } from "@/hooks/use-y-axis-width";
 import { ChartStats, seriesExtremes } from "./chart-stats";
 
 interface PricePoint {
@@ -39,6 +40,7 @@ function formatDate(dateStr: string): string {
 }
 
 export function PriceChart({ data, currency, rangeLabel }: PriceChartProps): React.ReactElement {
+  const [chartRef, yAxisWidth] = useYAxisWidth();
   const stats = seriesExtremes(data.map((point) => point.pricePerUnit));
   const price = (value: number): string => formatUnitPrice(value, currency);
 
@@ -68,8 +70,12 @@ export function PriceChart({ data, currency, rangeLabel }: PriceChartProps): Rea
         <CardTitle>Price History</CardTitle>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="aspect-auto h-[260px] w-full sm:h-[300px]">
-          <LineChart data={chartData} accessibilityLayer>
+        <ChartContainer
+          ref={chartRef}
+          config={chartConfig}
+          className="aspect-auto h-[260px] w-full sm:h-[300px]"
+        >
+          <ComposedChart data={chartData} accessibilityLayer>
             <CartesianGrid vertical={false} />
             <XAxis
               dataKey="date"
@@ -81,10 +87,10 @@ export function PriceChart({ data, currency, rangeLabel }: PriceChartProps): Rea
             <YAxis
               tickLine={false}
               axisLine={false}
-              // Unit prices span everything from six figures to sub-cent coins;
-              // significant digits cover both ends where fraction digits can't.
+              // Unit prices span everything from six figures to sub-cent coins,
+              // so both the tick format and the gutter follow the data.
               tickFormatter={formatAxisTick}
-              width={72}
+              width={yAxisWidth}
             />
             <ChartTooltip
               content={
@@ -94,14 +100,15 @@ export function PriceChart({ data, currency, rangeLabel }: PriceChartProps): Rea
                 />
               }
             />
-            <Line
+            <Area
               dataKey="price"
               type="monotone"
+              fill="var(--color-price)"
+              fillOpacity={0.15}
               stroke="var(--color-price)"
               strokeWidth={2}
-              dot={false}
             />
-          </LineChart>
+          </ComposedChart>
         </ChartContainer>
         {stats && (
           <ChartStats

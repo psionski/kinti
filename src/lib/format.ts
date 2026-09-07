@@ -49,22 +49,6 @@ function getFormatter(currency: string): Intl.NumberFormat {
   return f;
 }
 
-const compactFormatterCache = new Map<string, Intl.NumberFormat>();
-
-function getCompactFormatter(currency: string): Intl.NumberFormat {
-  let f = compactFormatterCache.get(currency);
-  if (!f) {
-    f = new Intl.NumberFormat(DISPLAY_LOCALE, {
-      style: "currency",
-      currency,
-      notation: "compact",
-      maximumFractionDigits: 1,
-    });
-    compactFormatterCache.set(currency, f);
-  }
-  return f;
-}
-
 /**
  * Format a monetary amount. Decimal precision is determined by the currency
  * itself via Intl (JPY = 0, USD/EUR = 2, BHD = 3, etc.) — never assume 2.
@@ -76,18 +60,6 @@ function getCompactFormatter(currency: string): Intl.NumberFormat {
  */
 export function formatCurrency(amount: number, currency: string = getBaseCurrency()): string {
   return getFormatter(currency).format(amount);
-}
-
-/**
- * Compact currency formatter for chart axes and tight UI labels.
- * Produces e.g. "1,2 Tsd. €" / "1.2K €" — suitable for Y-axis ticks where
- * the full `formatCurrency` output is too wide.
- */
-export function formatCurrencyCompact(
-  amount: number,
-  currency: string = getBaseCurrency()
-): string {
-  return getCompactFormatter(currency).format(amount);
 }
 
 /**
@@ -148,24 +120,66 @@ function countDecimals(n: number): number {
   return dot === -1 ? 0 : s.length - dot - 1;
 }
 
-const axisTickFormatter = new Intl.NumberFormat(DISPLAY_LOCALE, {
-  notation: "compact",
+/*
+ * Chart-axis ticks. The gutter a Y axis reserves is as wide as its widest tick,
+ * so the goal here is the shortest string that still says which number it is:
+ * a K/M/B/T suffix at the top end, and scientific notation at the bottom, with
+ * plain digits over the range where plain digits are already short.
+ */
+
+const AXIS_MAGNITUDES = [
+  { at: 1e12, suffix: "T" },
+  { at: 1e9, suffix: "B" },
+  { at: 1e6, suffix: "M" },
+  { at: 1e3, suffix: "K" },
+] as const;
+
+/** Below this, plain decimals grow a leading-zero tail; scientific is shorter. */
+const AXIS_SCIENTIFIC_BELOW = 1e-4;
+
+const axisPlainFormatter = new Intl.NumberFormat(DISPLAY_LOCALE, {
   maximumSignificantDigits: 4,
 });
 
+const axisScaledFormatter = new Intl.NumberFormat(DISPLAY_LOCALE, {
+  maximumSignificantDigits: 3,
+});
+
+const axisScientificFormatter = new Intl.NumberFormat(DISPLAY_LOCALE, {
+  notation: "scientific",
+  maximumSignificantDigits: 3,
+});
+
 /**
- * A number for a chart axis tick: compact, at most four significant digits, and
- * no currency symbol — the gutter has no room for one, and the chart's stats row
- * and tooltip both name the currency.
+ * A number for a chart axis tick: as short as it can be while staying an
+ * unambiguous reading of the value, and with no currency symbol — the gutter
+ * has no room for one, and the chart's stats row and tooltip both name the
+ * currency.
  *
- * A price axis has to span the whole range an asset can trade at, and significant
- * digits are what cover both ends: 89000 → "89.000", 1e-7 → "0,0000001".
- * `formatCurrencyCompact` caps at one fraction digit, so it renders every tick
- * under 0.05 as "0 €". Use that one for axes whose values are amounts of money
- * (a position's value), and this one for axes of unit prices.
+ * A price axis has to span the whole range an asset can trade at, and no single
+ * rule covers that: 89000 -> "89K", 1250000 -> "1,25M", 12.94 -> "12,94",
+ * 0.00000514 -> "5,14e-6".
+ *
+ * The K/M/B/T suffixes are deliberately not the display locale's own ("Tsd.",
+ * "Mio."), which are wider than the digits they abbreviate and so defeat the
+ * point. Pair this with `useYAxisWidth`, which sizes the gutter from what these
+ * ticks actually render as.
  */
 export function formatAxisTick(value: number): string {
-  return axisTickFormatter.format(value);
+  if (value === 0) return "0";
+
+  const magnitude = Math.abs(value);
+
+  const scale = AXIS_MAGNITUDES.find((m) => magnitude >= m.at);
+  if (scale) return `${axisScaledFormatter.format(value / scale.at)}${scale.suffix}`;
+
+  if (magnitude < AXIS_SCIENTIFIC_BELOW) {
+    // Intl renders the exponent as "E-6"; lowercase reads as part of the number
+    // rather than as a unit appended to it.
+    return axisScientificFormatter.format(value).replace("E", "e");
+  }
+
+  return axisPlainFormatter.format(value);
 }
 
 const unitPriceFormatterCache = new Map<string, Intl.NumberFormat>();

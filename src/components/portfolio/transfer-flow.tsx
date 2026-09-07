@@ -10,7 +10,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency } from "@/lib/format";
+import { formatAxisTick, formatCurrency } from "@/lib/format";
+import { useYAxisWidth } from "@/hooks/use-y-axis-width";
 import type { TransferSummaryItem } from "@/lib/validators/portfolio-reports";
 
 const chartConfig = {
@@ -29,6 +30,7 @@ interface TransferFlowProps {
 }
 
 export function TransferFlow({ data }: TransferFlowProps): React.ReactElement {
+  const [chartRef, yAxisWidth] = useYAxisWidth();
   const chartData = data.map((item) => ({
     name: item.assetName,
     purchases: item.purchases,
@@ -42,14 +44,17 @@ export function TransferFlow({ data }: TransferFlowProps): React.ReactElement {
       </CardHeader>
       <CardContent>
         {chartData.length > 0 ? (
-          <ChartContainer config={chartConfig} className="min-h-[250px] w-full">
+          <ChartContainer ref={chartRef} config={chartConfig} className="min-h-[250px] w-full">
             <BarChart data={chartData} layout="horizontal" accessibilityLayer>
               <CartesianGrid vertical={false} />
               <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} />
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(value: number) => formatCurrency(value)}
+                // Bare numbers, in a gutter sized to them: the tooltip names
+                // the currency.
+                tickFormatter={formatAxisTick}
+                width={yAxisWidth}
               />
               <ChartTooltip
                 content={

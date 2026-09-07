@@ -144,23 +144,39 @@ describe("formatUnitPrice", () => {
 
 describe("formatAxisTick", () => {
   // A price axis has to span whatever the asset trades at, so both ends matter.
-  it("keeps six-figure prices short", () => {
-    expect(formatAxisTick(89000)).toBe("89.000");
-    expect(formatAxisTick(1000000)).toContain("Mio");
+  it("abbreviates large prices with a one-character suffix", () => {
+    expect(formatAxisTick(89000)).toBe("89K");
+    expect(formatAxisTick(1250000)).toBe("1,25M");
+    expect(formatAxisTick(2500000000)).toBe("2,5B");
+  });
+
+  // The locale's own compact forms are wider than the digits they replace,
+  // which is the opposite of what an axis gutter needs.
+  it("uses K/M rather than the display locale's compact words", () => {
+    expect(formatAxisTick(89000)).not.toContain("Tsd");
+    expect(formatAxisTick(1000000)).not.toContain("Mio");
   });
 
   it("keeps sub-cent prices legible instead of collapsing them to zero", () => {
-    expect(formatAxisTick(0.0000001)).toBe("0,0000001");
-    expect(formatAxisTick(0.00000514)).toBe("0,00000514");
+    expect(formatAxisTick(0.0000001)).toBe("1e-7");
+    expect(formatAxisTick(0.00000514)).toBe("5,14e-6");
   });
 
   it("keeps ordinary prices exact", () => {
+    expect(formatAxisTick(0)).toBe("0");
     expect(formatAxisTick(12.94)).toBe("12,94");
     expect(formatAxisTick(715.3)).toBe("715,3");
+    expect(formatAxisTick(0.00099)).toBe("0,00099");
   });
 
   it("carries no currency symbol", () => {
     expect(formatAxisTick(12.94)).not.toContain("€");
+  });
+
+  it("keeps every tick short enough for a narrow gutter", () => {
+    for (const v of [0, 0.0000001, 0.00099, 12.94, 715.3, 89000, 1250000, 2.5e9]) {
+      expect(formatAxisTick(v).length).toBeLessThanOrEqual(7);
+    }
   });
 });
 

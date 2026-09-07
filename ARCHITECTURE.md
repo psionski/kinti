@@ -338,18 +338,21 @@ The same `currency` column lives on `recurring_transactions`. Generated transact
 **Boundaries — convert at the edges:**
 - **Write time:** `TransactionService.create/update/createBatch/updateBatch` and `AssetLotService.buy/sell` are async and consult `FinancialDataService.convertToBase()` to compute `amount_base`. The write fails if no provider can resolve the rate.
 - **Read time:** Aggregations sum `amount_base` directly. Per-row display uses `formatCurrency(tx.amount, tx.currency)` for the native value, with `formatCurrency(tx.amountBase)` shown in a tooltip when the row is in a foreign currency.
-- **Format:** Never hardcode a currency symbol or `Math.round(x * 100) / 100` — Intl handles per-currency precision (JPY has 0 decimals, BHD has 3). Three formatters live in `src/lib/format.ts`; each omits its `currency` argument to default to the cached base currency:
+- **Format:** Never hardcode a currency symbol or `Math.round(x * 100) / 100` — Intl handles per-currency precision (JPY has 0 decimals, BHD has 3). The formatters live in `src/lib/format.ts`; each omits its `currency` argument to default to the cached base currency:
 
 | Function | Use for | Example output |
 | --- | --- | --- |
 | `formatCurrency(amount, currency?)` | Amounts of money — totals, balances, cost basis, P&L. Uses the currency's own precision. | `628,00 €` |
-| `formatCurrencyCompact(amount, currency?)` | Money on a chart axis, where ticks are approximate. | `100.000 €` |
 | `formatUnitPrice(price, currency?)` | The price of one unit — quotes, manual marks, lot fills. Same presentation, variable precision. | `12,94 €`, `0,00000514 €` |
 | `formatQuantity(value)` | A holdings or lot count. Exact below a million, abbreviated above it. | `2.695`, `0,01305`, `5 Mrd.` |
-| `formatAxisTick(value)` | A unit price on a chart axis. No symbol — the gutter has no room. | `89.000`, `0,0000001` |
+| `formatAxisTick(value)` | Any number on a chart axis. No symbol — the gutter has no room. | `89K`, `1,25M`, `12,94`, `5,14e-6` |
 | `priceInputValue(price)` | The `value` of a number `<input>`. Never render it as text. | `89000.00` |
 
 `formatQuantity` abbreviates only above a million on purpose: compact notation rounds to a few significant digits, and in a `.`-grouping locale 12345 renders as `12.350`, which reads as a precise 12,350 — a different number of units. Past a million the `Mio.`/`Mrd.` suffix makes the rounding explicit. `formatAxisTick` accepts that rounding because axis ticks are approximations by design.
+
+A Y axis reserves a gutter as wide as its widest tick, so `formatAxisTick` optimises for short: `K`/`M`/`B`/`T` above a thousand, scientific notation below `0,0001`, plain digits in between. The suffixes are Latin rather than the display locale's `Tsd.`/`Mio.`, which are wider than the digits they abbreviate. Ticks carry no currency symbol — every chart's tooltip already names the currency, and the gutter has no room for one.
+
+Pair it with `useYAxisWidth()` (`src/hooks/use-y-axis-width.ts`), which every chart with a `YAxis` uses — attach its ref to the `ChartContainer` and pass its width to the `YAxis`. Recharts 2 has no auto-sizing axis, and any fixed `width` is dead space beside small numbers or a clipped label beside large ones; the data can't settle it either, because Recharts picks its tick values during the render that needs the width and rounds the domain outwards while doing it. The hook measures the tick text that actually rendered, so it is right whatever the formatter is — the savings-rate axis uses it with `%` labels.
 
 `formatUnitPrice` and `priceInputValue` are not interchangeable. A unit price can be finer than its currency's scale, so `formatCurrency` renders a `0,00000514 €` coin as `0,00 €`. Going the other way is worse: `parseFloat("89.000,00 €")` is `89`, because `parseFloat` stops at the first `.` and reads it as the decimal point — a display string in a number input silently books a value off by 1000×, and the input rejects it as non-numeric besides.
 

@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMonth } from "@/lib/format";
+import { useYAxisWidth } from "@/hooks/use-y-axis-width";
 import type { TrendPoint } from "@/lib/validators/reports";
 
 const chartConfig = {
@@ -47,6 +48,7 @@ export function SavingsRateChart({
   incomeTrend,
   expenseTrend,
 }: SavingsRateChartProps): React.ReactElement {
+  const [chartRef, yAxisWidth] = useYAxisWidth();
   const chartData = computeSavingsRateData(incomeTrend, expenseTrend);
 
   return (
@@ -56,7 +58,11 @@ export function SavingsRateChart({
       </CardHeader>
       <CardContent className="flex flex-1 flex-col">
         {chartData.length > 0 ? (
-          <ChartContainer config={chartConfig} className="min-h-[200px] w-full flex-1">
+          <ChartContainer
+            ref={chartRef}
+            config={chartConfig}
+            className="min-h-[200px] w-full flex-1"
+          >
             <AreaChart data={chartData} accessibilityLayer>
               <CartesianGrid vertical={false} />
               <XAxis
@@ -70,6 +76,7 @@ export function SavingsRateChart({
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(value: number) => `${value}%`}
+                width={yAxisWidth}
               />
               <ChartTooltip
                 content={

@@ -8,7 +8,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency, formatCurrencyCompact, formatMonth } from "@/lib/format";
+import { formatAxisTick, formatCurrency, formatMonth } from "@/lib/format";
+import { useYAxisWidth } from "@/hooks/use-y-axis-width";
 import type { TrendPoint } from "@/lib/validators/reports";
 
 const chartConfig = {
@@ -23,6 +24,7 @@ interface SpendingTrendChartProps {
 }
 
 export function SpendingTrendChart({ data }: SpendingTrendChartProps): React.ReactElement {
+  const [chartRef, yAxisWidth] = useYAxisWidth();
   const chartData = data.map((point) => ({
     month: formatMonth(point.month),
     total: point.total,
@@ -35,14 +37,17 @@ export function SpendingTrendChart({ data }: SpendingTrendChartProps): React.Rea
       </CardHeader>
       <CardContent>
         {chartData.length > 0 ? (
-          <ChartContainer config={chartConfig} className="min-h-[250px] w-full">
+          <ChartContainer ref={chartRef} config={chartConfig} className="min-h-[250px] w-full">
             <AreaChart data={chartData} accessibilityLayer>
               <CartesianGrid vertical={false} />
               <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(value: number) => formatCurrencyCompact(value)}
+                // Bare numbers, in a gutter sized to them: the tooltip names
+                // the currency.
+                tickFormatter={formatAxisTick}
+                width={yAxisWidth}
               />
               <ChartTooltip
                 content={

@@ -10,7 +10,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency, formatCurrencyCompact } from "@/lib/format";
+import { formatAxisTick, formatCurrency } from "@/lib/format";
+import { useYAxisWidth } from "@/hooks/use-y-axis-width";
 import type { NetWorthPoint } from "@/lib/validators/portfolio-reports";
 import { Temporal } from "@js-temporal/polyfill";
 
@@ -45,6 +46,7 @@ function formatXAxisDate(dates: string[]): (date: string) => string {
 }
 
 export function NetWorthChart({ data }: NetWorthChartProps): React.ReactElement {
+  const [chartRef, yAxisWidth] = useYAxisWidth();
   const chartData = data.map((point) => ({
     date: point.date,
     cash: point.cash,
@@ -60,7 +62,11 @@ export function NetWorthChart({ data }: NetWorthChartProps): React.ReactElement 
       </CardHeader>
       <CardContent>
         {chartData.length > 0 ? (
-          <ChartContainer config={chartConfig} className="max-h-[350px] min-h-[250px] w-full">
+          <ChartContainer
+            ref={chartRef}
+            config={chartConfig}
+            className="max-h-[350px] min-h-[250px] w-full"
+          >
             <AreaChart data={chartData} accessibilityLayer>
               <CartesianGrid vertical={false} />
               <XAxis
@@ -73,7 +79,10 @@ export function NetWorthChart({ data }: NetWorthChartProps): React.ReactElement 
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(value: number) => formatCurrencyCompact(value)}
+                // Bare numbers, in a gutter sized to them: the tooltip names
+                // the currency.
+                tickFormatter={formatAxisTick}
+                width={yAxisWidth}
               />
               <ChartTooltip
                 content={
