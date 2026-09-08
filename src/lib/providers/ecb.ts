@@ -1,5 +1,6 @@
 import type { PriceResult, FinancialDataProvider, SymbolSearchResult, ProviderName } from "./types";
 import { isoToday } from "@/lib/date-ranges";
+import { providerFetch } from "./rate-limit";
 
 const DAILY_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
 const HIST_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml";
@@ -22,7 +23,7 @@ export class EcbProvider implements FinancialDataProvider {
     const isHistorical = date && date < isoToday();
     const url = isHistorical ? HIST_URL : DAILY_URL;
 
-    const res = await fetch(url, {
+    const res = await providerFetch(this.name, url, {
       headers: { Accept: "application/xml" },
       next: { revalidate: 0 },
     });
@@ -45,7 +46,7 @@ export class EcbProvider implements FinancialDataProvider {
     from: string,
     to: string
   ): Promise<PriceResult[]> {
-    const res = await fetch(HIST_URL, {
+    const res = await providerFetch(this.name, HIST_URL, {
       headers: { Accept: "application/xml" },
       next: { revalidate: 0 },
     });
@@ -75,7 +76,7 @@ export class EcbProvider implements FinancialDataProvider {
   }
 
   async searchSymbol(query: string): Promise<SymbolSearchResult[]> {
-    const res = await fetch(DAILY_URL, {
+    const res = await providerFetch(this.name, DAILY_URL, {
       headers: { Accept: "application/xml" },
       next: { revalidate: 0 },
     });
@@ -100,7 +101,7 @@ export class EcbProvider implements FinancialDataProvider {
 
   async healthCheck(): Promise<boolean> {
     try {
-      const res = await fetch(DAILY_URL, { method: "HEAD" });
+      const res = await providerFetch(this.name, DAILY_URL, { method: "HEAD" });
       return res.ok;
     } catch {
       return false;

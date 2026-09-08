@@ -1,5 +1,6 @@
 import type { PriceResult, FinancialDataProvider, SymbolSearchResult } from "./types";
 import { isoDateFromMs } from "@/lib/date-ranges";
+import { providerFetch } from "./rate-limit";
 
 const BASE_URL = "https://openexchangerates.org/api";
 
@@ -24,7 +25,7 @@ export class OpenExchangeRatesProvider implements FinancialDataProvider {
       ? `${BASE_URL}/historical/${date}.json?app_id=${this.apiKey}&base=USD`
       : `${BASE_URL}/latest.json?app_id=${this.apiKey}&base=USD`;
 
-    const res = await fetch(url, { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url, { next: { revalidate: 0 } });
     if (!res.ok) return [];
 
     const data = (await res.json()) as OerResponse;
@@ -67,7 +68,7 @@ export class OpenExchangeRatesProvider implements FinancialDataProvider {
 
     for (const date of dates) {
       const url = `${BASE_URL}/historical/${date}.json?app_id=${this.apiKey}&base=USD&symbols=USD,${symbol},${currency}`;
-      const res = await fetch(url, { next: { revalidate: 0 } });
+      const res = await providerFetch(this.name, url, { next: { revalidate: 0 } });
       if (!res.ok) continue;
 
       const data = (await res.json()) as OerResponse;
@@ -93,7 +94,7 @@ export class OpenExchangeRatesProvider implements FinancialDataProvider {
 
   async searchSymbol(query: string): Promise<SymbolSearchResult[]> {
     const url = `${BASE_URL}/currencies.json`;
-    const res = await fetch(url, { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url, { next: { revalidate: 0 } });
     if (!res.ok) return [];
 
     const data = (await res.json()) as Record<string, string>;
@@ -113,9 +114,13 @@ export class OpenExchangeRatesProvider implements FinancialDataProvider {
 
   async healthCheck(): Promise<boolean> {
     try {
-      const res = await fetch(`${BASE_URL}/latest.json?app_id=${this.apiKey}&symbols=EUR`, {
-        next: { revalidate: 0 },
-      });
+      const res = await providerFetch(
+        this.name,
+        `${BASE_URL}/latest.json?app_id=${this.apiKey}&symbols=EUR`,
+        {
+          next: { revalidate: 0 },
+        }
+      );
       return res.ok;
     } catch {
       return false;

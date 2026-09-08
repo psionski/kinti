@@ -1,4 +1,5 @@
 import type { PriceResult, FinancialDataProvider, SymbolSearchResult } from "./types";
+import { providerFetch } from "./rate-limit";
 
 const BASE_URL = "https://api.frankfurter.app";
 
@@ -14,7 +15,7 @@ export class FrankfurterProvider implements FinancialDataProvider {
     const endpoint = date ? `${BASE_URL}/${date}` : `${BASE_URL}/latest`;
     const url = `${endpoint}?from=${encodeURIComponent(symbol)}&to=${encodeURIComponent(currency)}`;
 
-    const res = await fetch(url, { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url, { next: { revalidate: 0 } });
     if (!res.ok) return null;
 
     const data = (await res.json()) as FrankfurterResponse;
@@ -34,7 +35,7 @@ export class FrankfurterProvider implements FinancialDataProvider {
     const endpoint = date ? `${BASE_URL}/${date}` : `${BASE_URL}/latest`;
     const url = `${endpoint}?from=${encodeURIComponent(symbol)}`;
 
-    const res = await fetch(url, { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url, { next: { revalidate: 0 } });
     if (!res.ok) return [];
 
     const data = (await res.json()) as FrankfurterResponse;
@@ -56,7 +57,7 @@ export class FrankfurterProvider implements FinancialDataProvider {
     to: string
   ): Promise<PriceResult[]> {
     const url = `${BASE_URL}/${from}..${to}?from=${encodeURIComponent(symbol)}&to=${encodeURIComponent(currency)}`;
-    const res = await fetch(url, { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url, { next: { revalidate: 0 } });
     if (!res.ok) return [];
 
     const data = (await res.json()) as FrankfurterTimeseriesResponse;
@@ -73,7 +74,7 @@ export class FrankfurterProvider implements FinancialDataProvider {
   }
 
   async searchSymbol(query: string): Promise<SymbolSearchResult[]> {
-    const res = await fetch(`${BASE_URL}/currencies`);
+    const res = await providerFetch(this.name, `${BASE_URL}/currencies`);
     if (!res.ok) return [];
     const data = (await res.json()) as Record<string, string>;
     const q = query.toUpperCase();
@@ -91,7 +92,7 @@ export class FrankfurterProvider implements FinancialDataProvider {
 
   async healthCheck(): Promise<boolean> {
     try {
-      const res = await fetch(`${BASE_URL}/latest?from=EUR&to=USD`, {
+      const res = await providerFetch(this.name, `${BASE_URL}/latest?from=EUR&to=USD`, {
         next: { revalidate: 0 },
       });
       return res.ok;

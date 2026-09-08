@@ -1,5 +1,6 @@
 import type { PriceResult, FinancialDataProvider, SymbolSearchResult } from "./types";
 import { isoToday } from "@/lib/date-ranges";
+import { providerFetch } from "./rate-limit";
 
 const BASE_URL = "https://pro-api.coinmarketcap.com";
 
@@ -48,7 +49,7 @@ export class CoinMarketCapProvider implements FinancialDataProvider {
     url.searchParams.set("slug", symbol);
     url.searchParams.set("convert", currency.toUpperCase());
 
-    const res = await fetch(url.toString(), {
+    const res = await providerFetch(this.name, url.toString(), {
       headers: this.headers(),
       next: { revalidate: 0 },
     });
@@ -87,7 +88,7 @@ export class CoinMarketCapProvider implements FinancialDataProvider {
     url.searchParams.set("time_end", date);
     url.searchParams.set("count", "1");
 
-    const res = await fetch(url.toString(), {
+    const res = await providerFetch(this.name, url.toString(), {
       headers: this.headers(),
       next: { revalidate: 0 },
     });
@@ -129,7 +130,7 @@ export class CoinMarketCapProvider implements FinancialDataProvider {
     url.searchParams.set("slug", symbol);
     url.searchParams.set("convert", convert);
 
-    const res = await fetch(url.toString(), {
+    const res = await providerFetch(this.name, url.toString(), {
       headers: this.headers(),
       next: { revalidate: 0 },
     });
@@ -163,7 +164,7 @@ export class CoinMarketCapProvider implements FinancialDataProvider {
     url.searchParams.set("listing_status", "active");
     url.searchParams.set("limit", "100");
 
-    const res = await fetch(url.toString(), {
+    const res = await providerFetch(this.name, url.toString(), {
       headers: this.headers(),
       next: { revalidate: 0 },
     });
@@ -193,7 +194,7 @@ export class CoinMarketCapProvider implements FinancialDataProvider {
     try {
       const url = new URL(`${BASE_URL}/v1/cryptocurrency/map`);
       url.searchParams.set("limit", "1");
-      const res = await fetch(url.toString(), {
+      const res = await providerFetch(this.name, url.toString(), {
         headers: this.headers(),
         next: { revalidate: 0 },
       });

@@ -1,6 +1,7 @@
 import type { PriceResult, FinancialDataProvider, SymbolSearchResult } from "./types";
 import { ProviderError, ProviderRateLimitError } from "./errors";
 import { isoToday } from "@/lib/date-ranges";
+import { providerFetch } from "./rate-limit";
 
 const BASE_URL = "https://www.alphavantage.co/query";
 
@@ -50,7 +51,7 @@ export class AlphaVantageProvider implements FinancialDataProvider {
     url.searchParams.set("symbol", symbol);
     url.searchParams.set("apikey", this.apiKey);
 
-    const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
     if (!res.ok) return null;
 
     const data = (await res.json()) as AlphaVantageQuoteResponse;
@@ -87,7 +88,7 @@ export class AlphaVantageProvider implements FinancialDataProvider {
     url.searchParams.set("outputsize", "compact");
     url.searchParams.set("apikey", this.apiKey);
 
-    const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
     if (!res.ok) return null;
 
     const data = (await res.json()) as AlphaVantageDailyResponse;
@@ -128,7 +129,7 @@ export class AlphaVantageProvider implements FinancialDataProvider {
     url.searchParams.set("outputsize", "full");
     url.searchParams.set("apikey", this.apiKey);
 
-    const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
     if (!res.ok) return [];
 
     const data = (await res.json()) as AlphaVantageDailyResponse;
@@ -161,7 +162,7 @@ export class AlphaVantageProvider implements FinancialDataProvider {
     url.searchParams.set("keywords", query);
     url.searchParams.set("apikey", this.apiKey);
 
-    const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
     if (!res.ok) return [];
 
     const data = (await res.json()) as AlphaVantageSearchResponse;
@@ -186,7 +187,7 @@ export class AlphaVantageProvider implements FinancialDataProvider {
       url.searchParams.set("function", "GLOBAL_QUOTE");
       url.searchParams.set("symbol", "IBM");
       url.searchParams.set("apikey", this.apiKey);
-      const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+      const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
       if (!res.ok) return false;
       const data = (await res.json()) as Record<string, unknown>;
       return "Global Quote" in data;

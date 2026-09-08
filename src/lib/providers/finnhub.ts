@@ -1,6 +1,7 @@
 import { Temporal } from "@js-temporal/polyfill";
 import type { PriceResult, FinancialDataProvider, SymbolSearchResult } from "./types";
 import { isoToday } from "@/lib/date-ranges";
+import { providerFetch } from "./rate-limit";
 
 const BASE_URL = "https://finnhub.io/api/v1";
 
@@ -26,7 +27,7 @@ export class FinnhubProvider implements FinancialDataProvider {
     url.searchParams.set("symbol", symbol);
     url.searchParams.set("token", this.apiKey);
 
-    const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
     if (!res.ok) return null;
 
     const data = (await res.json()) as FinnhubQuoteResponse;
@@ -58,7 +59,7 @@ export class FinnhubProvider implements FinancialDataProvider {
     url.searchParams.set("to", String(toTs));
     url.searchParams.set("token", this.apiKey);
 
-    const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
     if (!res.ok) return null;
 
     const data = (await res.json()) as FinnhubCandleResponse;
@@ -99,7 +100,7 @@ export class FinnhubProvider implements FinancialDataProvider {
     url.searchParams.set("to", String(toTs));
     url.searchParams.set("token", this.apiKey);
 
-    const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
     if (!res.ok) return [];
 
     const data = (await res.json()) as FinnhubCandleResponse;
@@ -134,7 +135,7 @@ export class FinnhubProvider implements FinancialDataProvider {
     url.searchParams.set("q", query);
     url.searchParams.set("token", this.apiKey);
 
-    const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
     if (!res.ok) return [];
 
     const data = (await res.json()) as FinnhubSearchResponse;
@@ -153,7 +154,7 @@ export class FinnhubProvider implements FinancialDataProvider {
       const url = new URL(`${BASE_URL}/quote`);
       url.searchParams.set("symbol", "AAPL");
       url.searchParams.set("token", this.apiKey);
-      const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+      const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
       if (!res.ok) return false;
       const data = (await res.json()) as FinnhubQuoteResponse;
       return data.c !== undefined && data.c > 0;

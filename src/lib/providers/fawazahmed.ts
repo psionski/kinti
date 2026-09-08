@@ -1,5 +1,6 @@
 import type { PriceResult, FinancialDataProvider, SymbolSearchResult } from "./types";
 import { isoToday } from "@/lib/date-ranges";
+import { providerFetch } from "./rate-limit";
 
 /**
  * fawazahmed0/exchange-api — free, CC0-licensed, no API key, no rate limits.
@@ -71,7 +72,7 @@ export class FawazahmedProvider implements FinancialDataProvider {
 
   async searchSymbol(query: string): Promise<SymbolSearchResult[]> {
     const url = `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies.json`;
-    const res = await fetch(url, { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url, { next: { revalidate: 0 } });
     if (!res.ok) return [];
     const data = (await res.json()) as Record<string, string>;
     const q = query.toLowerCase();
@@ -108,7 +109,7 @@ export class FawazahmedProvider implements FinancialDataProvider {
     // Primary CDN: jsDelivr. Cloudflare mirror would be the obvious failover,
     // but jsDelivr is reliable enough that we keep this single-source.
     const url = `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${tag}/v1/currencies/${encodeURIComponent(lower)}.json`;
-    const res = await fetch(url, { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url, { next: { revalidate: 0 } });
     if (!res.ok) return null;
     const json = (await res.json()) as { date?: string } & Record<string, unknown>;
     const rates = json[lower];

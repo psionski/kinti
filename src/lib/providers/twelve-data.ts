@@ -1,5 +1,6 @@
 import type { PriceResult, FinancialDataProvider, SymbolSearchResult } from "./types";
 import { isoToday } from "@/lib/date-ranges";
+import { providerFetch } from "./rate-limit";
 
 const BASE_URL = "https://api.twelvedata.com";
 
@@ -25,7 +26,7 @@ export class TwelveDataProvider implements FinancialDataProvider {
     url.searchParams.set("symbol", symbol);
     url.searchParams.set("apikey", this.apiKey);
 
-    const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
     if (!res.ok) return null;
 
     const data = (await res.json()) as TwelveDataQuoteResponse;
@@ -56,7 +57,7 @@ export class TwelveDataProvider implements FinancialDataProvider {
     url.searchParams.set("outputsize", "1");
     url.searchParams.set("apikey", this.apiKey);
 
-    const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
     if (!res.ok) return null;
 
     const data = (await res.json()) as TwelveDataTimeSeriesResponse;
@@ -90,7 +91,7 @@ export class TwelveDataProvider implements FinancialDataProvider {
     url.searchParams.set("outputsize", "5000");
     url.searchParams.set("apikey", this.apiKey);
 
-    const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
     if (!res.ok) return [];
 
     const data = (await res.json()) as TwelveDataTimeSeriesResponse;
@@ -119,7 +120,7 @@ export class TwelveDataProvider implements FinancialDataProvider {
     url.searchParams.set("outputsize", "15");
     url.searchParams.set("apikey", this.apiKey);
 
-    const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
     if (!res.ok) return [];
 
     const data = (await res.json()) as TwelveDataSearchResponse;
@@ -139,7 +140,7 @@ export class TwelveDataProvider implements FinancialDataProvider {
       const url = new URL(`${BASE_URL}/quote`);
       url.searchParams.set("symbol", "AAPL");
       url.searchParams.set("apikey", this.apiKey);
-      const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+      const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
       if (!res.ok) return false;
       const data = (await res.json()) as TwelveDataQuoteResponse;
       return data.status !== "error";

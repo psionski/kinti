@@ -9,6 +9,9 @@ export default defineConfig({
     globals: true,
     exclude: ["e2e/**", "node_modules/**", ".next/**", "dist/**"],
     pool: "forks",
+    // Providers pace their outbound requests (see providers/rate-limit.ts).
+    // Tests stub fetch, so the real sleep would only add wall time.
+    env: { PROVIDER_MIN_INTERVAL_MS: "0" },
     coverage: {
       provider: "v8",
       include: ["src/lib/**"],

@@ -1,5 +1,6 @@
 import type { PriceResult, FinancialDataProvider, SymbolSearchResult } from "./types";
 import { isoToday } from "@/lib/date-ranges";
+import { providerFetch } from "./rate-limit";
 
 const BASE_URL = "https://v6.exchangerate-api.com/v6";
 
@@ -23,7 +24,7 @@ export class ExchangeRateApiProvider implements FinancialDataProvider {
 
   private async getPairPrice(symbol: string, currency: string): Promise<PriceResult | null> {
     const url = `${BASE_URL}/${this.apiKey}/pair/${encodeURIComponent(symbol)}/${encodeURIComponent(currency)}`;
-    const res = await fetch(url, { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url, { next: { revalidate: 0 } });
     if (!res.ok) return null;
 
     const data = (await res.json()) as ExchangeRateApiPairResponse;
@@ -48,7 +49,7 @@ export class ExchangeRateApiProvider implements FinancialDataProvider {
     // Historical endpoint: /v6/KEY/history/BASE/YEAR/MONTH/DAY
     const [year, month, day] = date.split("-");
     const url = `${BASE_URL}/${this.apiKey}/history/${encodeURIComponent(symbol)}/${year}/${month}/${day}`;
-    const res = await fetch(url, { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url, { next: { revalidate: 0 } });
     if (!res.ok) {
       // Historical not available on free tier — fall back to latest
       return this.getPairPrice(symbol, currency);
@@ -75,7 +76,7 @@ export class ExchangeRateApiProvider implements FinancialDataProvider {
     }
 
     const url = `${BASE_URL}/${this.apiKey}/latest/${encodeURIComponent(symbol)}`;
-    const res = await fetch(url, { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url, { next: { revalidate: 0 } });
     if (!res.ok) return [];
 
     const data = (await res.json()) as ExchangeRateApiStandardResponse;
@@ -99,7 +100,7 @@ export class ExchangeRateApiProvider implements FinancialDataProvider {
   private async getHistoricalPrices(symbol: string, date: string): Promise<PriceResult[]> {
     const [year, month, day] = date.split("-");
     const url = `${BASE_URL}/${this.apiKey}/history/${encodeURIComponent(symbol)}/${year}/${month}/${day}`;
-    const res = await fetch(url, { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url, { next: { revalidate: 0 } });
     if (!res.ok) return [];
 
     const data = (await res.json()) as ExchangeRateApiHistoryResponse;
@@ -118,7 +119,7 @@ export class ExchangeRateApiProvider implements FinancialDataProvider {
 
   async searchSymbol(query: string): Promise<SymbolSearchResult[]> {
     const url = `${BASE_URL}/${this.apiKey}/codes`;
-    const res = await fetch(url, { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url, { next: { revalidate: 0 } });
     if (!res.ok) return [];
 
     const data = (await res.json()) as ExchangeRateApiCodesResponse;
@@ -140,7 +141,7 @@ export class ExchangeRateApiProvider implements FinancialDataProvider {
   async healthCheck(): Promise<boolean> {
     try {
       const url = `${BASE_URL}/${this.apiKey}/pair/USD/EUR`;
-      const res = await fetch(url, { next: { revalidate: 0 } });
+      const res = await providerFetch(this.name, url, { next: { revalidate: 0 } });
       if (!res.ok) return false;
       const data = (await res.json()) as ExchangeRateApiPairResponse;
       return data.result === "success";

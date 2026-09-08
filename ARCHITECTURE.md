@@ -109,6 +109,7 @@ src/
 │   ├── services/                # One service per domain — single source of truth
 │   ├── providers/               # Financial data providers (ECB, Frankfurter,
 │   │                            #   CoinGecko, Alpha Vantage, Open Exchange Rates)
+│   │                            #   + rate-limit.ts — per-provider request pacing
 │   ├── mcp/                     # MCP server init + tools/ (one file per domain)
 │   ├── validators/              # Zod schemas shared by API, MCP, and forms
 │   ├── utils/                   # Currency formatting
@@ -173,6 +174,8 @@ The other half of that failure was refresh, not resolution: `runMarketPriceJob` 
 The observed failure was time-of-day dependent, not quota. At 04:00 local (01:00 UTC) Alpha Vantage returned HTTP 200 with an empty `Global Quote` for two thinly traded XETRA listings — `WEBN.DEX` and `2B76.DEX` — every day for ten days, while `SXR8.DEX` on the same key in the same run succeeded 160/160. The same two symbols answer normally a few hours later. Quota exhaustion looks different in the logs: it arrives as an `Information` envelope, which `assertNoErrorEnvelope` turns into a thrown `ProviderRateLimitError`, so it is recorded with the provider's message rather than as `"no data"`.
 
 `runMarketPriceRetry` therefore re-runs at 10:00/16:00/22:00 for assets that still have no quote dated today, skipping the rest without touching a provider — on a normal day it makes no requests at all, which matters because retries share Alpha Vantage's 25 requests/day with the user's own lookups. It deliberately does not branch on *why* a fetch missed: asking again later is the remedy for an empty early-morning response and for an exhausted budget alike.
+
+**Request pacing.** Every provider call goes through `providerFetch` (`src/lib/providers/rate-limit.ts`), which queues per provider and holds each request until 2s have passed since that provider's previous one. Free tiers enforce a per-second burst rate alongside their daily quota, and a sweep that walks assets back-to-back trips it in milliseconds: in a typical cycle the first Alpha Vantage symbol succeeded at `04:00:00.211` and the next two, issued 110ms and 276ms later, both came back as `ProviderRateLimitError`. The message names both limits, so a burst rejection reads in the logs like an exhausted daily quota — the tell is that the *first* call of every cycle succeeds. Spacing is measured from when a request is sent rather than when it completes, so a slow response doesn't push the queue back, and it applies to all providers because the free endpoints publish no burst limit at all, which is not the same as not having one. `PROVIDER_MIN_INTERVAL_MS` overrides the gap (0 disables it) for keys that allow bursts.
 
 **`updated_at` management:** No triggers — services are the single mutation path and set `updated_at` explicitly on every UPDATE.
 

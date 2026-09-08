@@ -1,6 +1,7 @@
 import { Temporal } from "@js-temporal/polyfill";
 import type { PriceResult, FinancialDataProvider, SymbolSearchResult } from "./types";
 import { isoToday } from "@/lib/date-ranges";
+import { providerFetch } from "./rate-limit";
 
 const BASE_URL = "https://api.coingecko.com/api/v3";
 const PRO_URL = "https://pro-api.coingecko.com/api/v3";
@@ -59,7 +60,7 @@ export class CoinGeckoProvider implements FinancialDataProvider {
     url.searchParams.set("vs_currencies", vs);
     if (this.apiKey) url.searchParams.set("x_cg_pro_api_key", this.apiKey);
 
-    const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
     if (!res.ok) return null;
 
     const data = (await res.json()) as Record<string, Record<string, number>>;
@@ -89,7 +90,7 @@ export class CoinGeckoProvider implements FinancialDataProvider {
     url.searchParams.set("localization", "false");
     if (this.apiKey) url.searchParams.set("x_cg_pro_api_key", this.apiKey);
 
-    const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
     if (!res.ok) return null;
 
     const data = (await res.json()) as CoinGeckoHistoryResponse;
@@ -117,7 +118,7 @@ export class CoinGeckoProvider implements FinancialDataProvider {
     url.searchParams.set("vs_currencies", vsCurrencies);
     if (this.apiKey) url.searchParams.set("x_cg_pro_api_key", this.apiKey);
 
-    const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
     if (!res.ok) return [];
 
     const data = (await res.json()) as Record<string, Record<string, number>>;
@@ -142,7 +143,7 @@ export class CoinGeckoProvider implements FinancialDataProvider {
     url.searchParams.set("localization", "false");
     if (this.apiKey) url.searchParams.set("x_cg_pro_api_key", this.apiKey);
 
-    const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
     if (!res.ok) return [];
 
     const data = (await res.json()) as CoinGeckoHistoryResponse;
@@ -175,7 +176,7 @@ export class CoinGeckoProvider implements FinancialDataProvider {
     url.searchParams.set("to", String(toTs));
     if (this.apiKey) url.searchParams.set("x_cg_pro_api_key", this.apiKey);
 
-    const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
     if (!res.ok) return [];
 
     const data = (await res.json()) as CoinGeckoRangeResponse;
@@ -202,7 +203,7 @@ export class CoinGeckoProvider implements FinancialDataProvider {
     url.searchParams.set("query", query);
     if (this.apiKey) url.searchParams.set("x_cg_pro_api_key", this.apiKey);
 
-    const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+    const res = await providerFetch(this.name, url.toString(), { next: { revalidate: 0 } });
     if (!res.ok) return [];
 
     const data = (await res.json()) as CoinGeckoSearchResponse;
@@ -219,7 +220,7 @@ export class CoinGeckoProvider implements FinancialDataProvider {
   async healthCheck(): Promise<boolean> {
     try {
       const url = `${this.baseUrl}/ping${this.apiKey ? `?x_cg_pro_api_key=${this.apiKey}` : ""}`;
-      const res = await fetch(url, { next: { revalidate: 0 } });
+      const res = await providerFetch(this.name, url, { next: { revalidate: 0 } });
       return res.ok;
     } catch {
       return false;
