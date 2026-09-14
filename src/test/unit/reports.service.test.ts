@@ -261,7 +261,7 @@ describe("getCategoryStats", async () => {
     expect(foodStats?.count).toBe(2);
   });
 
-  it("excludes income transactions from spend total", async () => {
+  it("caps the refund offset at the category's own spend", async () => {
     const cat = catService.create({ name: "Salary" });
     await txService.create(
       tx({ categoryId: cat.id, amount: 50, type: "income", date: "2026-03-01" })
@@ -270,8 +270,50 @@ describe("getCategoryStats", async () => {
 
     const { items } = reports.getCategoryStats(catStats({ month: "2026-03" }));
     const salaryStats = items.find((s) => s.categoryId === cat.id);
-    expect(salaryStats?.total).toBe(2);
+    // Income exceeding the category's spend cancels it to zero, never below — otherwise
+    // a salary with one stray fee in it would drag the whole expense report negative.
+    expect(salaryStats?.total).toBe(0);
+    // `count` counts spending transactions; the refund reduces the total, it is not a spend.
     expect(salaryStats?.count).toBe(1);
+  });
+
+  it("nets a refund against spend in the same category", async () => {
+    const cat = catService.create({ name: "Transport" });
+    await txService.create(tx({ categoryId: cat.id, amount: 203, date: "2026-03-01" }));
+    await txService.create(tx({ categoryId: cat.id, amount: 6, date: "2026-03-02" }));
+    await txService.create(
+      tx({ categoryId: cat.id, amount: 94, type: "income", date: "2026-03-03" })
+    );
+
+    const { items } = reports.getCategoryStats(catStats({ month: "2026-03" }));
+    const stats = items.find((s) => s.categoryId === cat.id);
+    expect(stats?.total).toBe(115);
+    expect(stats?.count).toBe(2);
+  });
+
+  it("leaves a refund in one category from touching another", async () => {
+    const transport = catService.create({ name: "Transport" });
+    const food = catService.create({ name: "Food" });
+    await txService.create(tx({ categoryId: transport.id, amount: 100, date: "2026-03-01" }));
+    await txService.create(tx({ categoryId: food.id, amount: 40, date: "2026-03-02" }));
+    await txService.create(
+      tx({ categoryId: transport.id, amount: 30, type: "income", date: "2026-03-03" })
+    );
+
+    const { items } = reports.getCategoryStats(catStats({ month: "2026-03" }));
+    expect(items.find((s) => s.categoryId === transport.id)?.total).toBe(70);
+    expect(items.find((s) => s.categoryId === food.id)?.total).toBe(40);
+  });
+
+  it("does not net refunds into an income report", async () => {
+    const cat = catService.create({ name: "Transport" });
+    await txService.create(tx({ categoryId: cat.id, amount: 203, date: "2026-03-01" }));
+    await txService.create(
+      tx({ categoryId: cat.id, amount: 94, type: "income", date: "2026-03-03" })
+    );
+
+    const { items } = reports.getCategoryStats(catStats({ month: "2026-03", type: "income" }));
+    expect(items.find((s) => s.categoryId === cat.id)?.total).toBe(94);
   });
 
   it("scopes stats to the requested month only", async () => {

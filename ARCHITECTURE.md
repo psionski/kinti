@@ -339,6 +339,27 @@ The app has a single **user-configured timezone** stored in the `settings` table
 - API: `GET/PUT /api/settings/timezone`.
 - Onboarding gate: each page calls `requireOnboarding()` from `src/lib/api/require-timezone.ts` — redirects to `/settings` if timezone OR base currency is not configured. Server startup initializes both via `instrumentation.ts`.
 
+### Refund Netting
+
+Expense reporting is **net of refunds**. Income filed against an expense category — a returned rental deposit, a reimbursed fare, a returned purchase — is subtracted from that category's spend rather than counted only on the income side. Without this, a 203 rental whose 94 deposit came back reads as 203 spent, and the budget bar moves by money the user still has.
+
+`refundOffsets(db, dateFrom, dateTo)` in `src/lib/services/reports.ts` is the single source of this rule. It returns, per category, the income to cancel against that category's spend in the window, and every expense-side read goes through it:
+
+| Consumer | What it nets |
+| --- | --- |
+| `getCategoryStats` | Per-category `total` (rollups follow, so parents net their children's refunds) |
+| `getBudgetStats` → `BudgetService.getForMonth` | `spentAmount`, and therefore every budget bar and over/under flag |
+| `spendingSummary` (`groupBy: "category"`) | Group totals and `compareTotal`, so the dashboard breakdown agrees with the category cards |
+| `categoryTrends` | Each month's point, capped against that month's own spend |
+| `periodTotal` | The "Total Spend" KPI, so the headline stays equal to the sum of its parts |
+
+Two rules keep this from misfiring, and both matter:
+
+- **The offset is capped at the category's own spend.** Nothing links a refund to the expense it reverses, so an uncapped offset lets unrelated income swing the report: a `Salary` category holding one stray bank fee would net to a large negative and drag the whole expense breakdown with it. Capped, a category cancels to zero and no further.
+- **Only `type: "expense"` nets.** Income reports stay gross. Netting symmetrically would render a category with real spending as a large negative row in the income breakdown, which is not a thing users file.
+
+Period totals for income and the P&L (`getNetIncome`) are deliberately **not** netted — they already come out right, because a refund either reduces expenses or adds to income, and net income is identical under both readings.
+
 ### Currency Conventions
 
 Kinti is **multi-currency**. Each Kinti instance has a single **base currency** stored in the `settings` table (key `"base_currency"`, ISO 4217 like `"EUR"` or `"USD"`, default EUR). It is set once during onboarding and **immutable** thereafter — migrating between base currencies requires a fresh database. The base currency is the unit that every aggregate report, budget, cash balance, and net-worth figure is denominated in.

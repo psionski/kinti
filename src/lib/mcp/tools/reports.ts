@@ -31,6 +31,7 @@ export function registerReportTools(server: McpServer): void {
       description:
         "Per-category spending stats with hierarchy rollups, percentages, and category color/icon. " +
         "Best for detailed per-category breakdowns. " +
+        "Expense totals are net of refunds: income filed against an expense category (a returned deposit, a reimbursement) is subtracted from that category's spend, capped so a category never goes below zero. " +
         "For flexible grouping (by merchant/month) or period comparisons, use get_spending_summary instead. " +
         "Use get_budget_status for budget tracking.",
       inputSchema: CategoryStatsSchema,

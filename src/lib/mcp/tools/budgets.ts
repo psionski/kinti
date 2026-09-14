@@ -23,6 +23,7 @@ export function registerBudgetTools(server: McpServer): void {
     {
       description:
         "Current spend vs budget for all budgeted categories in a given month. " +
+        "Expense totals are net of refunds: income filed against an expense category (a returned deposit, a reimbursement) is subtracted from that category's spend, capped so a category never goes below zero. " +
         "Returns amounts, percentages, and over/under status. " +
         "'inheritedFrom' in the response indicates which month the budgets were copied from (null = own budgets).",
       inputSchema: GetBudgetStatusSchema,
