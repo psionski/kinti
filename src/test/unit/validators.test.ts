@@ -103,6 +103,11 @@ describe("CreateTransactionSchema", () => {
     expect(() => CreateTransactionSchema.parse({ ...valid, amount: 0 })).toThrow();
   });
 
+  it("allows a negative expense (a refund)", () => {
+    const result = CreateTransactionSchema.parse({ ...valid, amount: -94, type: "expense" });
+    expect(result.amount).toBe(-94);
+  });
+
   it("allows negative amount (signed transfers)", () => {
     const result = CreateTransactionSchema.parse({ ...valid, amount: -1, type: "transfer" });
     expect(result.amount).toBe(-1);

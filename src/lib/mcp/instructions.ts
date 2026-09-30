@@ -19,6 +19,12 @@ export const INSTRUCTIONS = [
     "When a user receives money INTO a specific account, call list_assets to find it, then create_transaction for the income AND buy_asset on the account. " +
     "If the account doesn't exist yet, offer to create it with create_asset (type: 'deposit'). Kinti handles the cash-side bookkeeping automatically.",
 
+  // Refunds
+  "Money coming back for something the user bought (a returned item, a returned deposit, a reimbursed fare or expense) is a refund, never income. " +
+    "Record it with create_transaction as an expense with a NEGATIVE amount, dated when the money came back, in the category of the original purchase. " +
+    "Refunds reduce spending in every report and budget. If the refund lands in a specific account, also call buy_asset on it, as for income. " +
+    "Income stays positive; only genuine earnings (salary, interest, gifts, sales) are income.",
+
   // Asset creation conventions — currency vs symbolMap
   "An asset's `currency` field is always an ISO 4217 fiat code (USD, EUR, GBP, JPY, …) — the currency the asset is denominated/priced in. " +
     "It is NEVER a crypto ticker (BTC, ETH) or stock symbol (AAPL). Those go in `symbolMap` from search_symbol.",

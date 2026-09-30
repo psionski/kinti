@@ -17,7 +17,8 @@ function DeltaBadge({
   current: number;
   previous: number;
 }): React.ReactElement | null {
-  if (previous === 0) return null;
+  // Refunds can leave a period at or below zero, which no percentage change is relative to.
+  if (previous <= 0) return null;
   const pct = ((current - previous) / previous) * 100;
   const isUp = pct > 0;
 

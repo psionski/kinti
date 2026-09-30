@@ -40,11 +40,16 @@ export type PaginatedTransactionsResponse = z.infer<typeof PaginatedTransactions
 
 // ─── Create ───────────────────────────────────────────────────────────────────
 
+const AMOUNT_DESCRIPTION =
+  "Native amount (e.g. 12.10). Positive for income and expenses. A refund — money back for an " +
+  "earlier purchase (a return, a returned deposit, a reimbursement) — is an expense with a " +
+  "negative amount, dated when the money came back, in the purchase's category.";
+
 export const CreateTransactionSchema = z.object({
   amount: z
     .number()
     .refine((n) => n !== 0, "Amount must not be zero")
-    .describe("Native amount (e.g. 12.10). Always positive for income and expense."),
+    .describe(AMOUNT_DESCRIPTION),
   currency: CurrencySchema.optional().describe(
     "ISO 4217 currency of the amount. Defaults to the configured base currency. " +
       "Foreign currencies are converted to the base currency at write time using the configured FX providers; " +
@@ -78,7 +83,8 @@ export const UpdateTransactionSchema = z.object({
   amount: z
     .number()
     .refine((n) => n !== 0, "Amount must not be zero")
-    .optional(),
+    .optional()
+    .describe(AMOUNT_DESCRIPTION),
   currency: CurrencySchema.optional().describe(
     "ISO 4217 currency. Updating amount or currency triggers a fresh FX lookup to recompute amount_base."
   ),
@@ -118,8 +124,12 @@ export const ListTransactionsSchema = PaginationSchema.extend({
     .nullable()
     .optional()
     .describe("Filter by category ID. Pass null for uncategorized only"),
-  amountMin: z.number().min(0).optional().describe("Minimum amount"),
-  amountMax: z.number().min(0).optional().describe("Maximum amount"),
+  amountMin: z
+    .number()
+    .min(0)
+    .optional()
+    .describe("Minimum amount, by size: a refund of -30 matches a minimum of 20"),
+  amountMax: z.number().min(0).optional().describe("Maximum amount, by size"),
   merchant: z.string().max(255).optional().describe("Filter by merchant (substring match)"),
   search: z
     .string()
@@ -127,10 +137,19 @@ export const ListTransactionsSchema = PaginationSchema.extend({
     .optional()
     .describe("Search across description, merchant, notes, and category name"),
   tags: z.array(z.string().max(100)).optional().describe("Filter by tags"),
-  type: TransactionTypeSchema.optional(),
+  type: z
+    .enum(["income", "expense", "refund", "transfer"])
+    .optional()
+    .describe(
+      "Filter by type. 'expense' includes refunds; 'refund' returns only refunds. " +
+        "Transfers are excluded unless requested."
+    ),
   receiptId: z.number().int().positive().optional(),
   recurringId: z.number().int().positive().optional(),
-  sortBy: z.enum(["date", "amount", "merchant", "createdAt"]).default("date"),
+  sortBy: z
+    .enum(["date", "amount", "merchant", "createdAt"])
+    .default("date")
+    .describe("'amount' sorts by size, so a refund ranks with purchases of the same size"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 

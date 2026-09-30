@@ -69,7 +69,8 @@ export function BudgetTable({ budgets, onEdit, onDelete }: BudgetTableProps): Re
               <div className="flex items-center gap-2">
                 <BudgetProgressBar percentUsed={item.percentUsed} className="flex-1" />
                 <span className="text-muted-foreground w-12 text-right text-xs">
-                  {formatPercent(item.percentUsed)}
+                  {/* Spent can go negative with refunds; the share used can't. */}
+                  {formatPercent(Math.max(item.percentUsed, 0))}
                 </span>
               </div>
             </TableCell>

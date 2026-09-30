@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { getTransactionService } from "@/lib/api/services";
-import { parseBody, isErrorResponse, errorResponse, parseId } from "@/lib/api/helpers";
+import {
+  parseBody,
+  isErrorResponse,
+  errorResponse,
+  handleServiceError,
+  parseId,
+} from "@/lib/api/helpers";
 import { UpdateTransactionSchema } from "@/lib/validators/transactions";
 
 interface RouteContext {
@@ -28,11 +34,7 @@ export async function PATCH(req: Request, ctx: RouteContext): Promise<NextRespon
     if (!tx) return errorResponse("Transaction not found", "NOT_FOUND", 404);
     return NextResponse.json(tx);
   } catch (err) {
-    return errorResponse(
-      err instanceof Error ? err.message : "Failed to update transaction",
-      "INTERNAL_ERROR",
-      500
-    );
+    return handleServiceError(err, "Referenced category or receipt not found");
   }
 }
 

@@ -65,7 +65,7 @@ export async function createTransactionViaUI(
   page: Page,
   opts: {
     amount: string;
-    type: "income" | "expense";
+    type: "income" | "expense" | "refund";
     description: string;
     category?: string;
     date?: string;

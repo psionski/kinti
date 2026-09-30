@@ -87,6 +87,12 @@ describe("roundToCurrency", () => {
   it("rounds to 3 decimals for BHD", () => {
     expect(roundToCurrency(1.2345, "BHD")).toBe(1.235);
   });
+
+  it("returns 0, not -0, for a negative residue", () => {
+    // `toBe` uses Object.is, which tells -0 from 0.
+    expect(roundToCurrency(-1e-14, "EUR")).toBe(0);
+    expect(formatCurrency(roundToCurrency(-1e-14, "EUR"), "EUR")).not.toContain("-");
+  });
 });
 
 // ─── formatPercent ───────────────────────────────────────────────────────────

@@ -339,26 +339,14 @@ The app has a single **user-configured timezone** stored in the `settings` table
 - API: `GET/PUT /api/settings/timezone`.
 - Onboarding gate: each page calls `requireOnboarding()` from `src/lib/api/require-timezone.ts` — redirects to `/settings` if timezone OR base currency is not configured. Server startup initializes both via `instrumentation.ts`.
 
-### Refund Netting
+### Refunds
 
-Expense reporting is **net of refunds**. Income filed against an expense category — a returned rental deposit, a reimbursed fare, a returned purchase — is subtracted from that category's spend rather than counted only on the income side. Without this, a 203 rental whose 94 deposit came back reads as 203 spent, and the budget bar moves by money the user still has.
+A refund — money back for a purchase: a returned item, a returned deposit, a reimbursement — is stored as an **expense with a negative amount**, in the purchase's category, dated when the money came back. It is never income, and it is never inferred: whoever records it says it's a refund.
 
-`refundOffsets(db, dateFrom, dateTo)` in `src/lib/services/reports.ts` is the single source of this rule. It returns, per category, the income to cancel against that category's spend in the window, and every expense-side read goes through it:
-
-| Consumer | What it nets |
-| --- | --- |
-| `getCategoryStats` | Per-category `total` (rollups follow, so parents net their children's refunds) |
-| `getBudgetStats` → `BudgetService.getForMonth` | `spentAmount`, and therefore every budget bar and over/under flag |
-| `spendingSummary` (`groupBy: "category"`) | Group totals and `compareTotal`, so the dashboard breakdown agrees with the category cards |
-| `categoryTrends` | Each month's point, capped against that month's own spend |
-| `periodTotal` | The "Total Spend" KPI, so the headline stays equal to the sum of its parts |
-
-Two rules keep this from misfiring, and both matter:
-
-- **The offset is capped at the category's own spend.** Nothing links a refund to the expense it reverses, so an uncapped offset lets unrelated income swing the report: a `Salary` category holding one stray bank fee would net to a large negative and drag the whole expense breakdown with it. Capped, a category cancels to zero and no further.
-- **Only `type: "expense"` nets.** Income reports stay gross. Netting symmetrically would render a category with real spending as a large negative row in the income breakdown, which is not a thing users file.
-
-Period totals for income and the P&L (`getNetIncome`) are deliberately **not** netted — they already come out right, because a refund either reduces expenses or adds to income, and net income is identical under both readings.
+- **Every sum over expenses nets it.** Reports, budgets and cash balance need no refund logic, and neither does a raw `SUM(amount_base)` from the MCP `query` tool. Adding refund handling to a report is a sign something is wrong.
+- **Income is positive.** `TransactionService` rejects a negative income (`ValidationError`, a 400) on create, batch create and update, because it would be a second way to say "refund" that skips the purchase's category.
+- **Entered and shown as its own kind.** The REST API and MCP use the signed expense as stored. The web UI presents a Refund type with a positive amount; `src/lib/transaction-kind.ts` converts between the two, and the table marks refund rows and shows them as money in. `list` takes `type: "refund"` (`"expense"` includes refunds), and its amount filters and amount sort go by size.
+- **Dated when the money came back,** not when the purchase was made. A closed month never changes afterwards, and each month's income minus expenses still matches the change in the cash balance. The cost is that a refund arriving in a month with no purchase in its category leaves that category-month **negative**. Data stays negative; only visuals that can't draw a negative clamp at zero (budget bars, the stacked category chart, donut slices and percentages, delta badges).
 
 ### Currency Conventions
 

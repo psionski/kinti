@@ -146,6 +146,10 @@ export async function seed(): Promise<void> {
   const fcRate = fx.lookup("GBP", BASE_CURRENCY, fcDate);
   const fcNative = 4.5;
 
+  // A returned purchase in the last complete month, so the demo shows a refund.
+  const refundMonth = months[months.length - 2]!;
+  const refundDate = isoDate(refundMonth.year, refundMonth.month, 20);
+
   const oneOffEvents: TxInput[] = [
     {
       amount: OPENING_BALANCE,
@@ -167,6 +171,17 @@ export async function seed(): Promise<void> {
       categoryId: catIds.Coffee!,
       date: fcDate,
       tags: ["travel", "coffee"],
+    },
+    {
+      amount: -24.99,
+      currency: BASE_CURRENCY,
+      amountBase: -24.99,
+      type: "expense",
+      description: "Returned jacket",
+      merchant: "Zara",
+      categoryId: catIds.Shopping!,
+      date: refundDate,
+      tags: ["shopping"],
     },
   ];
 

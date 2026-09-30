@@ -6,6 +6,7 @@ import {
   ArrowDown,
   Receipt,
   Repeat,
+  Undo2,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -31,6 +32,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { formatCurrency, formatDate, getBaseCurrency } from "@/lib/format";
 import type { TransactionResponse } from "@/lib/validators/transactions";
 import type { CategoryWithCountResponse } from "@/lib/validators/categories";
+import { isMoneyIn, kindOf } from "@/lib/transaction-kind";
 
 type SortField = "date" | "amount" | "merchant" | "createdAt";
 type SortOrder = "asc" | "desc";
@@ -145,6 +147,8 @@ export function TransactionTable({
       <TableBody>
         {transactions.map((tx) => {
           const category = tx.categoryId ? categories.get(tx.categoryId) : null;
+          const kind = kindOf(tx);
+          const amountClass = isMoneyIn(kind) ? "text-emerald-600" : "text-foreground";
 
           return (
             <TableRow
@@ -187,6 +191,18 @@ export function TransactionTable({
                       aria-label="Recurring"
                     />
                   )}
+                  {kind === "refund" && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Undo2
+                          className="text-muted-foreground size-3.5 shrink-0"
+                          aria-label="Refund"
+                          data-testid="refund-icon"
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent>Refund</TooltipContent>
+                    </Tooltip>
+                  )}
                 </div>
               </TableCell>
               <TableCell className="hidden text-sm md:table-cell">{tx.merchant ?? "—"}</TableCell>
@@ -194,20 +210,21 @@ export function TransactionTable({
                 {category ? category.name : "—"}
               </TableCell>
               <TableCell className="text-right text-sm tabular-nums">
+                {/* A refund is stored negative but reads as money back, like income. */}
                 {tx.currency !== getBaseCurrency() ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span
-                        className={tx.type === "income" ? "text-emerald-600" : "text-foreground"}
-                      >
-                        {formatCurrency(tx.amount, tx.currency)}
+                      <span className={amountClass}>
+                        {formatCurrency(Math.abs(tx.amount), tx.currency)}
                       </span>
                     </TooltipTrigger>
-                    <TooltipContent>≈ {formatCurrency(tx.amountBase)} (base)</TooltipContent>
+                    <TooltipContent>
+                      ≈ {formatCurrency(Math.abs(tx.amountBase))} (base)
+                    </TooltipContent>
                   </Tooltip>
                 ) : (
-                  <span className={tx.type === "income" ? "text-emerald-600" : "text-foreground"}>
-                    {formatCurrency(tx.amount, tx.currency)}
+                  <span className={amountClass}>
+                    {formatCurrency(Math.abs(tx.amount), tx.currency)}
                   </span>
                 )}
               </TableCell>

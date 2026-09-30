@@ -29,6 +29,7 @@ import {
 import { EmptyState } from "@/components/shared/empty-state";
 import type { CategoryWithCountResponse } from "@/lib/validators/categories";
 import type { BudgetStatsItem } from "@/lib/validators/reports";
+import { formatCurrency } from "@/lib/format";
 
 interface CategoryTreeProps {
   categories: CategoryWithCountResponse[];
@@ -75,7 +76,8 @@ function formatAmount(amount: number): string {
 }
 
 function BudgetBar({ spent, budget }: { spent: number; budget: number }): React.ReactElement {
-  const pct = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
+  // Refunds can take a month's spend below zero; a bar can't be narrower than empty.
+  const pct = budget > 0 ? Math.min(Math.max((spent / budget) * 100, 0), 100) : 0;
   const color = pct < 60 ? "bg-green-500" : pct < 90 ? "bg-yellow-500" : "bg-red-500";
 
   return (
@@ -112,6 +114,7 @@ function CategoryRow({
   const cat = node.category;
   const catStats = stats.get(cat.id);
   const hasChildren = node.children.length > 0;
+  const monthSpend = catStats ? (hasChildren ? catStats.rollupTotal : catStats.total) : 0;
   const isExpanded = expanded.has(cat.id);
 
   return (
@@ -161,9 +164,8 @@ function CategoryRow({
 
         {/* Current month spend — show rollup for parents */}
         <TableCell className="text-muted-foreground text-right text-sm tabular-nums">
-          {catStats && (hasChildren ? catStats.rollupTotal : catStats.total) > 0
-            ? `€${formatAmount(hasChildren ? catStats.rollupTotal : catStats.total)}`
-            : "—"}
+          {/* Negative when the month's refunds exceed its purchases in this category. */}
+          {monthSpend !== 0 ? formatCurrency(monthSpend) : "—"}
         </TableCell>
 
         {/* Budget status — use rollup spend vs budget (includes child category spend) */}

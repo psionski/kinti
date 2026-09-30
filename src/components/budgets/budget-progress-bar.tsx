@@ -18,7 +18,8 @@ export function BudgetProgressBar({
   percentUsed,
   className,
 }: BudgetProgressBarProps): React.ReactElement {
-  const displayValue = Math.min(percentUsed, 100);
+  // Refunds can take spend below zero; Radix Progress rejects a negative value.
+  const displayValue = Math.min(Math.max(percentUsed, 0), 100);
 
   return (
     <Progress

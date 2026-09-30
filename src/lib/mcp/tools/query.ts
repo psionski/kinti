@@ -14,6 +14,7 @@ const DB_CONVENTIONS = [
   "Conventions:",
   "- Dates are TEXT in ISO 8601 format (YYYY-MM-DD or datetime)",
   "- 'tags' columns store JSON arrays as TEXT — query with json_each(tags)",
+  "- Transaction amounts: income is positive; expense is positive, and NEGATIVE for a refund (money back for a purchase, in its category), so sum(amount_base) over expenses is net spending",
   "- Transaction type 'transfer' = asset/savings movement with signed amount (negative = cash out/purchase, positive = cash in/sale), excluded from spending/income reports but included in balance calculations",
   "- transactions_fts is an FTS5 virtual table mirroring transactions (description, merchant, notes) for full-text search",
   "- category parent_id enables hierarchical categories (NULL = top-level)",

@@ -89,7 +89,7 @@ export const transactions = sqliteTable(
   "transactions",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    amount: real("amount").notNull(), // native amount: positive for income/expense, signed for transfers (negative = cash out, positive = cash in)
+    amount: real("amount").notNull(), // native amount: positive for income; positive for expense, negative for a refund (money back for a purchase); signed for transfers (negative = cash out, positive = cash in)
     currency: text("currency").notNull().default("EUR"), // ISO 4217 native currency
     amountBase: real("amount_base").notNull().default(0), // amount converted to the configured base currency at write time (denormalized for fast aggregation)
     type: text("type").notNull().default("expense"), // 'income' | 'expense' | 'transfer'

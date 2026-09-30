@@ -70,9 +70,10 @@ function buildDonutData(
     });
   }
 
-  // Compute percentages from this level's total
-  const grandTotal = entries.reduce((s, e) => s + e.rawValue, 0);
+  // Compute percentages from this level's visible slices. A category that refunds took
+  // below zero has no slice, so it can't count toward the total either.
   const visible = entries.filter((e) => e.rawValue > 0).sort((a, b) => b.rawValue - a.rawValue);
+  const grandTotal = visible.reduce((s, e) => s + e.rawValue, 0);
   const colorlessCount = visible.filter((e) => !e.color).length;
   let fallbackIndex = 0;
 

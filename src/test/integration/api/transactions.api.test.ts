@@ -127,6 +127,50 @@ describe("Transaction API Routes", () => {
     expect(body.description).toBe("New");
   });
 
+  it("POST creates a refund as an expense with a negative amount", async () => {
+    const res = await POST(
+      makeJson("POST", "/api/transactions", {
+        amount: -94,
+        description: "Deposit refund",
+        date: "2025-01-15",
+        type: "expense",
+      })
+    );
+    expect(res.status).toBe(201);
+    expect(await json(res)).toMatchObject({ amount: -94, type: "expense" });
+  });
+
+  it("POST rejects a negative income with 400", async () => {
+    const res = await POST(
+      makeJson("POST", "/api/transactions", {
+        amount: -94,
+        description: "Deposit refund",
+        date: "2025-01-15",
+        type: "income",
+      })
+    );
+    expect(res.status).toBe(400);
+    expect((await json<{ code: string }>(res)).code).toBe("VALIDATION_ERROR");
+  });
+
+  it("PATCH rejects turning a refund into a negative income with 400", async () => {
+    const createRes = await POST(
+      makeJson("POST", "/api/transactions", {
+        amount: -94,
+        description: "Deposit refund",
+        date: "2025-01-15",
+      })
+    );
+    const created = await json<{ id: number }>(createRes);
+
+    const res = await PATCH(
+      makeJson("PATCH", `/api/transactions/${created.id}`, { type: "income" }),
+      ctx(created.id)
+    );
+    expect(res.status).toBe(400);
+    expect((await json<{ code: string }>(res)).code).toBe("VALIDATION_ERROR");
+  });
+
   it("DELETE removes a transaction", async () => {
     const createRes = await POST(
       makeJson("POST", "/api/transactions", {

@@ -70,7 +70,9 @@ export function formatCurrency(amount: number, currency: string = getBaseCurrenc
 export function roundToCurrency(amount: number, currency: string = getBaseCurrency()): number {
   const fractionDigits = getFormatter(currency).resolvedOptions().maximumFractionDigits ?? 2;
   const factor = 10 ** fractionDigits;
-  return Math.round(amount * factor) / factor;
+  const rounded = Math.round(amount * factor) / factor;
+  // A small negative residue rounds to -0, which formats as "-0.00".
+  return rounded === 0 ? 0 : rounded;
 }
 
 // ─── Prices ───────────────────────────────────────────────────────────────────

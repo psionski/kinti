@@ -21,7 +21,7 @@ export function generateOpenApiDocument(): ReturnType<typeof createDocument> {
       version: "1.0.0",
       description:
         "Personal finance tracker API. " +
-        "Income and expense transactions use positive amounts. " +
+        "Income and expense transactions use positive amounts; a refund is an expense with a negative amount. " +
         "For account-linked cash movements, use the asset buy/sell endpoints rather than creating transfers directly.",
     },
     tags: [

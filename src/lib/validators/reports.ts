@@ -163,11 +163,11 @@ export const CategorySpendingItemSchema = z.object({
   color: z.string().nullable(),
   icon: z.string().nullable(),
   parentId: z.number().int().nullable(),
-  total: z.number(), // direct spend
+  total: z.number(), // direct spend, net of refunds; negative when refunds exceed purchases
   count: z.number().int(), // direct transaction count
   rollupTotal: z.number(), // this + descendants
   rollupCount: z.number().int(), // this + descendants
-  percentage: z.number(), // 0–100, share of grand total
+  percentage: z.number(), // 0–100, share of the positive totals; 0 for a negative total
 });
 
 export type CategorySpendingItem = z.infer<typeof CategorySpendingItemSchema>;
@@ -188,17 +188,21 @@ export type TrendPoint = z.infer<typeof TrendPointSchema>;
 
 export const DailySpendPointSchema = z.object({
   date: z.string().describe("Calendar date (YYYY-MM-DD)"),
-  total: z.number().describe("Sum of expense amount_base for the day, in base currency"),
-  count: z.number().int().describe("Number of expense transactions on the day"),
+  total: z
+    .number()
+    .describe(
+      "Net expense for the day in base currency; a refund lowers it, and a day with only refunds is negative"
+    ),
+  count: z.number().int().describe("Number of expense transactions on the day, refunds included"),
 });
 
 export type DailySpendPoint = z.infer<typeof DailySpendPointSchema>;
 
 export const TopMerchantSchema = z.object({
   merchant: z.string(),
-  total: z.number(),
-  count: z.number().int(),
-  avgAmount: z.number(),
+  total: z.number().describe("Spend net of refunds"),
+  count: z.number().int().describe("Number of purchases; refunds are not counted"),
+  avgAmount: z.number().describe("Average purchase"),
 });
 
 export type TopMerchant = z.infer<typeof TopMerchantSchema>;
@@ -207,9 +211,9 @@ export const BudgetStatusItemSchema = z.object({
   categoryId: z.number().int(),
   categoryName: z.string(),
   budgetAmount: z.number(),
-  spentAmount: z.number(),
+  spentAmount: z.number(), // net of refunds; negative when refunds exceed purchases
   remainingAmount: z.number(), // can be negative
-  percentUsed: z.number(), // 0+, can exceed 100
+  percentUsed: z.number(), // can exceed 100, and is negative when spentAmount is
   isOver: z.boolean(),
 });
 

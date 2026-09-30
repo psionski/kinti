@@ -15,6 +15,7 @@ import { formatCurrency } from "@/lib/format";
 import type { ReceiptResponse } from "@/lib/validators/receipts";
 import type { PaginatedTransactionsResponse } from "@/lib/validators/transactions";
 import { Temporal } from "@js-temporal/polyfill";
+import { isMoneyIn, kindOf } from "@/lib/transaction-kind";
 
 interface ReceiptDialogProps {
   receiptId: number | null;
@@ -162,8 +163,8 @@ export function ReceiptDialog({
                       <span className="text-muted-foreground max-w-[60%] truncate">
                         {tx.description}
                       </span>
-                      <span className={tx.type === "income" ? "text-emerald-600" : ""}>
-                        {formatCurrency(tx.amount, tx.currency)}
+                      <span className={isMoneyIn(kindOf(tx)) ? "text-emerald-600" : ""}>
+                        {formatCurrency(Math.abs(tx.amount), tx.currency)}
                       </span>
                     </li>
                   ))}

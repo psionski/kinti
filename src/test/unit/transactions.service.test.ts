@@ -4,6 +4,7 @@ import { makeTestDb } from "../helpers";
 import { TransactionService } from "@/lib/services/transactions";
 import { CreateTransactionSchema, ListTransactionsSchema } from "@/lib/validators/transactions";
 import { receipts, categories } from "@/lib/db/schema";
+import { ValidationError } from "@/lib/errors";
 
 type TestDb = ReturnType<typeof makeTestDb>;
 
@@ -609,5 +610,90 @@ describe("transfer type", async () => {
     const transfers = service.list(ListTransactionsSchema.parse({ type: "transfer" }));
     expect(transfers.total).toBe(1);
     expect(transfers.data[0]!.type).toBe("transfer");
+  });
+});
+
+// ─── refunds ──────────────────────────────────────────────────────────────────
+
+describe("refunds", async () => {
+  it("stores a refund as an expense with a negative amount", async () => {
+    const result = await service.create(tx({ amount: -94, description: "Deposit refund" }));
+    expect(result.type).toBe("expense");
+    expect(result.amount).toBe(-94);
+    expect(result.amountBase).toBe(-94);
+  });
+
+  it("rejects a negative income on create", async () => {
+    await expect(service.create(tx({ amount: -94, type: "income" }))).rejects.toThrow(
+      ValidationError
+    );
+  });
+
+  it("rejects a batch holding a negative income, inserting none of it", async () => {
+    await expect(
+      service.createBatch({ transactions: [tx(), tx({ amount: -5, type: "income" })] })
+    ).rejects.toThrow(ValidationError);
+    expect(service.list(listInput()).total).toBe(0);
+  });
+
+  it("rejects turning a refund into income without flipping its sign", async () => {
+    const refund = await service.create(tx({ amount: -94 }));
+    await expect(service.update(refund.id, { type: "income" })).rejects.toThrow(ValidationError);
+    expect(service.getById(refund.id)?.type).toBe("expense");
+  });
+
+  it("allows turning a refund into income with a positive amount", async () => {
+    const refund = await service.create(tx({ amount: -94 }));
+    const updated = await service.update(refund.id, { type: "income", amount: 94 });
+    expect(updated?.type).toBe("income");
+    expect(updated?.amountBase).toBe(94);
+  });
+
+  it("rejects a batch update that would leave a negative income, applying none of it", async () => {
+    const other = await service.create(tx({ amount: 10 }));
+    const refund = await service.create(tx({ amount: -94 }));
+    await expect(
+      service.updateBatch({
+        updates: [
+          { id: other.id, description: "Changed" },
+          { id: refund.id, type: "income" },
+        ],
+      })
+    ).rejects.toThrow(ValidationError);
+    expect(service.getById(other.id)?.description).toBe("Test transaction");
+  });
+
+  describe("listing", async () => {
+    beforeEach(async () => {
+      await service.create(tx({ amount: 50, description: "Jacket" }));
+      await service.create(tx({ amount: -30, description: "Jacket returned" }));
+      await service.create(tx({ amount: 5, description: "Coffee" }));
+      await service.create(tx({ amount: 1000, type: "income", description: "Salary" }));
+    });
+
+    it("narrows to refunds with the refund type filter", async () => {
+      const result = service.list(listInput({ type: "refund" }));
+      expect(result.data.map((t) => t.description)).toEqual(["Jacket returned"]);
+    });
+
+    it("keeps refunds in the expense type filter", async () => {
+      const result = service.list(listInput({ type: "expense" }));
+      expect(result.total).toBe(3);
+    });
+
+    it("matches amount filters by size", async () => {
+      const result = service.list(listInput({ amountMin: 20, amountMax: 60 }));
+      expect(result.data.map((t) => t.description).sort()).toEqual(["Jacket", "Jacket returned"]);
+    });
+
+    it("sorts by amount size", async () => {
+      const result = service.list(listInput({ sortBy: "amount", sortOrder: "desc" }));
+      expect(result.data.map((t) => t.description)).toEqual([
+        "Salary",
+        "Jacket",
+        "Jacket returned",
+        "Coffee",
+      ]);
+    });
   });
 });

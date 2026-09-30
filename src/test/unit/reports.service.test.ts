@@ -261,7 +261,7 @@ describe("getCategoryStats", async () => {
     expect(foodStats?.count).toBe(2);
   });
 
-  it("caps the refund offset at the category's own spend", async () => {
+  it("excludes income transactions from spend total", async () => {
     const cat = catService.create({ name: "Salary" });
     await txService.create(
       tx({ categoryId: cat.id, amount: 50, type: "income", date: "2026-03-01" })
@@ -270,50 +270,8 @@ describe("getCategoryStats", async () => {
 
     const { items } = reports.getCategoryStats(catStats({ month: "2026-03" }));
     const salaryStats = items.find((s) => s.categoryId === cat.id);
-    // Income exceeding the category's spend cancels it to zero, never below — otherwise
-    // a salary with one stray fee in it would drag the whole expense report negative.
-    expect(salaryStats?.total).toBe(0);
-    // `count` counts spending transactions; the refund reduces the total, it is not a spend.
+    expect(salaryStats?.total).toBe(2);
     expect(salaryStats?.count).toBe(1);
-  });
-
-  it("nets a refund against spend in the same category", async () => {
-    const cat = catService.create({ name: "Transport" });
-    await txService.create(tx({ categoryId: cat.id, amount: 203, date: "2026-03-01" }));
-    await txService.create(tx({ categoryId: cat.id, amount: 6, date: "2026-03-02" }));
-    await txService.create(
-      tx({ categoryId: cat.id, amount: 94, type: "income", date: "2026-03-03" })
-    );
-
-    const { items } = reports.getCategoryStats(catStats({ month: "2026-03" }));
-    const stats = items.find((s) => s.categoryId === cat.id);
-    expect(stats?.total).toBe(115);
-    expect(stats?.count).toBe(2);
-  });
-
-  it("leaves a refund in one category from touching another", async () => {
-    const transport = catService.create({ name: "Transport" });
-    const food = catService.create({ name: "Food" });
-    await txService.create(tx({ categoryId: transport.id, amount: 100, date: "2026-03-01" }));
-    await txService.create(tx({ categoryId: food.id, amount: 40, date: "2026-03-02" }));
-    await txService.create(
-      tx({ categoryId: transport.id, amount: 30, type: "income", date: "2026-03-03" })
-    );
-
-    const { items } = reports.getCategoryStats(catStats({ month: "2026-03" }));
-    expect(items.find((s) => s.categoryId === transport.id)?.total).toBe(70);
-    expect(items.find((s) => s.categoryId === food.id)?.total).toBe(40);
-  });
-
-  it("does not net refunds into an income report", async () => {
-    const cat = catService.create({ name: "Transport" });
-    await txService.create(tx({ categoryId: cat.id, amount: 203, date: "2026-03-01" }));
-    await txService.create(
-      tx({ categoryId: cat.id, amount: 94, type: "income", date: "2026-03-03" })
-    );
-
-    const { items } = reports.getCategoryStats(catStats({ month: "2026-03", type: "income" }));
-    expect(items.find((s) => s.categoryId === cat.id)?.total).toBe(94);
   });
 
   it("scopes stats to the requested month only", async () => {
@@ -817,5 +775,146 @@ describe("transfer exclusion from spending reports", async () => {
     // Broker transaction is a transfer — should not appear
     const broker = merchants.find((r) => r.merchant === "Broker");
     expect(broker).toBeUndefined();
+  });
+});
+
+// ─── Refunds across reports ───────────────────────────────────────────────────
+
+describe("refunds across reports", async () => {
+  let transportId: number;
+  let booksId: number;
+
+  beforeEach(async () => {
+    const transport = catService.create({ name: "Transport" });
+    const food = catService.create({ name: "Food" });
+    const books = catService.create({ name: "Books" });
+    const salary = catService.create({ name: "Salary" });
+    transportId = transport.id;
+    booksId = books.id;
+
+    // A refund is an expense with a negative amount.
+    const expense = (date: string, amount: number, categoryId: number, merchant: string) =>
+      txService.create(tx({ date, amount, categoryId, merchant }));
+
+    await expense("2026-01-20", 30, books.id, "Bookshop");
+    await expense("2026-02-10", 50, transport.id, "BVG");
+    // Returned in a month with no Books purchase, which leaves February's Books negative.
+    await expense("2026-02-20", -30, books.id, "Bookshop");
+    await expense("2026-03-01", 203, transport.id, "Sixt");
+    await expense("2026-03-02", 6, transport.id, "BVG");
+    await expense("2026-03-03", -94, transport.id, "Sixt"); // deposit returned
+    await expense("2026-03-05", 40, food.id, "ALDI");
+    await txService.create(
+      tx({ date: "2026-03-10", amount: 1000, categoryId: salary.id, type: "income" })
+    );
+  });
+
+  const march = { dateFrom: "2026-03-01", dateTo: "2026-03-31" };
+  const quarter = { dateFrom: "2026-01-01", dateTo: "2026-03-31" };
+
+  it("agrees between the dashboard's total spend and its spending trend", async () => {
+    const summary = reports.spendingSummary(SpendingSummarySchema.parse(march));
+    const { points } = reports.trends(TrendsSchema.parse({ months: 3, type: "expense" }));
+
+    // 203 + 6 - 94 in Transport, plus 40 in Food; the refund counts as a transaction.
+    expect(summary.period).toMatchObject({ total: 155, count: 4 });
+    expect(points.find((p) => p.month === "2026-03")).toEqual({
+      month: "2026-03",
+      total: 155,
+      count: 4,
+    });
+  });
+
+  it("keeps refunds out of income entirely", async () => {
+    const result = reports.netIncome(march);
+    expect(result.totalIncome).toBe(1000);
+    expect(result.totalExpenses).toBe(155);
+    expect(result.netIncome).toBe(845);
+
+    const { points } = reports.trends(TrendsSchema.parse({ months: 3, type: "income" }));
+    expect(points.map((p) => p.total)).toEqual([0, 0, 1000]);
+  });
+
+  it("nets a refund in the month it came back", async () => {
+    const { points } = reports.trends(TrendsSchema.parse({ months: 3, type: "expense" }));
+    expect(points.map((p) => p.total)).toEqual([30, 20, 155]);
+
+    const transport = reports.trends(
+      TrendsSchema.parse({ months: 2, type: "expense", categoryId: transportId })
+    );
+    expect(transport.points.map((p) => p.total)).toEqual([50, 115]);
+  });
+
+  it("gives the same expense total from every report over a multi-month window", async () => {
+    const expected = 30 + 20 + 155;
+    const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
+
+    expect(reports.spendingSummary(SpendingSummarySchema.parse(quarter)).period.total).toBe(
+      expected
+    );
+    for (const groupBy of ["category", "month", "merchant"] as const) {
+      const { groups } = reports.spendingSummary(
+        SpendingSummarySchema.parse({ ...quarter, groupBy })
+      );
+      expect(sum(groups.map((g) => g.total))).toBe(expected);
+    }
+    const stats = reports.getCategoryStats(
+      catStats({ ...quarter, includeZeroSpend: false, includeUncategorized: true })
+    );
+    expect(sum(stats.items.map((i) => i.total))).toBe(expected);
+    const trend = reports.trends(TrendsSchema.parse({ months: 3, type: "expense" }));
+    expect(sum(trend.points.map((p) => p.total))).toBe(expected);
+    const categoryTrend = reports.categoryTrends(CategoryTrendsSchema.parse(quarter));
+    expect(sum(categoryTrend.series.flatMap((s) => s.values))).toBe(expected);
+    // 2026-01-01 through today, 2026-03-15.
+    const daily = reports.dailySpend(DailySpendSchema.parse({ days: 74 }));
+    expect(sum(daily.points.map((p) => p.total))).toBe(expected);
+    expect(reports.netIncome(quarter).totalExpenses).toBe(expected);
+    expect(reports.cashBalance()).toMatchObject({
+      totalIncome: 1000,
+      totalExpenses: expected,
+      cashBalance: 1000 - expected,
+    });
+  });
+
+  it("reports a category-month negative when refunds exceed its purchases", async () => {
+    const { items } = reports.getCategoryStats(catStats({ month: "2026-02" }));
+    const books = items.find((i) => i.categoryId === booksId);
+    expect(books).toMatchObject({ total: -30, count: 1, percentage: 0 });
+    // The negative category has no share; the purchases still add up to 100%.
+    expect(items.find((i) => i.categoryId === transportId)?.percentage).toBe(100);
+  });
+
+  it("lands a refund on its own day in the daily series", async () => {
+    const { points } = reports.dailySpend(DailySpendSchema.parse({ days: 15 }));
+    expect(points.find((p) => p.date === "2026-03-03")).toEqual({
+      date: "2026-03-03",
+      total: -94,
+      count: 1,
+    });
+  });
+
+  it("nets a refund into its merchant, counting and averaging purchases only", async () => {
+    const { merchants } = reports.topMerchants(TopMerchantsSchema.parse(march));
+    expect(merchants).toEqual([
+      { merchant: "Sixt", total: 109, count: 1, avgAmount: 203 },
+      { merchant: "ALDI", total: 40, count: 1, avgAmount: 40 },
+      { merchant: "BVG", total: 6, count: 1, avgAmount: 6 },
+    ]);
+  });
+
+  it("leaves out a merchant whose refunds cancel its purchases", async () => {
+    const { merchants } = reports.topMerchants(TopMerchantsSchema.parse(quarter));
+    expect(merchants.find((m) => m.merchant === "Bookshop")).toBeUndefined();
+  });
+
+  it("counts income filed in a spending category as income, not a refund", async () => {
+    await txService.create(
+      tx({ date: "2026-03-12", amount: 20, categoryId: transportId, type: "income" })
+    );
+
+    const expense = reports.getCategoryStats(catStats({ month: "2026-03" }));
+    expect(expense.items.find((i) => i.categoryId === transportId)?.total).toBe(115);
+    expect(reports.netIncome(march).totalIncome).toBe(1020);
   });
 });

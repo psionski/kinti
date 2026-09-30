@@ -22,7 +22,7 @@ export interface TransactionFilters {
   dateFrom: string;
   dateTo: string;
   categoryId: string; // "" = all, "uncategorized" = null, number string = specific
-  type: string; // "" = all, "income", "expense"
+  type: string; // "" = all, "income", "expense" (refunds included), "refund"
   amountMin: string;
   amountMax: string;
   recurringId: string; // "" = all, number string = specific
@@ -38,6 +38,26 @@ const EMPTY_FILTERS: TransactionFilters = {
   amountMax: "",
   recurringId: "",
 };
+
+// "Expenses" keeps refunds, which are expense rows; "Refunds" narrows to them alone.
+const TYPE_FILTER_OPTIONS = [
+  { value: "all", label: "All types" },
+  { value: "expense", label: "Expenses" },
+  { value: "refund", label: "Refunds" },
+  { value: "income", label: "Income" },
+] as const;
+
+function TypeFilterItems(): React.ReactElement {
+  return (
+    <>
+      {TYPE_FILTER_OPTIONS.map((o) => (
+        <SelectItem key={o.value} value={o.value}>
+          {o.label}
+        </SelectItem>
+      ))}
+    </>
+  );
+}
 
 interface TransactionFilterBarProps {
   filters: TransactionFilters;
@@ -69,9 +89,7 @@ function SheetFilterControls({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
-            <SelectItem value="expense">Expenses</SelectItem>
-            <SelectItem value="income">Income</SelectItem>
+            <TypeFilterItems />
           </SelectContent>
         </Select>
       </div>
@@ -227,9 +245,7 @@ export function TransactionFilterBar({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All types</SelectItem>
-                <SelectItem value="expense">Expenses</SelectItem>
-                <SelectItem value="income">Income</SelectItem>
+                <TypeFilterItems />
               </SelectContent>
             </Select>
 

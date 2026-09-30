@@ -156,7 +156,8 @@ function formatCellDate(date: string): string {
 export function SpendingHeatmap({ points, today }: SpendingHeatmapProps): React.ReactElement {
   const grid = buildGrid(points);
   const totalSpend = points.reduce((sum, p) => sum + p.total, 0);
-  const activeDays = points.filter((p) => p.total > 0).length;
+  // A day with only a refund nets to zero or below but still had activity.
+  const activeDays = points.filter((p) => p.count > 0).length;
 
   return (
     <Card>
@@ -240,7 +241,7 @@ export function SpendingHeatmap({ points, today }: SpendingHeatmapProps): React.
                         </div>
                       </TooltipContent>
                     );
-                    if (cell.total > 0) {
+                    if (cell.count > 0) {
                       return (
                         <Tooltip key={key}>
                           <TooltipTrigger asChild>

@@ -27,6 +27,9 @@ import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { TagsAutocompleteInput } from "@/components/transactions/tags-input";
 import type { CategoryWithCountResponse } from "@/lib/validators/categories";
 import type { TransactionResponse } from "@/lib/validators/transactions";
+import { KIND_LABELS, kindOf, toStored, type EntryKind } from "@/lib/transaction-kind";
+
+const ENTRY_KINDS: EntryKind[] = ["expense", "income", "refund"];
 
 interface TransactionFormProps {
   open: boolean;
@@ -59,9 +62,12 @@ export function TransactionFormDialog({
 }: TransactionFormProps): React.ReactElement {
   const isEdit = !!initialData;
 
-  const initialType: "income" | "expense" = initialData?.type === "income" ? "income" : "expense";
-  const [type, setType] = useState<"income" | "expense">(initialType);
-  const [amountStr, setAmountStr] = useState(initialData ? String(initialData.amount) : "");
+  const initialKind = initialData ? kindOf(initialData) : "expense";
+  const [kind, setKind] = useState<EntryKind>(initialKind === "transfer" ? "expense" : initialKind);
+  // A refund is stored negative; the form always takes the amount as a positive number.
+  const [amountStr, setAmountStr] = useState(
+    initialData ? String(Math.abs(initialData.amount)) : ""
+  );
   const [currency, setCurrency] = useState<string>(initialData?.currency ?? getBaseCurrency());
   const [description, setDescription] = useState(initialData?.description ?? "");
   const [merchant, setMerchant] = useState(initialData?.merchant ?? "");
@@ -92,9 +98,8 @@ export function TransactionFormDialog({
     }
 
     onSubmit({
-      amount: amountNum,
+      ...toStored(kind, amountNum),
       currency,
-      type,
       description: description.trim(),
       merchant: merchant.trim(),
       categoryId: categoryId === "none" ? null : Number(categoryId),
@@ -118,23 +123,26 @@ export function TransactionFormDialog({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Type */}
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              type="button"
-              variant={type === "expense" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setType("expense")}
-            >
-              Expense
-            </Button>
-            <Button
-              type="button"
-              variant={type === "income" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setType("income")}
-            >
-              Income
-            </Button>
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-2">
+              {ENTRY_KINDS.map((k) => (
+                <Button
+                  key={k}
+                  type="button"
+                  variant={kind === k ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setKind(k)}
+                >
+                  {KIND_LABELS[k]}
+                </Button>
+              ))}
+            </div>
+            {kind === "refund" && (
+              <p className="text-muted-foreground text-xs">
+                Money back for something you bought — a return, a returned deposit, a reimbursement.
+                It reduces spending in the purchase&apos;s category.
+              </p>
+            )}
           </div>
 
           {/* Amount + Date */}
@@ -199,7 +207,7 @@ export function TransactionFormDialog({
 
           {/* Category */}
           <div className="space-y-1.5">
-            <Label>Category</Label>
+            <Label>{kind === "refund" ? "Category of the purchase" : "Category"}</Label>
             <Select value={categoryId} onValueChange={setCategoryId}>
               <SelectTrigger id="tx-category" className="w-full">
                 <SelectValue placeholder="Select category" />

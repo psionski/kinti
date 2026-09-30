@@ -148,13 +148,12 @@ describe("getForMonth", async () => {
     expect(budgetService.hasOwnRows("2026-04")).toBe(false);
   });
 
-  it("calculates spentAmount net of refunds in the category", async () => {
+  it("calculates spentAmount correctly (expense only)", async () => {
     const { items } = budgetService.getForMonth(GetBudgetStatusSchema.parse({ month: "2026-03" }));
     const food = items.find((r) => r.categoryName === "Food");
-    // 200 + 100 spent, less the 50 income refund filed against the same category.
-    expect(food?.spentAmount).toBe(250);
+    expect(food?.spentAmount).toBe(300);
     expect(food?.budgetAmount).toBe(500);
-    expect(food?.remainingAmount).toBe(250);
+    expect(food?.remainingAmount).toBe(200);
     expect(food?.isOver).toBe(false);
   });
 
@@ -183,7 +182,7 @@ describe("getForMonth", async () => {
     );
     const { items } = budgetService.getForMonth(GetBudgetStatusSchema.parse({ month: "2026-03" }));
     const food = items.find((r) => r.categoryName === "Food");
-    expect(food?.spentAmount).toBe(250);
+    expect(food?.spentAmount).toBe(300);
   });
 
   it("includes child category spend in parent budget (rollup)", async () => {
@@ -199,7 +198,7 @@ describe("getForMonth", async () => {
 
     const { items } = budgetService.getForMonth(GetBudgetStatusSchema.parse({ month: "2026-03" }));
     const food = items.find((r) => r.categoryName === "Food");
-    expect(food?.spentAmount).toBe(330);
+    expect(food?.spentAmount).toBe(380);
   });
 
   it("includes deeply nested child spend in rollup", async () => {
@@ -212,7 +211,20 @@ describe("getForMonth", async () => {
 
     const { items } = budgetService.getForMonth(GetBudgetStatusSchema.parse({ month: "2026-03" }));
     const food = items.find((r) => r.categoryName === "Food");
-    expect(food?.spentAmount).toBe(270);
+    expect(food?.spentAmount).toBe(320);
+  });
+
+  it("nets a refund out of spentAmount", async () => {
+    // A refund is an expense with a negative amount. The 50 of income filed in Food by
+    // beforeEach stays income and does not reduce the spend.
+    await txService.create(
+      tx({ amount: -80, categoryId: foodId, type: "expense", date: "2026-03-25" })
+    );
+
+    const { items } = budgetService.getForMonth(GetBudgetStatusSchema.parse({ month: "2026-03" }));
+    const food = items.find((r) => r.categoryName === "Food");
+    expect(food?.spentAmount).toBe(220);
+    expect(food?.remainingAmount).toBe(280);
   });
 
   it("nets a refund in a child category out of the parent rollup", async () => {
@@ -221,13 +233,12 @@ describe("getForMonth", async () => {
       tx({ amount: 80, categoryId: groceries.id, type: "expense", date: "2026-03-12" })
     );
     await txService.create(
-      tx({ amount: 30, categoryId: groceries.id, type: "income", date: "2026-03-14" })
+      tx({ amount: -30, categoryId: groceries.id, type: "expense", date: "2026-03-14" })
     );
 
     const { items } = budgetService.getForMonth(GetBudgetStatusSchema.parse({ month: "2026-03" }));
     const food = items.find((r) => r.categoryName === "Food");
-    // 250 net in Food itself, plus 80 - 30 from the child.
-    expect(food?.spentAmount).toBe(300);
+    expect(food?.spentAmount).toBe(350);
   });
 
   it("returns empty result when no budgets exist anywhere", async () => {

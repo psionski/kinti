@@ -1,5 +1,5 @@
 import { Temporal } from "@js-temporal/polyfill";
-import { and, eq, gte, isNotNull, lte, sql, type SQL } from "drizzle-orm";
+import { and, eq, gte, lte, sql, type SQL } from "drizzle-orm";
 import { getCurrentMonth, isoToday } from "@/lib/date-ranges";
 import { getBaseCurrency } from "@/lib/format";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
@@ -45,48 +45,6 @@ function typeFilter(type: "income" | "expense" | "all"): SQL | undefined {
   return eq(transactions.type, type);
 }
 
-/**
- * How much refunded income each category cancels against its own spend in a window.
- *
- * A refund is filed as an `income` row against an expense category — a returned rental
- * deposit, a reimbursed fare — so counting the category gross overstates what it cost.
- * Nothing links a refund to the expense it reverses, so the offset is capped at the
- * category's own spend: it can cancel a category down to zero but never past it. That
- * cap is what keeps a category holding genuine income (a salary with one stray bank fee
- * in it) from swinging the whole expense report negative.
- *
- * Keyed by category id; uncategorized rows have nothing to offset and are skipped.
- */
-function refundOffsets(db: Db, dateFrom: string, dateTo: string): Map<number, number> {
-  const totalsByType = (type: "income" | "expense") =>
-    new Map(
-      db
-        .select({
-          categoryId: transactions.categoryId,
-          total: sql<number>`coalesce(sum(${transactions.amountBase}), 0)`.mapWith(Number),
-        })
-        .from(transactions)
-        .where(
-          and(
-            ...dateFilters(dateFrom, dateTo),
-            eq(transactions.type, type),
-            isNotNull(transactions.categoryId)
-          )
-        )
-        .groupBy(transactions.categoryId)
-        .all()
-        .map((r) => [r.categoryId as number, r.total] as const)
-    );
-
-  const spend = totalsByType("expense");
-  const offsets = new Map<number, number>();
-  for (const [categoryId, income] of totalsByType("income")) {
-    const applied = Math.min(income, spend.get(categoryId) ?? 0);
-    if (applied > 0) offsets.set(categoryId, applied);
-  }
-  return offsets;
-}
-
 function periodTotal(db: Db, dateFrom: string, dateTo: string, type: "income" | "expense" | "all") {
   const filters: SQL[] = [...dateFilters(dateFrom, dateTo)];
   const tf = typeFilter(type);
@@ -100,12 +58,7 @@ function periodTotal(db: Db, dateFrom: string, dateTo: string, type: "income" | 
     .from(transactions)
     .where(and(...filters))
     .all();
-  const gross = row ?? { total: 0, count: 0 };
-  if (type !== "expense") return gross;
-
-  let offset = 0;
-  for (const amount of refundOffsets(db, dateFrom, dateTo).values()) offset += amount;
-  return { total: gross.total - offset, count: gross.count };
+  return row ?? { total: 0, count: 0 };
 }
 
 // ─── Hierarchy helpers ───────────────────────────────────────────────────────
@@ -185,32 +138,13 @@ export class ReportService {
         for (const r of cRows) compareMap.set(r.categoryId, r.total);
       }
 
-      // Net refunds the same way getCategoryStats does, so the dashboard's breakdown and
-      // its category cards agree.
-      const netted = new Map(rows.map((r) => [r.categoryId, r.total]));
-      if (type === "expense") {
-        for (const [categoryId, offset] of refundOffsets(this.db, dateFrom, dateTo)) {
-          if (netted.has(categoryId)) netted.set(categoryId, netted.get(categoryId)! - offset);
-        }
-        if (input.compareDateFrom && input.compareDateTo) {
-          const compareOffsets = refundOffsets(this.db, input.compareDateFrom, input.compareDateTo);
-          for (const [categoryId, offset] of compareOffsets) {
-            if (compareMap.has(categoryId)) {
-              compareMap.set(categoryId, compareMap.get(categoryId)! - offset);
-            }
-          }
-        }
-      }
-
-      groups = rows
-        .map((r) => ({
-          key: r.categoryName ?? "(uncategorized)",
-          categoryId: r.categoryId,
-          total: netted.get(r.categoryId) ?? r.total,
-          count: r.count,
-          ...(input.compareDateFrom ? { compareTotal: compareMap.get(r.categoryId) ?? 0 } : {}),
-        }))
-        .sort((a, b) => b.total - a.total);
+      groups = rows.map((r) => ({
+        key: r.categoryName ?? "(uncategorized)",
+        categoryId: r.categoryId,
+        total: r.total,
+        count: r.count,
+        ...(input.compareDateFrom ? { compareTotal: compareMap.get(r.categoryId) ?? 0 } : {}),
+      }));
     } else if (groupBy === "month") {
       const rows = this.db
         .select({
@@ -377,15 +311,6 @@ export class ReportService {
       spendMap.set(row.categoryId, { total: row.total, count: row.count });
     }
 
-    // Net refunds out of each category's spend. `count` stays a count of spending
-    // transactions — a refund reduces the total, it is not itself a spend.
-    if (input.type === "expense") {
-      for (const [categoryId, offset] of refundOffsets(this.db, dateFrom, dateTo)) {
-        const entry = spendMap.get(categoryId);
-        if (entry) entry.total -= offset;
-      }
-    }
-
     // Query all categories
     const allCategories = this.db
       .select({
@@ -441,7 +366,7 @@ export class ReportService {
     // Uncategorized row
     if (input.includeUncategorized) {
       const uncategorized = spendMap.get(null);
-      if (uncategorized && uncategorized.total > 0) {
+      if (uncategorized && uncategorized.total !== 0) {
         items.push({
           categoryId: null,
           categoryName: null,
@@ -457,10 +382,12 @@ export class ReportService {
       }
     }
 
-    // Compute percentages and sort
-    const grandTotal = items.reduce((s, r) => s + r.total, 0);
+    // Compute percentages and sort. A refund can leave a category negative for the period;
+    // it has no share of the spending, and counting it would push the others past 100%.
+    const grandTotal = items.reduce((s, r) => s + Math.max(r.total, 0), 0);
     for (const item of items) {
-      item.percentage = grandTotal > 0 ? Math.round((item.total / grandTotal) * 10000) / 100 : 0;
+      item.percentage =
+        grandTotal > 0 && item.total > 0 ? Math.round((item.total / grandTotal) * 10000) / 100 : 0;
     }
 
     items.sort((a, b) => b.rollupTotal - a.rollupTotal);
@@ -592,36 +519,6 @@ export class ReportService {
       .where(and(...filters))
       .groupBy(sql`strftime('%Y-%m', ${transactions.date})`, transactions.categoryId)
       .all();
-
-    // Net refunds against the month + category they land in, so a series matches the
-    // category cards. `rows` already holds spend per month + category, so the offsets
-    // only need the opposite direction — one query, not one per month.
-    if (input.type === "expense") {
-      const refunds = this.db
-        .select({
-          month: sql<string>`strftime('%Y-%m', ${transactions.date})`.mapWith(String),
-          categoryId: transactions.categoryId,
-          total: sql<number>`coalesce(sum(${transactions.amountBase}), 0)`.mapWith(Number),
-        })
-        .from(transactions)
-        .where(
-          and(
-            ...dateFilters(input.dateFrom, input.dateTo),
-            eq(transactions.type, "income"),
-            isNotNull(transactions.categoryId)
-          )
-        )
-        .groupBy(sql`strftime('%Y-%m', ${transactions.date})`, transactions.categoryId)
-        .all();
-
-      const spendByKey = new Map(rows.map((r) => [`${r.month}:${r.categoryId}`, r]));
-      for (const refund of refunds) {
-        const spend = spendByKey.get(`${refund.month}:${refund.categoryId}`);
-        if (!spend) continue;
-        // Capped at the month's spend, matching refundOffsets.
-        spend.total -= Math.min(refund.total, spend.total);
-      }
-    }
 
     // Pivot into per-root-category series aligned to the months array.
     const seriesMap = new Map<string, { name: string; color: string | null; values: number[] }>();
@@ -790,16 +687,25 @@ export class ReportService {
     // Only include transactions that have a merchant
     filters.push(sql`${transactions.merchant} IS NOT NULL`);
 
+    // `total` is net of refunds; `count` and `avgAmount` describe the purchases alone, so a
+    // refund doesn't read as a smaller purchase.
     const rows = this.db
       .select({
         merchant: transactions.merchant,
         total: sql<number>`coalesce(sum(${transactions.amountBase}), 0)`.mapWith(Number),
-        count: sql<number>`count(*)`.mapWith(Number),
-        avgAmount: sql<number>`coalesce(avg(${transactions.amountBase}), 0)`.mapWith(Number),
+        count: sql<number>`count(case when ${transactions.amountBase} > 0 then 1 end)`.mapWith(
+          Number
+        ),
+        avgAmount:
+          sql<number>`coalesce(avg(case when ${transactions.amountBase} > 0 then ${transactions.amountBase} end), 0)`.mapWith(
+            Number
+          ),
       })
       .from(transactions)
       .where(and(...filters))
       .groupBy(transactions.merchant)
+      // A merchant that only refunded in the window isn't one of the highest-spend merchants.
+      .having(sql`sum(${transactions.amountBase}) > 0`)
       .orderBy(sql`sum(${transactions.amountBase}) DESC`)
       .limit(input.limit)
       .all();

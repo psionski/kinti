@@ -34,7 +34,9 @@ export function CategoryTrendsChart({ data }: CategoryTrendsChartProps): React.R
   const chartData = data.months.map((month, i) => {
     const row: Record<string, string | number> = { month };
     for (const s of data.series) {
-      row[s.key] = s.values[i]!;
+      // A month where refunds exceed a category's purchases is negative, and a negative
+      // band can't stack: it would pull every series above it down through it.
+      row[s.key] = Math.max(s.values[i]!, 0);
     }
     return row;
   });

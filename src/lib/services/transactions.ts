@@ -30,6 +30,7 @@ import type { PaginatedResponse } from "@/lib/validators/common";
 import { isoToday, utcToLocal } from "@/lib/date-ranges";
 import { getBaseCurrency, roundToCurrency } from "@/lib/format";
 import { requireRow } from "@/lib/db/rows";
+import { ValidationError } from "@/lib/errors";
 import type { FinancialDataService } from "./financial-data";
 
 type Db = BetterSQLite3Database<typeof schema>;
@@ -42,6 +43,20 @@ function parseTags(raw: string | null): string[] | null {
     return parsed.filter((item): item is string => typeof item === "string");
   } catch {
     return null;
+  }
+}
+
+/**
+ * Money that comes back for a purchase is a refund: an expense with a negative amount, so
+ * every sum over expenses nets it. A negative income would be a second, conflicting way to
+ * say the same thing, and would silently skip the purchase's category.
+ */
+function assertSignFitsType(type: string, amount: number): void {
+  if (type === "income" && amount < 0) {
+    throw new ValidationError(
+      "Income must be a positive amount. Record money back for a purchase as a refund: " +
+        "an expense with a negative amount, in the purchase's category."
+    );
   }
 }
 
@@ -93,6 +108,7 @@ export class TransactionService {
   }
 
   async create(input: CreateTransactionInput): Promise<TransactionResponse> {
+    assertSignFitsType(input.type, input.amount);
     const date = input.date ?? isoToday();
     const currency = input.currency ?? getBaseCurrency();
     const amountBase = await this.resolveAmountBase(input.amount, currency, date);
@@ -122,6 +138,7 @@ export class TransactionService {
   }
 
   async createBatch(input: CreateTransactionsBatchInput): Promise<TransactionResponse[]> {
+    for (const tx of input.transactions) assertSignFitsType(tx.type, tx.amount);
     // Resolve FX for every line item before opening a write transaction so
     // any failure aborts the whole batch cleanly. Sequential to keep provider
     // load low — batches are typically small (single receipts).
@@ -170,12 +187,19 @@ export class TransactionService {
         filters.push(inArray(transactions.categoryId, allIds));
       }
     }
-    if (input.amountMin !== undefined) filters.push(gte(transactions.amount, input.amountMin));
-    if (input.amountMax !== undefined) filters.push(lte(transactions.amount, input.amountMax));
+    // Amount filters and sorting go by size, so a refund sits with purchases of the same size.
+    const size = sql`abs(${transactions.amount})`;
+    if (input.amountMin !== undefined) filters.push(sql`${size} >= ${input.amountMin}`);
+    if (input.amountMax !== undefined) filters.push(sql`${size} <= ${input.amountMax}`);
     if (input.merchant !== undefined)
       filters.push(like(transactions.merchant, `%${input.merchant}%`));
-    if (input.type !== undefined) filters.push(eq(transactions.type, input.type));
-    else filters.push(ne(transactions.type, "transfer"));
+    if (input.type === "refund") {
+      filters.push(eq(transactions.type, "expense"), sql`${transactions.amount} < 0`);
+    } else if (input.type !== undefined) {
+      filters.push(eq(transactions.type, input.type));
+    } else {
+      filters.push(ne(transactions.type, "transfer"));
+    }
     if (input.receiptId !== undefined) filters.push(eq(transactions.receiptId, input.receiptId));
     if (input.recurringId !== undefined)
       filters.push(eq(transactions.recurringId, input.recurringId));
@@ -203,7 +227,7 @@ export class TransactionService {
 
     const sortColumnMap = {
       date: transactions.date,
-      amount: transactions.amount,
+      amount: size,
       merchant: transactions.merchant,
       createdAt: transactions.createdAt,
     } as const;
@@ -239,23 +263,32 @@ export class TransactionService {
   }
 
   async update(id: number, input: UpdateTransactionInput): Promise<TransactionResponse | null> {
-    // If amount, currency, or date changes, we need to recompute amount_base.
-    // Read the existing row first so we can fall back to its values for any
-    // field the caller didn't touch.
+    const existing = this.db.select().from(transactions).where(eq(transactions.id, id)).get();
+    if (!existing) return null;
+    const amountBase = await this.prepareUpdate(existing, input);
+    return this.applyUpdate(id, input, amountBase);
+  }
+
+  /**
+   * Validates an update against the row it changes and, if amount, currency, or date
+   * changes, recomputes amount_base. The row supplies every field the caller didn't touch,
+   * so changing only `type` is checked against the stored amount's sign.
+   */
+  private async prepareUpdate(
+    existing: Transaction,
+    input: UpdateTransactionInput
+  ): Promise<number | undefined> {
+    const amount = input.amount ?? existing.amount;
+    assertSignFitsType(input.type ?? existing.type, amount);
+
     const fxFieldsTouched =
       input.amount !== undefined || input.currency !== undefined || input.date !== undefined;
-
-    let amountBase: number | undefined;
-    if (fxFieldsTouched) {
-      const existing = this.db.select().from(transactions).where(eq(transactions.id, id)).get();
-      if (!existing) return null;
-      const newAmount = input.amount ?? existing.amount;
-      const newCurrency = input.currency ?? existing.currency;
-      const newDate = input.date ?? existing.date;
-      amountBase = await this.resolveAmountBase(newAmount, newCurrency, newDate);
-    }
-
-    return this.applyUpdate(id, input, amountBase);
+    if (!fxFieldsTouched) return undefined;
+    return this.resolveAmountBase(
+      amount,
+      input.currency ?? existing.currency,
+      input.date ?? existing.date
+    );
   }
 
   /** Sync update used by both update() and updateBatch() after async FX work. */
@@ -291,8 +324,8 @@ export class TransactionService {
   }
 
   async updateBatch(input: UpdateTransactionsBatchInput): Promise<TransactionResponse[]> {
-    // Pre-compute amount_base for any update that touches amount/currency/date.
-    // This async work happens before the SQLite transaction so the eventual
+    // Validate every update and pre-compute amount_base where amount/currency/date
+    // changes. This async work happens before the SQLite transaction so the eventual
     // batch is still atomic (all updates commit together or none do).
     const resolved: Array<{
       id: number;
@@ -300,22 +333,12 @@ export class TransactionService {
       amountBase?: number;
     }> = [];
     for (const { id, ...fields } of input.updates) {
-      const fxFieldsTouched =
-        fields.amount !== undefined || fields.currency !== undefined || fields.date !== undefined;
-      let amountBase: number | undefined;
-      if (fxFieldsTouched) {
-        const existing = this.db.select().from(transactions).where(eq(transactions.id, id)).get();
-        if (!existing) {
-          resolved.push({ id, fields }); // will silently no-op below
-          continue;
-        }
-        amountBase = await this.resolveAmountBase(
-          fields.amount ?? existing.amount,
-          fields.currency ?? existing.currency,
-          fields.date ?? existing.date
-        );
+      const existing = this.db.select().from(transactions).where(eq(transactions.id, id)).get();
+      if (!existing) {
+        resolved.push({ id, fields }); // will silently no-op below
+        continue;
       }
-      resolved.push({ id, fields, amountBase });
+      resolved.push({ id, fields, amountBase: await this.prepareUpdate(existing, fields) });
     }
 
     return this.db.transaction(() =>
