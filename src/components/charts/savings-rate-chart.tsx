@@ -61,7 +61,7 @@ export function SavingsRateChart({
           <ChartContainer
             ref={chartRef}
             config={chartConfig}
-            className="min-h-[200px] w-full flex-1"
+            className="h-[200px] w-full flex-auto"
           >
             <AreaChart data={chartData} accessibilityLayer>
               <CartesianGrid vertical={false} />

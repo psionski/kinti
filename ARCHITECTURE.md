@@ -236,7 +236,7 @@ Components live in `src/components/{domain}/`; see the README and the pages them
 
   Because each history point carries its date's `rate`, the **value chart** reads in either denomination for a foreign asset — a toggle switches between the asset's own currency and base. It is the base curve that answers "what is this worth to me", and for a foreign holding the two genuinely differ: a US position can climb in dollars while a strengthening euro flattens it. Points with no cached rate are dropped from the base series rather than carried through unconverted, matching the rule the cross-currency totals follow.
 - **Cash Flow (`/reports/cash-flow`)** — spending by category, trends, merchants, budget vs actual, income vs expenses. (`/reports` redirects here.)
-- **Portfolio (`/reports/portfolio`)** — net worth over time, allocation, performance ranking, realized vs unrealized P&L, transfer flow.
+- **Portfolio (`/reports/portfolio`)** — net worth over time, allocation, currency exposure, performance ranking, realized vs unrealized P&L.
 - **Settings (`/settings`)** — timezone selector (onboarding gate) + provider API-key management.
 
 *Sidebar groups: **Track** (Transactions, Assets, Recurring), **Plan** (Categories, Budgets), **Reports** (Cash Flow, Portfolio).*
@@ -411,6 +411,7 @@ Pair it with `useYAxisWidth()` (`src/hooks/use-y-axis-width.ts`), which every ch
 
 - Use shadcn/ui components as the base. Don't reinvent accessible primitives.
 - Recharts (via shadcn/ui chart primitives) for charts and dashboard widgets.
+- **Every `ChartContainer` sets an explicit height** (`h-[250px] sm:h-[300px]`, or `h-[200px] flex-auto` to grow into a stretched card). Never derive a chart's height from width — `aspect-*` clamped by `min-h-*`/`max-h-*`: WebKit sizes the inner `ResponsiveContainer` differently from Blink, so the chart renders squashed on iOS while desktop browsers and Chromium phone emulation look fine. Our `ChartContainer` drops upstream's `aspect-video` default for this reason; a chart with no height collapses in every browser instead of only on iOS.
 - Components should be composable and focused. No god-components.
 - Server Components by default; only use `"use client"` when you need interactivity or browser APIs.
 - **Page pattern:** Server component fetches initial data via service layer, passes to a `"use client"` wrapper (e.g. `BudgetsClient`) as `initialData` props. Client component owns state, mutations, and dialogs.

@@ -96,7 +96,7 @@ export function PriceChart({
         <ChartContainer
           ref={chartRef}
           config={chartConfig}
-          className="aspect-auto h-[260px] w-full sm:h-[300px]"
+          className="h-[260px] w-full sm:h-[300px]"
         >
           <ComposedChart data={chartData} accessibilityLayer>
             <CartesianGrid vertical={false} />

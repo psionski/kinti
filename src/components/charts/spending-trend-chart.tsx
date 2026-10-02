@@ -37,7 +37,11 @@ export function SpendingTrendChart({ data }: SpendingTrendChartProps): React.Rea
       </CardHeader>
       <CardContent>
         {chartData.length > 0 ? (
-          <ChartContainer ref={chartRef} config={chartConfig} className="min-h-[250px] w-full">
+          <ChartContainer
+            ref={chartRef}
+            config={chartConfig}
+            className="h-[250px] w-full sm:h-[300px]"
+          >
             <AreaChart data={chartData} accessibilityLayer>
               <CartesianGrid vertical={false} />
               <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />

@@ -100,7 +100,7 @@ export function IncomeExpensesCard({
           <ChartContainer
             ref={chartRef}
             config={chartConfig}
-            className="min-h-[200px] w-full flex-1"
+            className="h-[200px] w-full flex-auto"
           >
             <AreaChart data={chartData} accessibilityLayer>
               <CartesianGrid vertical={false} />
@@ -128,7 +128,7 @@ export function IncomeExpensesCard({
                         (chartConfig as Record<string, { label?: string } | undefined>)[
                           name as string
                         ]?.label ?? name;
-                      return `${label}: €${(value as number).toLocaleString("de-DE", { minimumFractionDigits: 2 })}`;
+                      return `${label}: ${formatCurrency(value as number)}`;
                     }}
                     labelFormatter={formatMonth}
                   />

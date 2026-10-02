@@ -51,7 +51,7 @@ export function CategoryTrendsChart({ data }: CategoryTrendsChartProps): React.R
           <ChartContainer
             ref={chartRef}
             config={chartConfig}
-            className="max-h-[350px] min-h-[250px] w-full"
+            className="h-[250px] w-full sm:h-[350px]"
           >
             <AreaChart data={chartData} accessibilityLayer>
               <CartesianGrid vertical={false} />
