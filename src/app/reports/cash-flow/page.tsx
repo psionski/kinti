@@ -1,57 +1,70 @@
 export const dynamic = "force-dynamic";
 
+import { HydrationBoundary } from "@tanstack/react-query";
 import { requireOnboarding } from "@/lib/api/require-timezone";
 import { getReportService, getCategoryService } from "@/lib/api/services";
-import { ReportsClient, type ReportsData } from "@/components/reports/reports-client";
-import { DEFAULT_PRESET, computePresetRange, computeCompareRange } from "@/lib/date-ranges";
+import { ReportsClient } from "@/components/reports/reports-client";
+import {
+  cashFlowParams,
+  initialCashFlowRange,
+  showsTrends,
+} from "@/components/reports/cash-flow-query";
+import { seedQueries } from "@/lib/queries/seed";
+import {
+  categoryTrendsQuery,
+  netIncomeQuery,
+  spendingSummaryQuery,
+  topMerchantsQuery,
+  trendsQuery,
+} from "@/lib/queries/reports";
+import { categoryListQuery } from "@/lib/queries/categories";
+import {
+  CategoryTrendsSchema,
+  NetIncomeSchema,
+  SpendingSummarySchema,
+  TopMerchantsSchema,
+  TrendsSchema,
+} from "@/lib/validators/reports";
 
 export default function ReportsPage(): React.ReactElement {
   requireOnboarding();
-  const reportService = getReportService();
-  const categoryService = getCategoryService();
+  const reports = getReportService();
+  const range = initialCashFlowRange();
+  const params = cashFlowParams(range);
 
-  const { dateFrom, dateTo } = computePresetRange(DEFAULT_PRESET);
-  const computed = computeCompareRange({ dateFrom, dateTo });
-
-  const balance = reportService.netIncome({ dateFrom, dateTo });
-  const incomeTrend = reportService.trends({ months: computed.months, type: "income" });
-  const expenseTrend = reportService.trends({ months: computed.months, type: "expense" });
-  const categoryTrends = reportService.categoryTrends({
-    dateFrom,
-    dateTo,
-    type: "expense",
+  const state = seedQueries((client) => {
+    client.setQueryData(
+      netIncomeQuery(params.netIncome).queryKey,
+      reports.netIncome(NetIncomeSchema.parse(params.netIncome))
+    );
+    if (showsTrends(range)) {
+      client.setQueryData(
+        trendsQuery(params.incomeTrend).queryKey,
+        reports.trends(TrendsSchema.parse(params.incomeTrend))
+      );
+      client.setQueryData(
+        trendsQuery(params.expenseTrend).queryKey,
+        reports.trends(TrendsSchema.parse(params.expenseTrend))
+      );
+      client.setQueryData(
+        categoryTrendsQuery(params.categoryTrends).queryKey,
+        reports.categoryTrends(CategoryTrendsSchema.parse(params.categoryTrends))
+      );
+    }
+    client.setQueryData(
+      spendingSummaryQuery(params.spendingSummary).queryKey,
+      reports.spendingSummary(SpendingSummarySchema.parse(params.spendingSummary))
+    );
+    client.setQueryData(
+      topMerchantsQuery(params.topMerchants).queryKey,
+      reports.topMerchants(TopMerchantsSchema.parse(params.topMerchants))
+    );
+    client.setQueryData(categoryListQuery().queryKey, getCategoryService().getAll());
   });
-  const summary = reportService.spendingSummary({
-    dateFrom,
-    dateTo,
-    groupBy: "category",
-    type: "expense",
-    compareDateFrom: computed.compareDateFrom,
-    compareDateTo: computed.compareDateTo,
-    includeTransfers: false,
-  });
-  const topMerchants = reportService.topMerchants({
-    dateFrom,
-    dateTo,
-    type: "expense",
-    limit: 10,
-  });
-  const categories = categoryService.getAll();
-
-  const initialData: ReportsData = {
-    balance,
-    incomeTrend,
-    expenseTrend,
-    categoryTrends,
-    summary,
-    topMerchants,
-  };
 
   return (
-    <ReportsClient
-      initialData={initialData}
-      initialDateRange={{ dateFrom, dateTo }}
-      categories={categories}
-    />
+    <HydrationBoundary state={state}>
+      <ReportsClient initialRange={range} />
+    </HydrationBoundary>
   );
 }

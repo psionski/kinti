@@ -58,15 +58,18 @@ export function touchesYAxis(records: readonly MutationRecord[]): boolean {
  * The `width` a chart's `YAxis` should use, measured from the tick labels it
  * actually rendered.
  *
- * Recharts 2 has no auto-sizing axis, and any fixed `width` is wrong in one of
- * two directions: too wide leaves a gutter of dead space beside small numbers,
- * too narrow clips the labels beside large ones. Estimating from the data does
- * not close the gap either — Recharts picks its tick values during the render
- * that needs the width, and rounds the domain outwards while doing it, so the
- * widest label is not knowable beforehand. A proportional font makes it worse
- * still: in Geist "111" and "000" differ by 10px at the same digit count.
+ * Any fixed `width` is wrong in one of two directions: too wide leaves a gutter
+ * of dead space beside small numbers, too narrow clips the labels beside large
+ * ones. Estimating from the data does not close the gap either — Recharts picks
+ * its tick values during the render that needs the width, and rounds the domain
+ * outwards while doing it, so the widest label is not knowable beforehand. A
+ * proportional font makes it worse still: in Geist "111" and "000" differ by
+ * 10px at the same digit count.
  *
- * Measuring sidesteps all of that, and works whatever the tick formatter is.
+ * Recharts' own `width="auto"` measures only when the ticks change, so it keeps
+ * whatever width the fallback font's metrics gave it once Geist swaps in (see
+ * the font handling below). Measuring here sidesteps all of that, and works
+ * whatever the tick formatter is.
  * Tick values follow the domain, not the gutter, so the labels do not change
  * when the width does and the measurement settles after a single correction.
  *

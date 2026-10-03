@@ -1,9 +1,5 @@
 import { z, type ZodType } from "zod";
-import type {
-  ZodOpenApiOperationObject,
-  ZodOpenApiResponsesObject,
-  ZodOpenApiParameters,
-} from "zod-openapi";
+import type { ZodOpenApiOperationObject, ZodOpenApiParameters } from "zod-openapi";
 import { ErrorResponseSchema } from "@/lib/validators/common";
 import { TransactionResponseSchema } from "@/lib/validators/transactions";
 
@@ -61,7 +57,7 @@ export function op(cfg: OpConfig): ZodOpenApiOperationObject {
     operationId: cfg.id,
     summary: cfg.summary,
     tags: cfg.tags,
-    responses: Object.fromEntries(entries) as ZodOpenApiResponsesObject,
+    responses: Object.fromEntries(entries),
   };
 
   if (cfg.pathId) {

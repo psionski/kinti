@@ -29,6 +29,8 @@ interface CategoryFormProps {
   onSubmit: (data: CategoryFormData) => void;
   initialData?: CategoryWithCountResponse | null;
   loading?: boolean;
+  /** Why the server refused the last submit, if it did. */
+  submitError?: string | null;
 }
 
 export interface CategoryFormData {
@@ -77,6 +79,7 @@ export function CategoryFormDialog({
   onSubmit,
   initialData,
   loading,
+  submitError,
 }: CategoryFormProps): React.ReactElement {
   const isEdit = !!initialData;
 
@@ -194,7 +197,9 @@ export function CategoryFormDialog({
             />
           </div>
 
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          {(error || submitError) && (
+            <p className="text-destructive text-sm">{error || submitError}</p>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

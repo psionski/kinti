@@ -3,7 +3,7 @@ src/test/
 e2e/
 coverage/
 *.spec.ts
-vitest.config.ts
+vitest.config.mts
 playwright.config.ts
 
 # Runtime data

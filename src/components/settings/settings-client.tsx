@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { setBaseCurrencyCache } from "@/lib/format";
-import type { BackupInfo } from "@/lib/services/backup";
+import { setUserTimezone } from "@/lib/date-ranges";
+import { useSetBaseCurrency, useSetTimezone } from "@/lib/queries/settings";
 import { Section } from "./settings-section";
 import { TimezonePicker } from "./timezone-picker";
 import { CurrencyPicker } from "./currency-picker";
@@ -16,13 +18,7 @@ import { BackupManager } from "./backup-manager";
 // ─── Onboarding steps (after timezone + base currency) ──────────────────────
 
 type OnboardingStep =
-  | "base-currency"
-  | "cash"
-  | "savings"
-  | "investments"
-  | "providers"
-  | "backups"
-  | "done";
+  "base-currency" | "cash" | "savings" | "investments" | "providers" | "backups" | "done";
 const ONBOARDING_ORDER: OnboardingStep[] = [
   "base-currency",
   "cash",
@@ -65,28 +61,29 @@ function detectLocaleCurrency(): string {
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 interface SettingsClientProps {
+  /** The saved timezone, or `null` before onboarding has set one. */
   initialTimezone: string | null;
+  /** The saved base currency, or `null` before onboarding has set one. */
   initialBaseCurrency: string | null;
-  initialBackups: BackupInfo[];
 }
 
 export function SettingsClient({
   initialTimezone,
   initialBaseCurrency,
-  initialBackups,
 }: SettingsClientProps): React.ReactElement {
+  const router = useRouter();
   const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const [timezone, setTimezone] = useState(initialTimezone ?? detectedTz);
-  const [savingTz, setSavingTz] = useState(false);
+  const saveTimezone = useSetTimezone();
 
   const [baseCurrency, setBaseCurrency] = useState<string>(
     initialBaseCurrency ?? detectLocaleCurrency()
   );
-  const [savingCurrency, setSavingCurrency] = useState(false);
+  const saveBaseCurrency = useSetBaseCurrency();
   // Locked once persisted (whether from initial load or just saved this session).
   // Drives the picker disabled state, hides the Save button, and gates the
   // cash/savings/investments/providers/backups sections below.
-  const [baseCurrencyLocked, setBaseCurrencyLocked] = useState(initialBaseCurrency !== null);
+  const baseCurrencyLocked = initialBaseCurrency !== null || saveBaseCurrency.isSuccess;
 
   // First setup if either timezone or base currency is missing.
   const isFirstSetup = initialTimezone === null || initialBaseCurrency === null;
@@ -104,6 +101,11 @@ export function SettingsClient({
   const allRevealed = onboardingStep === "done";
   const lastRevealedRef = useRef<HTMLDivElement>(null);
 
+  /** Reveal the step after `step` — only while `step` is the one being shown. */
+  function advanceFrom(step: OnboardingStep): void {
+    setOnboardingStep((current) => (current === step ? nextStep(step) : current));
+  }
+
   function scrollToRevealed(): void {
     lastRevealedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -114,51 +116,40 @@ export function SettingsClient({
     }
   }, [onboardingStep, timezoneSaved, isFirstSetup, allRevealed]);
 
-  async function handleSaveTimezone(): Promise<void> {
-    setSavingTz(true);
-    try {
-      const res = await fetch("/api/settings/timezone", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ timezone }),
-      });
-      if (!res.ok) throw new Error("Failed to save");
-      if (isFirstSetup) {
-        setTimezoneSaved(true);
-      } else {
-        window.location.reload();
+  function handleSaveTimezone(): void {
+    saveTimezone.mutate(
+      { timezone },
+      {
+        onSuccess: () => {
+          if (isFirstSetup) {
+            // First setup doesn't reload, so the client's date module still
+            // holds the timezone the layout rendered with (UTC when none was
+            // saved). The opening lots the next steps record are dated
+            // "today" in this one.
+            setUserTimezone(timezone);
+            setTimezoneSaved(true);
+          } else {
+            window.location.reload();
+          }
+        },
       }
-    } finally {
-      setSavingTz(false);
-    }
+    );
   }
 
-  async function handleSaveBaseCurrency(): Promise<void> {
-    setSavingCurrency(true);
-    try {
-      const res = await fetch("/api/settings/base-currency", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currency: baseCurrency }),
-      });
-      if (!res.ok) {
-        const body: unknown = await res.json().catch(() => ({}));
-        const errMsg =
-          typeof body === "object" && body !== null && "error" in body
-            ? String((body as { error: unknown }).error)
-            : "Failed to save base currency";
-        throw new Error(errMsg);
+  function handleSaveBaseCurrency(): void {
+    saveBaseCurrency.mutate(
+      { currency: baseCurrency },
+      {
+        onSuccess: ({ currency }) => {
+          // Sync the client format cache so any subsequent formatCurrency() calls
+          // pick up the new base currency. The server cache is refreshed on the
+          // next request via the root layout. No reload needed: this only happens
+          // during first-time onboarding, so there's no rendered data to refresh.
+          setBaseCurrencyCache(currency);
+          advanceFrom("base-currency");
+        },
       }
-      // Sync the client format cache so any subsequent formatCurrency() calls
-      // pick up the new base currency. The server cache is refreshed on the
-      // next request via the root layout. No reload needed: this only happens
-      // during first-time onboarding, so there's no rendered data to refresh.
-      setBaseCurrencyCache(baseCurrency);
-      setBaseCurrencyLocked(true);
-      setOnboardingStep(nextStep("base-currency"));
-    } finally {
-      setSavingCurrency(false);
-    }
+    );
   }
 
   return (
@@ -181,9 +172,12 @@ export function SettingsClient({
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Button onClick={() => void handleSaveTimezone()} disabled={savingTz}>
-              {savingTz ? "Saving..." : "Save"}
+            <Button onClick={handleSaveTimezone} disabled={saveTimezone.isPending}>
+              {saveTimezone.isPending ? "Saving..." : "Save"}
             </Button>
+            {saveTimezone.error && (
+              <p className="text-destructive text-sm">{saveTimezone.error.message}</p>
+            )}
           </div>
         </div>
       </Section>
@@ -208,11 +202,14 @@ export function SettingsClient({
               {!baseCurrencyLocked && (
                 <div className="flex items-center gap-3">
                   <Button
-                    onClick={() => void handleSaveBaseCurrency()}
-                    disabled={savingCurrency || !baseCurrency}
+                    onClick={handleSaveBaseCurrency}
+                    disabled={saveBaseCurrency.isPending || !baseCurrency}
                   >
-                    {savingCurrency ? "Saving..." : "Save"}
+                    {saveBaseCurrency.isPending ? "Saving..." : "Save"}
                   </Button>
+                  {saveBaseCurrency.error && (
+                    <p className="text-destructive text-sm">{saveBaseCurrency.error.message}</p>
+                  )}
                 </div>
               )}
             </div>
@@ -226,7 +223,7 @@ export function SettingsClient({
             <div ref={onboardingStep === "cash" ? lastRevealedRef : undefined}>
               <CashBalanceSection
                 isOnboarding={onboardingStep === "cash"}
-                onContinue={() => setOnboardingStep(nextStep("cash"))}
+                onContinue={() => advanceFrom("cash")}
               />
             </div>
           )}
@@ -235,7 +232,7 @@ export function SettingsClient({
             <div ref={onboardingStep === "savings" ? lastRevealedRef : undefined}>
               <SavingsSection
                 isOnboarding={onboardingStep === "savings"}
-                onContinue={() => setOnboardingStep(nextStep("savings"))}
+                onContinue={() => advanceFrom("savings")}
               />
             </div>
           )}
@@ -244,7 +241,7 @@ export function SettingsClient({
             <div ref={onboardingStep === "investments" ? lastRevealedRef : undefined}>
               <InvestmentsSection
                 isOnboarding={onboardingStep === "investments"}
-                onContinue={() => setOnboardingStep(nextStep("investments"))}
+                onContinue={() => advanceFrom("investments")}
               />
             </div>
           )}
@@ -254,7 +251,7 @@ export function SettingsClient({
               <ProvidersSection
                 isOnboarding={onboardingStep === "providers"}
                 onContentLoaded={onboardingStep === "providers" ? scrollToRevealed : undefined}
-                onContinue={() => setOnboardingStep(nextStep("providers"))}
+                onContinue={() => advanceFrom("providers")}
               />
             </div>
           )}
@@ -262,11 +259,15 @@ export function SettingsClient({
           {stepReached(onboardingStep, "backups") && (
             <div ref={onboardingStep === "backups" ? lastRevealedRef : undefined}>
               <BackupManager
-                initialBackups={initialBackups}
                 isOnboarding={onboardingStep === "backups"}
                 onContinue={() => {
                   setOnboardingStep("done");
-                  window.location.href = "/";
+                  // The root layout rendered before onboarding saved the
+                  // timezone and base currency. Refresh it first so its
+                  // TimezoneInit/BaseCurrencyInit hand the client the saved
+                  // values before the dashboard mounts.
+                  router.refresh();
+                  router.push("/");
                 }}
               />
             </div>

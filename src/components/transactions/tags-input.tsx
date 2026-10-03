@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { useCombobox } from "downshift";
+import { useQuery } from "@tanstack/react-query";
+import { transactionTagsQuery } from "@/lib/queries/transactions";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -29,23 +31,9 @@ export function TagsAutocompleteInput({
   id,
   placeholder,
 }: TagsAutocompleteInputProps): React.ReactElement {
-  const [allTags, setAllTags] = React.useState<string[]>([]);
+  // Suggestions are best-effort: without the list, the input still takes free text.
+  const allTags = useQuery(transactionTagsQuery()).data ?? [];
   const [inputValue, setInputValue] = React.useState("");
-
-  React.useEffect(() => {
-    let active = true;
-    fetch("/api/transactions/tags")
-      .then((res) => (res.ok ? (res.json() as Promise<string[]>) : []))
-      .then((data) => {
-        if (active) setAllTags(Array.isArray(data) ? data : []);
-      })
-      .catch(() => {
-        /* suggestions are best-effort */
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   function addTag(tag: string): void {
     const t = tag.trim();

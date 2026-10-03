@@ -23,9 +23,8 @@ const chartConfig = {
 
 interface IncomeExpensesCardProps {
   balance: NetIncomeResult;
-  incomeTrend: TrendPoint[];
-  expenseTrend: TrendPoint[];
-  showChart?: boolean;
+  /** Monthly totals to chart under the figures; without them the card shows the figures alone. */
+  trends?: { income: TrendPoint[]; expense: TrendPoint[] };
 }
 
 interface MergedPoint {
@@ -55,12 +54,10 @@ function mergeIncomeExpenseTrends(
 
 export function IncomeExpensesCard({
   balance,
-  incomeTrend,
-  expenseTrend,
-  showChart = true,
+  trends,
 }: IncomeExpensesCardProps): React.ReactElement {
   const [chartRef, yAxisWidth] = useYAxisWidth();
-  const chartData = mergeIncomeExpenseTrends(incomeTrend, expenseTrend);
+  const chartData = trends ? mergeIncomeExpenseTrends(trends.income, trends.expense) : [];
 
   const netIsPositive = balance.netIncome >= 0;
 
@@ -96,7 +93,7 @@ export function IncomeExpensesCard({
         </div>
 
         {/* Dual area chart */}
-        {showChart && chartData.length > 0 ? (
+        {trends && chartData.length > 0 ? (
           <ChartContainer
             ref={chartRef}
             config={chartConfig}
@@ -130,7 +127,9 @@ export function IncomeExpensesCard({
                         ]?.label ?? name;
                       return `${label}: ${formatCurrency(value as number)}`;
                     }}
-                    labelFormatter={formatMonth}
+                    labelFormatter={(label) =>
+                      typeof label === "string" ? formatMonth(label) : label
+                    }
                   />
                 }
               />
@@ -152,7 +151,7 @@ export function IncomeExpensesCard({
               />
             </AreaChart>
           </ChartContainer>
-        ) : showChart ? (
+        ) : trends ? (
           <p className="text-muted-foreground py-10 text-center text-sm">
             No data for this period.
           </p>

@@ -10,6 +10,8 @@ interface DeleteBudgetDialogProps {
   budget: BudgetStatusItem | null;
   onConfirm: () => void;
   loading?: boolean;
+  /** Why the last attempt failed, if it did. */
+  error?: string | null;
 }
 
 export function DeleteBudgetDialog({
@@ -18,6 +20,7 @@ export function DeleteBudgetDialog({
   budget,
   onConfirm,
   loading,
+  error,
 }: DeleteBudgetDialogProps): React.ReactElement {
   return (
     <ConfirmDeleteDialog
@@ -31,6 +34,7 @@ export function DeleteBudgetDialog({
       }
       onConfirm={onConfirm}
       loading={loading}
+      error={error}
     >
       {budget && (
         <p>

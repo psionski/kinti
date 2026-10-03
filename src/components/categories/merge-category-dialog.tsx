@@ -22,6 +22,8 @@ interface MergeCategoryDialogProps {
   categories: CategoryWithCountResponse[];
   onConfirm: (targetCategoryId: number) => void;
   loading?: boolean;
+  /** Why the last attempt failed, if it did. */
+  error?: string | null;
 }
 
 export function MergeCategoryDialog({
@@ -31,6 +33,7 @@ export function MergeCategoryDialog({
   categories,
   onConfirm,
   loading,
+  error,
 }: MergeCategoryDialogProps): React.ReactElement {
   const [targetId, setTargetId] = useState<string>("");
 
@@ -43,13 +46,7 @@ export function MergeCategoryDialog({
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) setTargetId("");
-        onOpenChange(o);
-      }}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Merge Category</DialogTitle>
@@ -87,6 +84,8 @@ export function MergeCategoryDialog({
               </p>
             </div>
           )}
+
+          {error && <p className="text-destructive text-sm">{error}</p>}
         </div>
 
         <DialogFooter>

@@ -1,15 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Plus, Trash2, FolderInput, ScanLine, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
-import {
-  TransactionFilterBar,
-  EMPTY_FILTERS,
-  type TransactionFilters,
-} from "./transaction-filters";
+import { TransactionFilterBar } from "./transaction-filters";
 import { TransactionTable } from "./transaction-table";
 import { TransactionFormDialog, type TransactionFormData } from "./transaction-form";
 import { RecategorizeDialog } from "./recategorize-dialog";
@@ -17,129 +14,38 @@ import { PaginationControls } from "./pagination-controls";
 import { ReceiptDialog } from "@/components/receipts/receipt-dialog";
 import { ReceiptUploadDialog } from "@/components/receipts/receipt-upload-dialog";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
-import { useTransactionMutations } from "./use-transaction-mutations";
-import type {
-  TransactionResponse,
-  PaginatedTransactionsResponse,
-} from "@/lib/validators/transactions";
+import {
+  initialPageQuery,
+  toListParams,
+  type SortField,
+  type SortOrder,
+  type TransactionFilters,
+} from "./transaction-query";
+import { toCreateBody, toUpdateBody } from "./transaction-request";
+import {
+  transactionListQuery,
+  useCreateTransaction,
+  useDeleteTransactions,
+  useUpdateTransaction,
+  useUpdateTransactions,
+} from "@/lib/queries/transactions";
+import { categoryListQuery } from "@/lib/queries/categories";
+import { recurringTemplateQuery } from "@/lib/queries/recurring";
+import type { TransactionResponse } from "@/lib/validators/transactions";
 import type { CategoryWithCountResponse } from "@/lib/validators/categories";
+import { resetOnClose } from "@/components/shared/reset-on-close";
 
-interface TransactionsClientProps {
-  initialData: PaginatedTransactionsResponse;
-  categories: CategoryWithCountResponse[];
-}
-
-type SortField = "date" | "amount" | "merchant" | "createdAt";
-type SortOrder = "asc" | "desc";
-
-function buildQueryString(
-  filters: TransactionFilters,
-  sortBy: SortField,
-  sortOrder: SortOrder,
-  limit: number,
-  offset: number
-): string {
-  const params = new URLSearchParams();
-  params.set("sortBy", sortBy);
-  params.set("sortOrder", sortOrder);
-  params.set("limit", String(limit));
-  params.set("offset", String(offset));
-
-  if (filters.search) params.set("search", filters.search);
-  if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
-  if (filters.dateTo) params.set("dateTo", filters.dateTo);
-  if (filters.type) params.set("type", filters.type);
-
-  if (filters.categoryId === "uncategorized") {
-    params.set("categoryId", "null");
-  } else if (filters.categoryId) {
-    params.set("categoryId", filters.categoryId);
-  }
-
-  if (filters.amountMin) {
-    params.set("amountMin", String(parseFloat(filters.amountMin)));
-  }
-  if (filters.amountMax) {
-    params.set("amountMax", String(parseFloat(filters.amountMax)));
-  }
-
-  if (filters.recurringId) params.set("recurringId", filters.recurringId);
-
-  return params.toString();
-}
-
-interface PageQuery {
-  filters: TransactionFilters;
-  sortBy: SortField;
-  sortOrder: SortOrder;
-  limit: number;
-  offset: number;
-}
-
-async function fetchTransactionsPage(
-  q: PageQuery,
-  signal: AbortSignal
-): Promise<PaginatedTransactionsResponse | null> {
-  const qs = buildQueryString(q.filters, q.sortBy, q.sortOrder, q.limit, q.offset);
-  const res = await fetch(`/api/transactions?${qs}`, { signal });
-  return res.ok ? ((await res.json()) as PaginatedTransactionsResponse) : null;
-}
-
-/**
- * Loads a page into component state, aborting any request still in flight via
- * `abortRef` so a slow earlier response can't overwrite a fresher one (whether
- * triggered by a filter/sort change or a mutation-driven refresh). Returns the
- * controller so an effect can also abort it on cleanup/unmount.
- */
-function loadTransactionsPage(
-  q: PageQuery,
-  abortRef: React.RefObject<AbortController | null>,
-  setLoading: (loading: boolean) => void,
-  setData: (data: PaginatedTransactionsResponse) => void
-): AbortController {
-  abortRef.current?.abort();
-  const controller = new AbortController();
-  abortRef.current = controller;
-  setLoading(true);
-  void (async () => {
-    try {
-      const json = await fetchTransactionsPage(q, controller.signal);
-      if (json) setData(json);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return;
-    } finally {
-      if (!controller.signal.aborted) setLoading(false);
-    }
-  })();
-  return controller;
-}
-
-export function TransactionsClient({
-  initialData,
-  categories,
-}: TransactionsClientProps): React.ReactElement {
+export function TransactionsClient(): React.ReactElement {
   const searchParams = useSearchParams();
+  // The URL presets the first page only; after that the controls own the query.
+  const [initialQuery] = useState(() => initialPageQuery((key) => searchParams.get(key)));
 
-  const [data, setData] = useState<PaginatedTransactionsResponse>(initialData);
-  const [filters, setFilters] = useState<TransactionFilters>(() => {
-    const categoryId = searchParams.get("categoryId");
-    const recurringId = searchParams.get("recurringId");
-    const dateFrom = searchParams.get("dateFrom");
-    const dateTo = searchParams.get("dateTo");
-    const overrides: Partial<TransactionFilters> = {};
-    if (categoryId) overrides.categoryId = categoryId;
-    if (recurringId) overrides.recurringId = recurringId;
-    if (dateFrom) overrides.dateFrom = dateFrom;
-    if (dateTo) overrides.dateTo = dateTo;
-    return { ...EMPTY_FILTERS, ...overrides };
-  });
-  const [recurringName, setRecurringName] = useState<string>("");
-  const [sortBy, setSortBy] = useState<SortField>("date");
-  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
-  const [limit, setLimit] = useState(50);
-  const [offset, setOffset] = useState(0);
+  const [filters, setFilters] = useState<TransactionFilters>(initialQuery.filters);
+  const [sortBy, setSortBy] = useState<SortField>(initialQuery.sortBy);
+  const [sortOrder, setSortOrder] = useState<SortOrder>(initialQuery.sortOrder);
+  const [limit, setLimit] = useState(initialQuery.limit);
+  const [offset, setOffset] = useState(initialQuery.offset);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [loading, setLoading] = useState(false);
 
   // Dialogs
   const [showAddForm, setShowAddForm] = useState(false);
@@ -150,48 +56,27 @@ export function TransactionsClient({
   const [viewingReceiptId, setViewingReceiptId] = useState<number | null>(null);
   const [showUploadReceipt, setShowUploadReceipt] = useState(false);
 
+  // While a new page loads, the old one stays on screen, dimmed.
+  const list = useQuery({
+    ...transactionListQuery(toListParams({ filters, sortBy, sortOrder, limit, offset })),
+    placeholderData: keepPreviousData,
+  });
+  const page = list.data;
+  const categories = useQuery(categoryListQuery()).data ?? [];
   const categoryMap = new Map<number, CategoryWithCountResponse>(categories.map((c) => [c.id, c]));
 
-  const abortRef = useRef<AbortController | null>(null);
+  const recurringId = filters.recurringId ? Number(filters.recurringId) : null;
+  const recurring = useQuery({
+    ...recurringTemplateQuery(recurringId ?? 0),
+    enabled: recurringId !== null,
+  });
+  const recurringLabel =
+    recurring.data?.description ?? (recurring.isError ? `#${filters.recurringId}` : "…");
 
-  function refresh(): void {
-    loadTransactionsPage(
-      { filters, sortBy, sortOrder, limit, offset },
-      abortRef,
-      setLoading,
-      setData
-    );
-  }
-
-  const { formLoading, addTransaction, editTransaction, bulkDelete, recategorize } =
-    useTransactionMutations(refresh);
-
-  // Re-fetch when filters/sort/pagination change
-  useEffect(() => {
-    const controller = loadTransactionsPage(
-      { filters, sortBy, sortOrder, limit, offset },
-      abortRef,
-      setLoading,
-      setData
-    );
-    return () => controller.abort();
-  }, [filters, sortBy, sortOrder, limit, offset]);
-
-  // Fetch recurring template name when recurringId filter is active
-  useEffect(() => {
-    if (!filters.recurringId) {
-      setRecurringName("");
-      return;
-    }
-    fetch(`/api/recurring/${filters.recurringId}`)
-      .then(async (res) => {
-        if (res.ok) {
-          const json = (await res.json()) as { description: string };
-          setRecurringName(json.description);
-        }
-      })
-      .catch(() => setRecurringName(""));
-  }, [filters.recurringId]);
+  const createTx = useCreateTransaction();
+  const updateTx = useUpdateTransaction();
+  const recategorizeTx = useUpdateTransactions();
+  const deleteTx = useDeleteTransactions();
 
   function handleSortChange(field: SortField): void {
     if (field === sortBy) {
@@ -214,46 +99,47 @@ export function TransactionsClient({
     setOffset(0);
   }
 
-  async function handleAdd(formData: TransactionFormData): Promise<void> {
-    if (await addTransaction(formData)) setShowAddForm(false);
+  function handleAdd(formData: TransactionFormData): void {
+    createTx.mutate(toCreateBody(formData), { onSuccess: () => setShowAddForm(false) });
   }
 
-  async function handleEdit(formData: TransactionFormData): Promise<void> {
+  function handleEdit(formData: TransactionFormData): void {
     if (!editingTx) return;
-    if (await editTransaction(editingTx.id, formData)) setEditingTx(null);
+    updateTx.mutate(
+      { id: editingTx.id, ...toUpdateBody(formData) },
+      { onSuccess: () => setEditingTx(null) }
+    );
   }
 
-  async function handleBulkDelete(): Promise<void> {
+  function handleBulkDelete(): void {
     if (selectedIds.size === 0) return;
-    setLoading(true);
-    try {
-      if (await bulkDelete(Array.from(selectedIds))) {
-        setSelectedIds(new Set());
-        setShowDeleteConfirm(false);
+    deleteTx.mutate(
+      { ids: Array.from(selectedIds) },
+      {
+        onSuccess: () => {
+          setSelectedIds(new Set());
+          setShowDeleteConfirm(false);
+        },
       }
-    } finally {
-      setLoading(false);
-    }
+    );
   }
 
-  async function handleSingleDelete(): Promise<void> {
+  function handleSingleDelete(): void {
     if (!deletingTx) return;
-    setLoading(true);
-    try {
-      if (await bulkDelete([deletingTx.id])) {
-        setDeletingTx(null);
-      }
-    } finally {
-      setLoading(false);
-    }
+    deleteTx.mutate({ ids: [deletingTx.id] }, { onSuccess: () => setDeletingTx(null) });
   }
 
-  async function handleRecategorize(categoryId: number): Promise<void> {
+  function handleRecategorize(categoryId: number): void {
     if (selectedIds.size === 0) return;
-    if (await recategorize(Array.from(selectedIds), categoryId)) {
-      setShowRecategorize(false);
-      setSelectedIds(new Set());
-    }
+    recategorizeTx.mutate(
+      { updates: Array.from(selectedIds, (id) => ({ id, categoryId })) },
+      {
+        onSuccess: () => {
+          setShowRecategorize(false);
+          setSelectedIds(new Set());
+        },
+      }
+    );
   }
 
   return (
@@ -281,17 +167,22 @@ export function TransactionsClient({
           filters={filters}
           categories={categories}
           onFiltersChange={handleFiltersChange}
-          recurringName={recurringName}
+          recurringLabel={recurringLabel}
         />
       </div>
 
       {/* Table */}
+      {list.isError && (
+        <p className="text-destructive text-sm">
+          Couldn&apos;t load transactions: {list.error.message}
+        </p>
+      )}
       <div
         data-tour="transaction-table"
-        className={loading ? "pointer-events-none opacity-60" : ""}
+        className={list.isPlaceholderData || list.isPending ? "pointer-events-none opacity-60" : ""}
       >
         <TransactionTable
-          transactions={data.data}
+          transactions={page?.data ?? []}
           categories={categoryMap}
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
@@ -306,7 +197,7 @@ export function TransactionsClient({
 
       {/* Pagination */}
       <PaginationControls
-        total={data.total}
+        total={page?.total ?? 0}
         limit={limit}
         offset={offset}
         onPageChange={setOffset}
@@ -333,7 +224,7 @@ export function TransactionsClient({
               size="sm"
               className="text-destructive hover:bg-destructive/10 hover:text-destructive h-9 gap-1.5 rounded-full"
               onClick={() => setShowDeleteConfirm(true)}
-              disabled={loading}
+              disabled={deleteTx.isPending}
             >
               <Trash2 className="size-4" />
               <span className="hidden sm:inline">Delete</span>
@@ -354,65 +245,67 @@ export function TransactionsClient({
 
       {/* Add form dialog */}
       <TransactionFormDialog
-        key={String(showAddForm)}
+        key={`add-${showAddForm}`}
         open={showAddForm}
-        onOpenChange={setShowAddForm}
+        onOpenChange={resetOnClose(() => setShowAddForm(false), createTx)}
         categories={categories}
-        onSubmit={(d) => void handleAdd(d)}
-        loading={formLoading}
+        onSubmit={handleAdd}
+        loading={createTx.isPending}
+        submitError={createTx.error?.message}
       />
 
       {/* Edit form dialog */}
       <TransactionFormDialog
-        key={editingTx?.id ?? "new"}
+        key={`edit-${editingTx?.id ?? "none"}`}
         open={!!editingTx}
-        onOpenChange={(open) => {
-          if (!open) setEditingTx(null);
-        }}
+        onOpenChange={resetOnClose(() => setEditingTx(null), updateTx)}
         categories={categories}
-        onSubmit={(d) => void handleEdit(d)}
+        onSubmit={handleEdit}
         initialData={editingTx}
-        loading={formLoading}
+        loading={updateTx.isPending}
+        submitError={updateTx.error?.message}
       />
 
-      {/* Recategorize dialog */}
+      {/* Recategorize dialog. Keyed so each opening starts with no category picked. */}
       <RecategorizeDialog
+        key={`recategorize-${showRecategorize}`}
         open={showRecategorize}
-        onOpenChange={setShowRecategorize}
+        onOpenChange={resetOnClose(() => setShowRecategorize(false), recategorizeTx)}
         selectedCount={selectedIds.size}
         categories={categories}
-        onConfirm={(catId) => void handleRecategorize(catId)}
-        loading={formLoading}
+        onConfirm={handleRecategorize}
+        loading={recategorizeTx.isPending}
+        error={recategorizeTx.error?.message}
       />
 
       {/* Delete confirmation dialog */}
       <ConfirmDeleteDialog
         open={showDeleteConfirm}
-        onOpenChange={setShowDeleteConfirm}
+        onOpenChange={resetOnClose(() => setShowDeleteConfirm(false), deleteTx)}
         title="Delete Transactions"
         description={
           <>
             Are you sure you want to delete <strong>{selectedIds.size}</strong> transaction(s)?
           </>
         }
-        onConfirm={() => void handleBulkDelete()}
-        loading={loading}
+        onConfirm={handleBulkDelete}
+        loading={deleteTx.isPending}
+        error={deleteTx.error?.message}
       />
 
       {/* Single delete confirmation dialog */}
       <ConfirmDeleteDialog
         open={!!deletingTx}
-        onOpenChange={(open) => {
-          if (!open) setDeletingTx(null);
-        }}
+        onOpenChange={resetOnClose(() => setDeletingTx(null), deleteTx)}
         title="Delete Transaction"
         description={
           <>
             Are you sure you want to delete <strong>{deletingTx?.description}</strong>?
           </>
         }
-        onConfirm={() => void handleSingleDelete()}
-        loading={loading}
+        onConfirm={handleSingleDelete}
+        loading={deleteTx.isPending}
+        error={deleteTx.error?.message}
       />
 
       {/* Receipt detail dialog */}
@@ -421,7 +314,6 @@ export function TransactionsClient({
         onOpenChange={(open) => {
           if (!open) setViewingReceiptId(null);
         }}
-        onDeleted={refresh}
       />
 
       {/* Receipt upload dialog */}

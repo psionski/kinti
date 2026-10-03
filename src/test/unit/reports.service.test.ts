@@ -444,6 +444,34 @@ describe("trends", async () => {
     const months = points.map((r) => r.month);
     expect(months).toEqual([...months].sort());
   });
+
+  it("spans a date range's own months, even one long past", async () => {
+    await txService.create(tx({ amount: 4, date: "2024-02-10" }));
+
+    const { points } = reports.trends(
+      TrendsSchema.parse({ dateFrom: "2024-01-01", dateTo: "2024-03-31" })
+    );
+
+    expect(points.map((p) => p.month)).toEqual(["2024-01", "2024-02", "2024-03"]);
+    expect(points[1]).toMatchObject({ total: 4, count: 1 });
+  });
+
+  it("covers a range longer than the look-back limit", async () => {
+    const { points } = reports.trends(
+      TrendsSchema.parse({ dateFrom: "2022-01-01", dateTo: "2024-12-31" })
+    );
+
+    expect(points).toHaveLength(36);
+    expect(points[0]?.month).toBe("2022-01");
+    expect(points.at(-1)?.month).toBe("2024-12");
+  });
+
+  it("refuses half a range or one that runs backwards", () => {
+    expect(TrendsSchema.safeParse({ dateFrom: "2024-01-01" }).success).toBe(false);
+    expect(TrendsSchema.safeParse({ dateFrom: "2024-03-01", dateTo: "2024-01-31" }).success).toBe(
+      false
+    );
+  });
 });
 
 // ─── categoryTrends ────────────────────────────────────────────────────────────

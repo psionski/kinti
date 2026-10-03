@@ -48,17 +48,30 @@ export type BudgetStatsInput = z.infer<typeof BudgetStatsSchema>;
 
 // ─── Trends ───────────────────────────────────────────────────────────────────
 
-export const TrendsSchema = z.object({
-  months: z
-    .number()
-    .int()
-    .min(1)
-    .max(24)
-    .default(6)
-    .describe("Number of months to look back (default 6, max 24)"),
-  categoryId: z.number().int().positive().optional().describe("Filter to a single category"),
-  type: z.enum(["income", "expense", "all"]).default("expense"),
-});
+export const TrendsSchema = z
+  .object({
+    months: z
+      .number()
+      .int()
+      .min(1)
+      .max(24)
+      .default(6)
+      .describe(
+        "Number of months to look back from the current month (default 6, max 24). Ignored when dateFrom and dateTo are given."
+      ),
+    dateFrom: IsoDateSchema.optional().describe(
+      "Start of a date range (YYYY-MM-DD) — alternative to months. The series runs from this month through dateTo's month, inclusive."
+    ),
+    dateTo: IsoDateSchema.optional().describe("End of the date range (YYYY-MM-DD)"),
+    categoryId: z.number().int().positive().optional().describe("Filter to a single category"),
+    type: z.enum(["income", "expense", "all"]).default("expense"),
+  })
+  .refine((d) => (d.dateFrom === undefined) === (d.dateTo === undefined), {
+    message: "Provide both 'dateFrom' and 'dateTo', or neither",
+  })
+  .refine((d) => d.dateFrom === undefined || d.dateTo === undefined || d.dateFrom <= d.dateTo, {
+    message: "'dateFrom' must not be after 'dateTo'",
+  });
 
 export type TrendsInput = z.infer<typeof TrendsSchema>;
 
@@ -177,6 +190,14 @@ export const BudgetStatsItemSchema = CategorySpendingItemSchema.extend({
 });
 
 export type BudgetStatsItem = z.infer<typeof BudgetStatsItemSchema>;
+
+export const BudgetStatsResultSchema = z.object({
+  items: z.array(BudgetStatsItemSchema),
+  inheritedFrom: z.string().nullable(), // YYYY-MM the budgets carry over from, null when set this month
+  currency: z.string(),
+});
+
+export type BudgetStatsResult = z.infer<typeof BudgetStatsResultSchema>;
 
 export const TrendPointSchema = z.object({
   month: z.string(), // YYYY-MM

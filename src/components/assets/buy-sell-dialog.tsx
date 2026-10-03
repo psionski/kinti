@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useFxPreview } from "@/hooks/use-fx-preview";
 import { isoToday } from "@/lib/date-ranges";
 import {
   formatCurrency,
@@ -9,6 +11,7 @@ import {
   holdingsUnit,
   priceInputValue,
 } from "@/lib/format";
+import { priceQuery } from "@/lib/queries/financial";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +38,8 @@ interface BuySellDialogProps {
     description?: string;
   }) => void;
   loading?: boolean;
+  /** Why the server refused the last submit, if it did. */
+  submitError?: string | null;
 }
 
 export function BuySellDialog({
@@ -44,97 +49,55 @@ export function BuySellDialog({
   asset,
   onSubmit,
   loading,
+  submitError,
 }: BuySellDialogProps): React.ReactElement {
   const today = isoToday();
   const [quantity, setQuantity] = useState("");
-  const [price, setPrice] = useState("");
+  // What the user typed over the looked-up price, if anything.
+  const [priceOverride, setPriceOverride] = useState<string | null>(null);
   const [date, setDate] = useState(today);
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
-  const [fetchingPrice, setFetchingPrice] = useState(false);
-  const [basePreview, setBasePreview] = useState<{
-    base: number;
-    rate: number;
-  } | null>(null);
 
   const baseCurrency = getBaseCurrency();
   const isForeign = asset.currency !== baseCurrency;
 
-  // Fetch price for the selected date (re-fetches when date changes)
-  useEffect(() => {
-    if (!open || !asset.symbolMap) return;
-    const run = { cancelled: false };
-    void (async () => {
-      setFetchingPrice(true);
-      try {
-        const params = new URLSearchParams({
-          symbolMap: JSON.stringify(asset.symbolMap),
-          currency: asset.currency,
-          date,
-        });
-        const res = await fetch(`/api/financial/price?${params}`);
-        if (!run.cancelled && res.ok) {
-          const data = (await res.json()) as { price: number };
-          setPrice(priceInputValue(data.price));
-        }
-      } finally {
-        if (!run.cancelled) setFetchingPrice(false);
-      }
-    })();
-    return () => {
-      run.cancelled = true;
-    };
-  }, [open, date, asset.symbolMap, asset.currency]);
+  // A tracked asset's price for the selected date prefills the price field.
+  const symbolMap = asset.symbolMap ?? {};
+  const tracked = Object.keys(symbolMap).length > 0;
+  const lookup = useQuery({
+    ...priceQuery({ symbolMap, currency: asset.currency, date }),
+    enabled: open && tracked,
+  });
+  const price = priceOverride ?? (lookup.data ? priceInputValue(lookup.data.price) : "");
+  const fetchingPrice = lookup.isFetching;
 
-  // Quote the FX rate from the asset's currency to the configured base on the
-  // selected date — same provider chain as the eventual write. Fires whenever
-  // the user changes the date or amount, so the preview tracks input live.
-  useEffect(() => {
-    if (!open || !isForeign) {
-      setBasePreview(null);
-      return;
-    }
-    const qty = parseFloat(quantity);
-    const priceNum = parseFloat(price);
-    if (Number.isNaN(qty) || qty <= 0 || Number.isNaN(priceNum) || priceNum <= 0) {
-      setBasePreview(null);
-      return;
-    }
-    const total = qty * priceNum;
-    const run = { cancelled: false };
-    void (async () => {
-      const params = new URLSearchParams({
-        amount: String(total),
-        from: asset.currency,
-        to: baseCurrency,
-        date,
-      });
-      try {
-        const res = await fetch(`/api/financial/convert?${params}`);
-        if (!run.cancelled && res.ok) {
-          const data = (await res.json()) as { converted: number; rate: number };
-          setBasePreview({ base: data.converted, rate: data.rate });
-        }
-      } catch {
-        if (!run.cancelled) setBasePreview(null);
-      }
-    })();
-    return () => {
-      run.cancelled = true;
-    };
-  }, [open, isForeign, quantity, price, date, asset.currency, baseCurrency]);
+  function handleDateChange(next: string): void {
+    setDate(next);
+    // The new day has its own quote, which replaces a price typed for the old one.
+    if (tracked) setPriceOverride(null);
+  }
+
+  // Quote the total in the configured base on the selected date, live as the
+  // user edits the quantity, price or date.
+  const qty = parseFloat(quantity);
+  const priceNum = parseFloat(price);
+  const { preview: basePreview } = useFxPreview({
+    amount: open && isForeign && qty > 0 && priceNum > 0 ? qty * priceNum : null,
+    from: asset.currency,
+    to: baseCurrency,
+    date,
+  });
 
   function handleSubmit(e: React.SyntheticEvent): void {
     e.preventDefault();
     setError("");
 
-    const qty = parseFloat(quantity);
     if (Number.isNaN(qty) || qty <= 0) {
       setError("Quantity must be a positive number.");
       return;
     }
 
-    const priceNum = parseFloat(price);
     if (Number.isNaN(priceNum) || priceNum <= 0) {
       setError("Price must be a positive number.");
       return;
@@ -184,7 +147,7 @@ export function BuySellDialog({
                 step="any"
                 min="0"
                 value={price}
-                onChange={(e) => setPrice(e.target.value)}
+                onChange={(e) => setPriceOverride(e.target.value)}
                 placeholder={fetchingPrice ? "Fetching…" : "e.g. 345.63"}
                 disabled={loading}
               />
@@ -192,6 +155,11 @@ export function BuySellDialog({
                 <Loader2 className="text-muted-foreground absolute top-2.5 right-3 size-4 animate-spin" />
               )}
             </div>
+            {lookup.isError && price === "" && (
+              <p className="text-muted-foreground text-xs">
+                No price available for this date — enter it manually.
+              </p>
+            )}
           </div>
           <div className="space-y-1">
             <Label htmlFor="lot-date">Date</Label>
@@ -200,7 +168,7 @@ export function BuySellDialog({
               type="date"
               value={date}
               max={today}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(e) => handleDateChange(e.target.value)}
               disabled={loading}
             />
           </div>
@@ -218,9 +186,7 @@ export function BuySellDialog({
             <div className="bg-muted/50 text-muted-foreground rounded-md px-3 py-2 text-xs">
               <div className="flex justify-between">
                 <span>Total ({asset.currency})</span>
-                <span className="font-mono">
-                  {formatCurrency(parseFloat(quantity) * parseFloat(price), asset.currency)}
-                </span>
+                <span className="font-mono">{formatCurrency(qty * priceNum, asset.currency)}</span>
               </div>
               <div className="text-foreground flex justify-between font-medium">
                 <span>≈ {baseCurrency}</span>
@@ -231,7 +197,9 @@ export function BuySellDialog({
               </div>
             </div>
           )}
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          {(error || submitError) && (
+            <p className="text-destructive text-sm">{error || submitError}</p>
+          )}
           <DialogFooter>
             <Button type="submit" disabled={loading}>
               {mode === "buy" ? "Buy" : "Sell"}

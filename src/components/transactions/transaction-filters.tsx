@@ -16,28 +16,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CategorySelectItems } from "@/components/categories/category-select-items";
 import type { CategoryWithCountResponse } from "@/lib/validators/categories";
-
-export interface TransactionFilters {
-  search: string;
-  dateFrom: string;
-  dateTo: string;
-  categoryId: string; // "" = all, "uncategorized" = null, number string = specific
-  type: string; // "" = all, "income", "expense" (refunds included), "refund"
-  amountMin: string;
-  amountMax: string;
-  recurringId: string; // "" = all, number string = specific
-}
-
-const EMPTY_FILTERS: TransactionFilters = {
-  search: "",
-  dateFrom: "",
-  dateTo: "",
-  categoryId: "",
-  type: "",
-  amountMin: "",
-  amountMax: "",
-  recurringId: "",
-};
+import { EMPTY_FILTERS, type TransactionFilters } from "./transaction-query";
 
 // "Expenses" keeps refunds, which are expense rows; "Refunds" narrows to them alone.
 const TYPE_FILTER_OPTIONS = [
@@ -63,7 +42,8 @@ interface TransactionFilterBarProps {
   filters: TransactionFilters;
   categories: CategoryWithCountResponse[];
   onFiltersChange: (filters: TransactionFilters) => void;
-  recurringName?: string;
+  /** What the recurring-template badge calls the template the filter names. */
+  recurringLabel: string;
 }
 
 /** Vertical filter controls rendered inside the mobile Sheet. */
@@ -165,7 +145,7 @@ export function TransactionFilterBar({
   filters,
   categories,
   onFiltersChange,
-  recurringName,
+  recurringLabel,
 }: TransactionFilterBarProps): React.ReactElement {
   const [searchInput, setSearchInput] = useState(filters.search);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -349,12 +329,13 @@ export function TransactionFilterBar({
         </SheetContent>
       </Sheet>
 
-      {/* Active filter badges */}
-      {filters.recurringId && recurringName && (
+      {/* Active filter badges. Shown whenever the filter is on, named or not,
+          so it can always be cleared. */}
+      {filters.recurringId && (
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary" className="gap-1 py-1">
             <Repeat className="size-3" />
-            Recurring: {recurringName}
+            Recurring: {recurringLabel}
             <Button
               variant="ghost"
               size="icon-xs"
@@ -369,5 +350,3 @@ export function TransactionFilterBar({
     </div>
   );
 }
-
-export { EMPTY_FILTERS };

@@ -21,6 +21,8 @@ interface RecategorizeDialogProps {
   categories: CategoryWithCountResponse[];
   onConfirm: (categoryId: number) => void;
   loading?: boolean;
+  /** Why the last attempt failed, if it did. */
+  error?: string | null;
 }
 
 export function RecategorizeDialog({
@@ -30,6 +32,7 @@ export function RecategorizeDialog({
   categories,
   onConfirm,
   loading,
+  error,
 }: RecategorizeDialogProps): React.ReactElement {
   const [categoryId, setCategoryId] = useState<string>("");
 
@@ -53,6 +56,7 @@ export function RecategorizeDialog({
               <CategorySelectItems categories={categories} />
             </SelectContent>
           </Select>
+          {error && <p className="text-destructive mt-2 text-sm">{error}</p>}
         </div>
 
         <DialogFooter>

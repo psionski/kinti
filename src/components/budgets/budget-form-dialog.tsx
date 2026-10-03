@@ -14,17 +14,26 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CategorySelectItems } from "@/components/categories/category-select-items";
+import { getBaseCurrency } from "@/lib/format";
 import type { CategoryWithCountResponse } from "@/lib/validators/categories";
 import type { BudgetStatusItem } from "@/lib/validators/reports";
+
+export interface BudgetFormData {
+  categoryId: number;
+  month: string;
+  amount: number;
+}
 
 interface BudgetFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   categories: CategoryWithCountResponse[];
   currentMonth: string;
-  onSubmit: (data: { categoryId: number; month: string; amount: number }) => void;
+  onSubmit: (data: BudgetFormData) => void;
   initialData?: BudgetStatusItem | null;
   loading?: boolean;
+  /** Why the server refused the last submit, if it did. */
+  submitError?: string | null;
 }
 
 export function BudgetFormDialog({
@@ -35,6 +44,7 @@ export function BudgetFormDialog({
   onSubmit,
   initialData,
   loading,
+  submitError,
 }: BudgetFormDialogProps): React.ReactElement {
   const isEdit = !!initialData;
   const [categoryId, setCategoryId] = useState<string>(
@@ -95,7 +105,7 @@ export function BudgetFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="budget-amount">Amount (EUR)</Label>
+            <Label htmlFor="budget-amount">Amount ({getBaseCurrency()})</Label>
             <Input
               id="budget-amount"
               type="number"
@@ -107,7 +117,9 @@ export function BudgetFormDialog({
             />
           </div>
 
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          {(error || submitError) && (
+            <p className="text-destructive text-sm">{error || submitError}</p>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

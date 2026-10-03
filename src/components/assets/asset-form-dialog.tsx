@@ -36,6 +36,8 @@ interface AssetFormDialogProps {
   }) => void;
   initialData?: AssetWithMetrics | null;
   loading?: boolean;
+  /** Why the server refused the last submit, if it did. */
+  submitError?: string | null;
 }
 
 const ASSET_TYPES = [
@@ -56,6 +58,7 @@ export function AssetFormDialog({
   onSubmit,
   initialData,
   loading,
+  submitError,
 }: AssetFormDialogProps): React.ReactElement {
   const isEdit = !!initialData;
   const baseCurrency = getBaseCurrency();
@@ -214,7 +217,9 @@ export function AssetFormDialog({
               disabled={loading}
             />
           </div>
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          {(error || submitError) && (
+            <p className="text-destructive text-sm">{error || submitError}</p>
+          )}
           <DialogFooter>
             <Button type="submit" disabled={loading}>
               {isEdit ? "Save" : "Create"}

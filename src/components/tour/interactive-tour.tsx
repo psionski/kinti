@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useJoyride, ACTIONS, EVENTS, STATUS, type Status } from "react-joyride";
 import type { Step } from "react-joyride";
+import { useSetTutorial } from "@/lib/queries/settings";
 
 function waitForPageReady(): Promise<void> {
   return new Promise<void>((resolve) => {
@@ -236,18 +237,6 @@ function McpHintContent({ origin }: { origin: string }): React.ReactElement {
   );
 }
 
-async function setTutorialComplete(): Promise<void> {
-  try {
-    await fetch("/api/settings/tutorial", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tutorial: false }),
-    });
-  } catch {
-    // Silently fail — not critical
-  }
-}
-
 interface InteractiveTourProps {
   initialTutorial: boolean;
 }
@@ -257,6 +246,9 @@ export function InteractiveTour({
 }: InteractiveTourProps): React.ReactElement | null {
   const router = useRouter();
   const [run, setRun] = useState(false);
+  // A failed save goes unreported: the tour has closed, and the only effect is
+  // that it runs again on the next page load.
+  const { mutate: setTutorial } = useSetTutorial();
 
   useEffect(() => {
     if (initialTutorial) {
@@ -273,10 +265,10 @@ export function InteractiveTour({
   // load-bearing for correctness, not just performance.
   const handleTourEnd = useCallback(() => {
     setRun(false);
-    void setTutorialComplete();
+    setTutorial(false);
     window.dispatchEvent(new CustomEvent("tour-complete"));
     router.push("/");
-  }, [router]);
+  }, [router, setTutorial]);
 
   const steps = useMemo(() => buildSteps(router), [router]);
 

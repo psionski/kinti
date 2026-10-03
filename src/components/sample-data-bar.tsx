@@ -3,6 +3,7 @@
 import { useState, useEffect, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import { useClearSampleData } from "@/lib/queries/settings";
 
 export function SampleDataBar({
   show,
@@ -11,9 +12,10 @@ export function SampleDataBar({
   show: boolean;
   initiallyHidden?: boolean;
 }): React.ReactNode {
-  const [isPending, startTransition] = useTransition();
+  const [refreshing, startRefresh] = useTransition();
   const [hidden, setHidden] = useState(initiallyHidden);
   const router = useRouter();
+  const clearSampleData = useClearSampleData();
 
   useEffect(() => {
     if (!initiallyHidden) return;
@@ -30,13 +32,12 @@ export function SampleDataBar({
     );
     if (!confirmed) return;
 
-    startTransition(async () => {
-      const res = await fetch("/api/sample-data", { method: "DELETE" });
-      if (res.ok) {
-        router.refresh();
-      }
-    });
+    // The server rendered this bar from the deleted database; rendering again
+    // against the fresh one sends the app to onboarding.
+    clearSampleData.mutate(undefined, { onSuccess: () => startRefresh(() => router.refresh()) });
   }
+
+  const clearing = clearSampleData.isPending || refreshing;
 
   return (
     <div className="bg-muted w-full border-b px-4 py-2 text-center">
@@ -48,11 +49,14 @@ export function SampleDataBar({
         size="sm"
         variant="destructive"
         className="ml-3"
-        disabled={isPending}
+        disabled={clearing}
         onClick={handleClear}
       >
-        {isPending ? "Clearing…" : "Clear sample data"}
+        {clearing ? "Clearing…" : "Clear sample data"}
       </Button>
+      {clearSampleData.error && (
+        <p className="text-destructive mt-1 text-sm">{clearSampleData.error.message}</p>
+      )}
     </div>
   );
 }

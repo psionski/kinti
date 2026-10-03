@@ -8,7 +8,7 @@ import { financialLogger } from "@/lib/logger";
  * advertise, and a sweep that walks assets back-to-back trips the burst limit in
  * milliseconds: the first symbol of a cycle succeeds and every one after it comes
  * back as a rate-limit envelope, which reads in the logs like an exhausted daily
- * quota. 2s clears the tightest burst limit we've been bitten by (Alpha Vantage
+ * quota. 1.5s clears the tightest burst limit we've been bitten by (Alpha Vantage
  * allows 1 request/second) with margin, and costs nothing on a nightly job.
  *
  * Applied to every provider, not just the metered ones: the free endpoints
@@ -72,10 +72,15 @@ async function acquire(provider: ProviderName): Promise<void> {
   const interval = minIntervalMs();
 
   const turn = lane.tail.then(async () => {
-    const wait = lane.lastSentAt + interval - Date.now();
+    let wait = lane.lastSentAt + interval - Date.now();
     if (wait > 0) {
       financialLogger.debug({ provider, waitMs: wait }, "Pacing provider request");
+    }
+    // A timer can fire a millisecond early by the wall clock, so the gap is
+    // re-measured rather than assumed once the sleep returns.
+    while (wait > 0) {
       await sleep(wait);
+      wait = lane.lastSentAt + interval - Date.now();
     }
     lane.lastSentAt = Date.now();
   });

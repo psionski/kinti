@@ -1,57 +1,35 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { transactionSuggestionsQuery, type SuggestField } from "@/lib/queries/transactions";
 
 const DEBOUNCE_MS = 200;
 
-/** Fetch suggestions for a field. An empty query returns the most-used values. */
-async function fetchSuggestions(
-  field: "description" | "merchant",
-  q: string,
-  signal: AbortSignal
-): Promise<string[]> {
-  const params = new URLSearchParams({ field });
-  const trimmed = q.trim();
-  if (trimmed) params.set("q", trimmed);
-
-  const res = await fetch(`/api/transactions/suggest?${params.toString()}`, { signal });
-  if (!res.ok) return [];
-  const data: unknown = await res.json();
-  return Array.isArray(data) ? (data as string[]) : [];
-}
-
 /**
- * Fetches autocomplete suggestions for a transaction free-text field
- * (`description` or `merchant`) from the FTS5-backed `/api/transactions/suggest`
- * endpoint. Debounces keystrokes and aborts any in-flight request so only the
- * latest query wins — the same debounce+AbortController shape used by the asset
- * symbol search.
+ * Autocomplete suggestions for a transaction free-text field (`description` or
+ * `merchant`) from the FTS5-backed `/api/transactions/suggest` endpoint.
+ * Keystrokes are debounced into the query text; the query layer drops answers
+ * to text the user has since changed, and keeps the last list on screen while
+ * the next one loads. Nothing is fetched until the first `search`.
  */
-export function useFieldSuggestions(field: "description" | "merchant"): {
+export function useFieldSuggestions(field: SuggestField): {
   items: string[];
   search: (q: string) => void;
 } {
-  const [items, setItems] = useState<string[]>([]);
+  const [query, setQuery] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
 
-  function run(q: string): void {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    fetchSuggestions(field, q, controller.signal)
-      .then(setItems)
-      .catch((err: unknown) => {
-        if (err instanceof DOMException && err.name === "AbortError") return;
-        setItems([]);
-      });
-  }
+  const suggestions = useQuery({
+    ...transactionSuggestionsQuery(field, query ?? ""),
+    enabled: query !== null,
+    placeholderData: keepPreviousData,
+  });
 
   function search(q: string): void {
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => run(q), DEBOUNCE_MS);
+    timerRef.current = setTimeout(() => setQuery(q), DEBOUNCE_MS);
   }
 
-  return { items, search };
+  return { items: suggestions.data ?? [], search };
 }

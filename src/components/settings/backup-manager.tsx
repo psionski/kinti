@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Check, Download, Plus, RotateCcw, HardDrive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { BackupInfo } from "@/lib/services/backup";
+import { backupListQuery, useCreateBackup, useRestoreBackup } from "@/lib/queries/backups";
 import { Section } from "./settings-section";
 
 function formatBytes(bytes: number): string {
@@ -23,66 +24,28 @@ function formatBytes(bytes: number): string {
 }
 
 interface BackupManagerProps {
-  initialBackups: BackupInfo[];
   isOnboarding?: boolean;
   onContinue?: () => void;
 }
 
 export function BackupManager({
-  initialBackups,
   isOnboarding,
   onContinue,
 }: BackupManagerProps): React.ReactElement {
-  const [backups, setBackups] = useState<BackupInfo[]>(initialBackups);
-  const [creating, setCreating] = useState(false);
-  const [restoring, setRestoring] = useState(false);
+  const list = useQuery(backupListQuery());
+  const backups = list.data ?? [];
+  const createBackup = useCreateBackup();
+  const restoreBackup = useRestoreBackup();
   const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  async function refreshBackups(): Promise<void> {
-    const res = await fetch("/api/backups");
-    if (res.ok) {
-      setBackups((await res.json()) as BackupInfo[]);
-    }
+  function closeRestore(): void {
+    setRestoreTarget(null);
+    restoreBackup.reset();
   }
 
-  async function handleCreate(): Promise<void> {
-    setCreating(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/backups", { method: "POST" });
-      if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-        throw new Error(data.error ?? "Backup failed");
-      }
-      await refreshBackups();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Backup failed");
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  async function handleRestore(): Promise<void> {
+  function handleRestore(): void {
     if (!restoreTarget) return;
-    setRestoring(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/backups/restore", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: restoreTarget }),
-      });
-      if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-        throw new Error(data.error ?? "Restore failed");
-      }
-      setRestoreTarget(null);
-      window.location.reload();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Restore failed");
-      setRestoring(false);
-    }
+    restoreBackup.mutate({ filename: restoreTarget }, { onSuccess: () => setRestoreTarget(null) });
   }
 
   return (
@@ -92,15 +55,25 @@ export function BackupManager({
       icon={<HardDrive className="text-muted-foreground size-5" />}
     >
       <div className="flex">
-        <Button variant="outline" size="sm" onClick={() => void handleCreate()} disabled={creating}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => createBackup.mutate()}
+          disabled={createBackup.isPending}
+        >
           <Plus className="mr-1.5 size-3.5" />
-          {creating ? "Creating..." : "Create Backup"}
+          {createBackup.isPending ? "Creating..." : "Create Backup"}
         </Button>
       </div>
 
-      {error && <p className="text-destructive text-sm">{error}</p>}
+      {createBackup.error && (
+        <p className="text-destructive text-sm">{createBackup.error.message}</p>
+      )}
+      {list.isError && (
+        <p className="text-destructive text-sm">Couldn&apos;t load backups: {list.error.message}</p>
+      )}
 
-      {backups.length === 0 ? (
+      {list.isPending ? null : backups.length === 0 ? (
         <p className="text-muted-foreground text-sm">No backups available.</p>
       ) : (
         <div className="divide-border divide-y rounded-md border">
@@ -134,10 +107,7 @@ export function BackupManager({
         </div>
       )}
 
-      <Dialog
-        open={restoreTarget !== null}
-        onOpenChange={(open) => !open && setRestoreTarget(null)}
-      >
+      <Dialog open={restoreTarget !== null} onOpenChange={(open) => !open && closeRestore()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Restore Database</DialogTitle>
@@ -147,13 +117,20 @@ export function BackupManager({
               database will be created automatically before restoring.
             </DialogDescription>
           </DialogHeader>
+          {restoreBackup.error && (
+            <p className="text-destructive text-sm">{restoreBackup.error.message}</p>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRestoreTarget(null)} disabled={restoring}>
+            <Button variant="outline" onClick={closeRestore} disabled={restoreBackup.isPending}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={() => void handleRestore()} disabled={restoring}>
+            <Button
+              variant="destructive"
+              onClick={handleRestore}
+              disabled={restoreBackup.isPending}
+            >
               <Download className="mr-1.5 size-4" />
-              {restoring ? "Restoring..." : "Restore"}
+              {restoreBackup.isPending ? "Restoring..." : "Restore"}
             </Button>
           </DialogFooter>
         </DialogContent>

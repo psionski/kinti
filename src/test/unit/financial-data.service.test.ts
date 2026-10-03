@@ -269,24 +269,22 @@ describe("getPrices", () => {
   it("caches all prices returned by getPrices", async () => {
     const provider = {
       name: "frankfurter" as ProviderName,
-      getPrices: vi.fn(
-        async (): Promise<PriceResult[]> => [
-          {
-            symbol: "USD",
-            currency: "EUR",
-            price: 0.92,
-            date: "2026-03-01",
-            provider: "frankfurter",
-          },
-          {
-            symbol: "USD",
-            currency: "GBP",
-            price: 0.79,
-            date: "2026-03-01",
-            provider: "frankfurter",
-          },
-        ]
-      ),
+      getPrices: vi.fn(async (): Promise<PriceResult[]> => [
+        {
+          symbol: "USD",
+          currency: "EUR",
+          price: 0.92,
+          date: "2026-03-01",
+          provider: "frankfurter",
+        },
+        {
+          symbol: "USD",
+          currency: "GBP",
+          price: 0.79,
+          date: "2026-03-01",
+          provider: "frankfurter",
+        },
+      ]),
     };
     const db = makeTestDb();
     const svc = new FinancialDataService(db, new SettingsService(db), mockFactory(provider));
@@ -338,31 +336,29 @@ describe("ensurePriceHistory", () => {
   it("backfills missing price history from provider", async () => {
     const provider = {
       name: "frankfurter" as ProviderName,
-      getPriceRange: vi.fn(
-        async (): Promise<PriceResult[]> => [
-          {
-            symbol: "USD",
-            currency: "EUR",
-            price: 0.91,
-            date: "2026-03-01",
-            provider: "frankfurter",
-          },
-          {
-            symbol: "USD",
-            currency: "EUR",
-            price: 0.92,
-            date: "2026-03-02",
-            provider: "frankfurter",
-          },
-          {
-            symbol: "USD",
-            currency: "EUR",
-            price: 0.93,
-            date: "2026-03-03",
-            provider: "frankfurter",
-          },
-        ]
-      ),
+      getPriceRange: vi.fn(async (): Promise<PriceResult[]> => [
+        {
+          symbol: "USD",
+          currency: "EUR",
+          price: 0.91,
+          date: "2026-03-01",
+          provider: "frankfurter",
+        },
+        {
+          symbol: "USD",
+          currency: "EUR",
+          price: 0.92,
+          date: "2026-03-02",
+          provider: "frankfurter",
+        },
+        {
+          symbol: "USD",
+          currency: "EUR",
+          price: 0.93,
+          date: "2026-03-03",
+          provider: "frankfurter",
+        },
+      ]),
     };
     const db = makeTestDb();
     const svc = new FinancialDataService(db, new SettingsService(db), mockFactory(provider));
@@ -396,24 +392,22 @@ describe("ensurePriceHistory", () => {
   it("skips already-cached dates during backfill", async () => {
     const provider = {
       name: "frankfurter" as ProviderName,
-      getPriceRange: vi.fn(
-        async (): Promise<PriceResult[]> => [
-          {
-            symbol: "USD",
-            currency: "EUR",
-            price: 0.91,
-            date: "2026-03-01",
-            provider: "frankfurter",
-          },
-          {
-            symbol: "USD",
-            currency: "EUR",
-            price: 0.92,
-            date: "2026-03-02",
-            provider: "frankfurter",
-          },
-        ]
-      ),
+      getPriceRange: vi.fn(async (): Promise<PriceResult[]> => [
+        {
+          symbol: "USD",
+          currency: "EUR",
+          price: 0.91,
+          date: "2026-03-01",
+          provider: "frankfurter",
+        },
+        {
+          symbol: "USD",
+          currency: "EUR",
+          price: 0.92,
+          date: "2026-03-02",
+          provider: "frankfurter",
+        },
+      ]),
     };
     const db = makeTestDb();
     const svc = new FinancialDataService(db, new SettingsService(db), mockFactory(provider));
@@ -491,7 +485,7 @@ describe("searchSymbol", () => {
         name: "coingecko",
         searchSymbol: vi.fn(async () => [
           {
-            provider: "coingecko" as ProviderName,
+            provider: "coingecko",
             symbol: "bitcoin",
             name: "Bitcoin",
             type: "crypto",
@@ -502,7 +496,7 @@ describe("searchSymbol", () => {
         name: "alpha-vantage",
         searchSymbol: vi.fn(async () => [
           {
-            provider: "alpha-vantage" as ProviderName,
+            provider: "alpha-vantage",
             symbol: "BTC-USD",
             name: "Bitcoin USD",
             type: "crypto",
@@ -534,7 +528,7 @@ describe("searchSymbol", () => {
         name: "alpha-vantage",
         searchSymbol: vi.fn(async () => [
           {
-            provider: "alpha-vantage" as ProviderName,
+            provider: "alpha-vantage",
             symbol: "AAPL",
             name: "Apple Inc",
             type: "stock",
@@ -560,7 +554,7 @@ describe("searchSymbol", () => {
       {
         name: "coingecko",
         searchSymbol: vi.fn(async () => [
-          { provider: "coingecko" as ProviderName, symbol: "bitcoin", name: "Bitcoin" },
+          { provider: "coingecko", symbol: "bitcoin", name: "Bitcoin" },
         ]),
       },
     ] as unknown as ReturnType<typeof import("@/lib/providers/registry").getProvidersByAssetType>);
@@ -589,7 +583,7 @@ describe("searchSymbolStream", () => {
                 () =>
                   resolve([
                     {
-                      provider: "coingecko" as ProviderName,
+                      provider: "coingecko",
                       symbol: "bitcoin",
                       name: "Bitcoin",
                       type: "crypto",
@@ -604,7 +598,7 @@ describe("searchSymbolStream", () => {
         name: "alpha-vantage",
         searchSymbol: vi.fn(async () => [
           {
-            provider: "alpha-vantage" as ProviderName,
+            provider: "alpha-vantage",
             symbol: "BTC",
             name: "BTC USD",
             type: "crypto",
@@ -638,7 +632,7 @@ describe("searchSymbolStream", () => {
         name: "alpha-vantage",
         searchSymbol: vi.fn(async () => [
           {
-            provider: "alpha-vantage" as ProviderName,
+            provider: "alpha-vantage",
             symbol: "AAPL",
             name: "Apple",
             type: "stock",
@@ -672,7 +666,7 @@ describe("searchSymbolStream", () => {
         name: "alpha-vantage",
         searchSymbol: vi.fn(async () => [
           {
-            provider: "alpha-vantage" as ProviderName,
+            provider: "alpha-vantage",
             symbol: "AAPL",
             name: "Apple",
             type: "stock",
@@ -852,15 +846,13 @@ describe("getPrice — as-of dates", () => {
   function makeBackdatedProvider(name: ProviderName, price: number, actualDate: string) {
     return {
       name,
-      getPrice: vi.fn(
-        async (symbol: string, currency: string): Promise<PriceResult | null> => ({
-          symbol,
-          price,
-          currency,
-          date: actualDate,
-          provider: name,
-        })
-      ),
+      getPrice: vi.fn(async (symbol: string, currency: string): Promise<PriceResult | null> => ({
+        symbol,
+        price,
+        currency,
+        date: actualDate,
+        provider: name,
+      })),
     };
   }
 

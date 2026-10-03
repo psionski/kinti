@@ -122,7 +122,7 @@ describe("computeNextOccurrence", async () => {
   });
 
   it("returns null for unknown frequency", async () => {
-    const r = makeRow({ frequency: "biweekly" as "monthly" });
+    const r = makeRow({ frequency: "biweekly" });
     expect(computeNextOccurrence(r, "2026-03-01")).toBeNull();
   });
 
@@ -331,6 +331,35 @@ describe("update", async () => {
 
   it("returns null for non-existent id", async () => {
     expect(service.update(9999, { amount: 1 })).toBeNull();
+  });
+
+  it("clears optional fields sent as null", async () => {
+    const category = new CategoryService(db).create({ name: "Housing" });
+    const created = await service.create(
+      rec({
+        merchant: "Landlord",
+        categoryId: category.id,
+        endDate: "2027-01-01",
+        notes: "Flat 4",
+        dayOfMonth: 5,
+      })
+    );
+
+    const updated = service.update(created.id, {
+      merchant: null,
+      categoryId: null,
+      endDate: null,
+      notes: null,
+      dayOfMonth: null,
+    });
+
+    expect(updated).toMatchObject({
+      merchant: null,
+      categoryId: null,
+      endDate: null,
+      notes: null,
+      dayOfMonth: null,
+    });
   });
 });
 

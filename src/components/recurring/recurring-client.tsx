@@ -1,107 +1,60 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { RecurringTable } from "./recurring-table";
-import { RecurringFormDialog } from "./recurring-form-dialog";
+import { RecurringFormDialog, type RecurringFormData } from "./recurring-form-dialog";
 import { DeleteRecurringDialog } from "./delete-recurring-dialog";
+import { toCreateRecurringBody, toUpdateRecurringBody } from "./recurring-request";
+import {
+  recurringListQuery,
+  useCreateRecurring,
+  useDeleteRecurring,
+  useUpdateRecurring,
+} from "@/lib/queries/recurring";
+import { categoryListQuery } from "@/lib/queries/categories";
 import type { RecurringResponse } from "@/lib/validators/recurring";
 import type { CategoryWithCountResponse } from "@/lib/validators/categories";
+import { resetOnClose } from "@/components/shared/reset-on-close";
 
-interface RecurringClientProps {
-  initialRecurring: RecurringResponse[];
-  initialCategories: CategoryWithCountResponse[];
-}
-
-export function RecurringClient({
-  initialRecurring,
-  initialCategories,
-}: RecurringClientProps): React.ReactElement {
-  const [recurring, setRecurring] = useState(initialRecurring);
-  const [categories] = useState(initialCategories);
-  const [loading, setLoading] = useState(false);
-  const [formLoading, setFormLoading] = useState(false);
-
+export function RecurringClient(): React.ReactElement {
   // Dialog states
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<RecurringResponse | null>(null);
   const [deletingItem, setDeletingItem] = useState<RecurringResponse | null>(null);
 
+  const list = useQuery(recurringListQuery());
+  const categories = useQuery(categoryListQuery()).data ?? [];
   const categoryMap = new Map<number, CategoryWithCountResponse>(categories.map((c) => [c.id, c]));
 
-  async function refresh(): Promise<void> {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/recurring");
-      if (res.ok) setRecurring((await res.json()) as RecurringResponse[]);
-    } finally {
-      setLoading(false);
-    }
+  const createRecurring = useCreateRecurring();
+  const updateRecurring = useUpdateRecurring();
+  // Pausing has no dialog of its own, so it keeps its error apart from the edit form's.
+  const toggleRecurring = useUpdateRecurring();
+  const deleteRecurring = useDeleteRecurring();
+
+  function handleCreate(data: RecurringFormData): void {
+    createRecurring.mutate(toCreateRecurringBody(data), { onSuccess: () => setShowForm(false) });
   }
 
-  async function handleCreate(data: Record<string, unknown>): Promise<void> {
-    setFormLoading(true);
-    try {
-      const res = await fetch("/api/recurring", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (res.ok) {
-        setShowForm(false);
-        void refresh();
-      }
-    } finally {
-      setFormLoading(false);
-    }
-  }
-
-  async function handleUpdate(data: Record<string, unknown>): Promise<void> {
+  function handleUpdate(data: RecurringFormData): void {
     if (!editingItem) return;
-    setFormLoading(true);
-    try {
-      const res = await fetch(`/api/recurring/${editingItem.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (res.ok) {
-        setEditingItem(null);
-        void refresh();
-      }
-    } finally {
-      setFormLoading(false);
-    }
+    updateRecurring.mutate(
+      { id: editingItem.id, ...toUpdateRecurringBody(data) },
+      { onSuccess: () => setEditingItem(null) }
+    );
   }
 
-  async function handleToggleActive(item: RecurringResponse): Promise<void> {
-    setLoading(true);
-    try {
-      await fetch(`/api/recurring/${item.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: item.isActive === 0 }),
-      });
-      void refresh();
-    } finally {
-      setLoading(false);
-    }
+  function handleToggleActive(item: RecurringResponse): void {
+    toggleRecurring.mutate({ id: item.id, isActive: item.isActive === 0 });
   }
 
-  async function handleDelete(): Promise<void> {
+  function handleDelete(): void {
     if (!deletingItem) return;
-    setFormLoading(true);
-    try {
-      const res = await fetch(`/api/recurring/${deletingItem.id}`, { method: "DELETE" });
-      if (res.ok) {
-        setDeletingItem(null);
-        void refresh();
-      }
-    } finally {
-      setFormLoading(false);
-    }
+    deleteRecurring.mutate(deletingItem.id, { onSuccess: () => setDeletingItem(null) });
   }
 
   return (
@@ -114,49 +67,64 @@ export function RecurringClient({
         </Button>
       </PageHeader>
 
+      {list.isError && (
+        <p className="text-destructive text-sm">
+          Couldn&apos;t load recurring transactions: {list.error.message}
+        </p>
+      )}
+      {toggleRecurring.isError && (
+        <p className="text-destructive text-sm">
+          Couldn&apos;t {toggleRecurring.variables.isActive ? "resume" : "pause"} the recurring
+          transaction: {toggleRecurring.error.message}
+        </p>
+      )}
+
       {/* Table */}
-      <div className={loading ? "pointer-events-none opacity-60" : ""}>
+      <div
+        className={
+          list.isPending || toggleRecurring.isPending ? "pointer-events-none opacity-60" : ""
+        }
+      >
         <RecurringTable
-          items={recurring}
+          items={list.data ?? []}
           categories={categoryMap}
           onEdit={setEditingItem}
           onDelete={setDeletingItem}
-          onToggleActive={(item) => void handleToggleActive(item)}
+          onToggleActive={handleToggleActive}
         />
       </div>
 
       {/* Create dialog */}
       <RecurringFormDialog
-        key={String(showForm)}
+        key={`create-${showForm}`}
         open={showForm}
-        onOpenChange={setShowForm}
+        onOpenChange={resetOnClose(() => setShowForm(false), createRecurring)}
         categories={categories}
-        onSubmit={(d) => void handleCreate(d)}
-        loading={formLoading}
+        onSubmit={handleCreate}
+        loading={createRecurring.isPending}
+        submitError={createRecurring.error?.message}
       />
 
       {/* Edit dialog */}
       <RecurringFormDialog
-        key={editingItem?.id ?? "new"}
+        key={`edit-${editingItem?.id ?? "none"}`}
         open={!!editingItem}
-        onOpenChange={(open) => {
-          if (!open) setEditingItem(null);
-        }}
+        onOpenChange={resetOnClose(() => setEditingItem(null), updateRecurring)}
         categories={categories}
-        onSubmit={(d) => void handleUpdate(d)}
+        onSubmit={handleUpdate}
         initialData={editingItem}
-        loading={formLoading}
+        loading={updateRecurring.isPending}
+        submitError={updateRecurring.error?.message}
       />
 
       {/* Delete dialog */}
       <DeleteRecurringDialog
         open={!!deletingItem}
-        onOpenChange={(open) => {
-          if (!open) setDeletingItem(null);
-        }}
+        onOpenChange={resetOnClose(() => setDeletingItem(null), deleteRecurring)}
         item={deletingItem}
-        onConfirm={() => void handleDelete()}
-        loading={formLoading}
+        onConfirm={handleDelete}
+        loading={deleteRecurring.isPending}
+        error={deleteRecurring.error?.message}
       />
     </div>
   );

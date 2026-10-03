@@ -1,22 +1,27 @@
 "use client";
 
 import { useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Temporal } from "@js-temporal/polyfill";
 import { ChevronLeft, ChevronRight, Plus, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { BudgetTable } from "./budget-table";
-import { BudgetFormDialog } from "./budget-form-dialog";
+import { BudgetFormDialog, type BudgetFormData } from "./budget-form-dialog";
 import { DeleteBudgetDialog } from "./delete-budget-dialog";
 import { formatMonth } from "@/lib/format";
+import {
+  budgetStatusQuery,
+  useDeleteBudget,
+  useResetBudgets,
+  useSetBudget,
+} from "@/lib/queries/budgets";
+import { categoryListQuery } from "@/lib/queries/categories";
 import type { BudgetStatusItem } from "@/lib/validators/reports";
-import type { BudgetStatusResponse } from "@/lib/validators/budgets";
-import type { CategoryWithCountResponse } from "@/lib/validators/categories";
+import { resetOnClose } from "@/components/shared/reset-on-close";
 
 interface BudgetsClientProps {
-  initialBudgetStatus: BudgetStatusItem[];
-  initialInheritedFrom: string | null;
-  initialCategories: CategoryWithCountResponse[];
+  /** The month the page opens on (`YYYY-MM`). */
   currentMonth: string;
 }
 
@@ -35,98 +40,46 @@ function formatMonthLabel(month: string): string {
     .toLocaleString("default", { month: "long", year: "numeric" });
 }
 
-export function BudgetsClient({
-  initialBudgetStatus,
-  initialInheritedFrom,
-  initialCategories,
-  currentMonth,
-}: BudgetsClientProps): React.ReactElement {
+export function BudgetsClient({ currentMonth }: BudgetsClientProps): React.ReactElement {
   const [month, setMonth] = useState(currentMonth);
-  const [budgetStatus, setBudgetStatus] = useState(initialBudgetStatus);
-  const [inheritedFrom, setInheritedFrom] = useState(initialInheritedFrom);
-  const [categories] = useState(initialCategories);
-  const [loading, setLoading] = useState(false);
 
   // Dialog states
   const [showForm, setShowForm] = useState(false);
   const [editingBudget, setEditingBudget] = useState<BudgetStatusItem | null>(null);
   const [deletingBudget, setDeletingBudget] = useState<BudgetStatusItem | null>(null);
-  const [formLoading, setFormLoading] = useState(false);
 
-  async function refresh(m: string): Promise<void> {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/budgets?month=${m}`);
-      if (res.ok) {
-        const data = (await res.json()) as BudgetStatusResponse;
-        setBudgetStatus(data.items);
-        setInheritedFrom(data.inheritedFrom);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
+  // While another month loads, the one before it stays on screen, dimmed.
+  const status = useQuery({ ...budgetStatusQuery({ month }), placeholderData: keepPreviousData });
+  const inheritedFrom = status.data?.inheritedFrom;
+  const categories = useQuery(categoryListQuery()).data ?? [];
+
+  const createBudget = useSetBudget();
+  const editBudget = useSetBudget();
+  const deleteBudget = useDeleteBudget();
+  const resetBudgets = useResetBudgets();
+
+  const loading = status.isPlaceholderData || status.isPending || resetBudgets.isPending;
 
   function navigateMonth(delta: number): void {
-    const newMonth = shiftMonth(month, delta);
-    setMonth(newMonth);
-    void refresh(newMonth);
+    setMonth((m) => shiftMonth(m, delta));
+    // A failed reset belongs to the month it was tried on.
+    resetBudgets.reset();
   }
 
-  async function handleSetBudget(data: {
-    categoryId: number;
-    month: string;
-    amount: number;
-  }): Promise<void> {
-    setFormLoading(true);
-    try {
-      const res = await fetch("/api/budgets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (res.ok) {
-        setShowForm(false);
-        setEditingBudget(null);
-        void refresh(month);
-      }
-    } finally {
-      setFormLoading(false);
-    }
+  function handleCreate(data: BudgetFormData): void {
+    createBudget.mutate(data, { onSuccess: () => setShowForm(false) });
   }
 
-  async function handleDelete(): Promise<void> {
+  function handleEdit(data: BudgetFormData): void {
+    editBudget.mutate(data, { onSuccess: () => setEditingBudget(null) });
+  }
+
+  function handleDelete(): void {
     if (!deletingBudget) return;
-    setFormLoading(true);
-    try {
-      const params = new URLSearchParams({
-        categoryId: String(deletingBudget.categoryId),
-        month,
-      });
-      const res = await fetch(`/api/budgets?${params}`, { method: "DELETE" });
-      if (res.ok) {
-        setDeletingBudget(null);
-        void refresh(month);
-      }
-    } finally {
-      setFormLoading(false);
-    }
-  }
-
-  async function handleResetToInherited(): Promise<void> {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/budgets/reset", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ month }),
-      });
-      if (res.ok) {
-        void refresh(month);
-      }
-    } finally {
-      setLoading(false);
-    }
+    deleteBudget.mutate(
+      { categoryId: deletingBudget.categoryId, month },
+      { onSuccess: () => setDeletingBudget(null) }
+    );
   }
 
   return (
@@ -137,7 +90,7 @@ export function BudgetsClient({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => void handleResetToInherited()}
+            onClick={() => resetBudgets.mutate({ month })}
             disabled={loading}
           >
             <RotateCcw className="size-4" />
@@ -171,17 +124,28 @@ export function BudgetsClient({
         >
           <ChevronRight className="size-4" />
         </Button>
-        {inheritedFrom !== null && (
-          <span className="text-muted-foreground text-sm">
+        {inheritedFrom && (
+          <span className={`text-muted-foreground text-sm ${loading ? "opacity-60" : ""}`}>
             Inherited from {formatMonthLabel(inheritedFrom)}
           </span>
         )}
       </div>
 
+      {status.isError && (
+        <p className="text-destructive text-sm">
+          Couldn&apos;t load budgets: {status.error.message}
+        </p>
+      )}
+      {resetBudgets.isError && (
+        <p className="text-destructive text-sm">
+          Couldn&apos;t reset budgets: {resetBudgets.error.message}
+        </p>
+      )}
+
       {/* Budget table */}
       <div data-tour="budget-table" className={loading ? "pointer-events-none opacity-60" : ""}>
         <BudgetTable
-          budgets={budgetStatus}
+          budgets={status.data?.items ?? []}
           onEdit={setEditingBudget}
           onDelete={setDeletingBudget}
         />
@@ -189,38 +153,37 @@ export function BudgetsClient({
 
       {/* Create dialog */}
       <BudgetFormDialog
-        key={String(showForm)}
+        key={`create-${showForm}`}
         open={showForm}
-        onOpenChange={setShowForm}
+        onOpenChange={resetOnClose(() => setShowForm(false), createBudget)}
         categories={categories}
         currentMonth={month}
-        onSubmit={(d) => void handleSetBudget(d)}
-        loading={formLoading}
+        onSubmit={handleCreate}
+        loading={createBudget.isPending}
+        submitError={createBudget.error?.message}
       />
 
       {/* Edit dialog */}
       <BudgetFormDialog
-        key={editingBudget?.categoryId ?? "new"}
+        key={`edit-${editingBudget?.categoryId ?? "none"}`}
         open={!!editingBudget}
-        onOpenChange={(open) => {
-          if (!open) setEditingBudget(null);
-        }}
+        onOpenChange={resetOnClose(() => setEditingBudget(null), editBudget)}
         categories={categories}
         currentMonth={month}
-        onSubmit={(d) => void handleSetBudget(d)}
+        onSubmit={handleEdit}
         initialData={editingBudget}
-        loading={formLoading}
+        loading={editBudget.isPending}
+        submitError={editBudget.error?.message}
       />
 
       {/* Delete dialog */}
       <DeleteBudgetDialog
         open={!!deletingBudget}
-        onOpenChange={(open) => {
-          if (!open) setDeletingBudget(null);
-        }}
+        onOpenChange={resetOnClose(() => setDeletingBudget(null), deleteBudget)}
         budget={deletingBudget}
-        onConfirm={() => void handleDelete()}
-        loading={formLoading}
+        onConfirm={handleDelete}
+        loading={deleteBudget.isPending}
+        error={deleteBudget.error?.message}
       />
     </div>
   );

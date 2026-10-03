@@ -61,6 +61,9 @@ test.describe.serial("Onboarding wizard", () => {
     // Last section (backups): click "Finish Setup" to complete and redirect to /
     await finishButton.click();
     await page.waitForURL("/", { timeout: 10000 });
+    // Still the same page: the dashboard renders from the settings just saved
+    // rather than bouncing back to the onboarding gate.
+    await expect(page.locator('[data-tour="kpi-cards"]')).toBeVisible();
   });
 
   test("dashboard loads empty after onboarding", async ({ page }) => {

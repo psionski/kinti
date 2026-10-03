@@ -10,6 +10,8 @@ interface DeleteCategoryDialogProps {
   categories: CategoryWithCountResponse[];
   onConfirm: () => void;
   loading?: boolean;
+  /** Why the last attempt failed, if it did. */
+  error?: string | null;
 }
 
 export function DeleteCategoryDialog({
@@ -19,6 +21,7 @@ export function DeleteCategoryDialog({
   categories,
   onConfirm,
   loading,
+  error,
 }: DeleteCategoryDialogProps): React.ReactElement {
   const childCount = category ? categories.filter((c) => c.parentId === category.id).length : 0;
 
@@ -34,6 +37,7 @@ export function DeleteCategoryDialog({
       }
       onConfirm={onConfirm}
       loading={loading}
+      error={error}
     >
       {category && category.transactionCount > 0 && (
         <p>

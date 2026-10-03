@@ -38,6 +38,8 @@ interface TransactionFormProps {
   onSubmit: (data: TransactionFormData) => void;
   initialData?: TransactionResponse | null;
   loading?: boolean;
+  /** Why the server refused the last submit, if it did. */
+  submitError?: string | null;
 }
 
 export interface TransactionFormData {
@@ -59,6 +61,7 @@ export function TransactionFormDialog({
   onSubmit,
   initialData,
   loading,
+  submitError,
 }: TransactionFormProps): React.ReactElement {
   const isEdit = !!initialData;
 
@@ -242,7 +245,9 @@ export function TransactionFormDialog({
             />
           </div>
 
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          {(error || submitError) && (
+            <p className="text-destructive text-sm">{error || submitError}</p>
+          )}
 
           <DialogFooter>
             <Button type="submit" disabled={loading}>

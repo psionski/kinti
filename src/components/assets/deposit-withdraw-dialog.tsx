@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useFxPreview } from "@/hooks/use-fx-preview";
 import { isoToday } from "@/lib/date-ranges";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,8 @@ interface DepositWithdrawDialogProps {
     description?: string;
   }) => void;
   loading?: boolean;
+  /** Why the server refused the last submit, if it did. */
+  submitError?: string | null;
 }
 
 export function DepositWithdrawDialog({
@@ -38,6 +41,7 @@ export function DepositWithdrawDialog({
   asset,
   onSubmit,
   loading,
+  submitError,
 }: DepositWithdrawDialogProps): React.ReactElement {
   const today = isoToday();
   const baseCurrency = getBaseCurrency();
@@ -52,55 +56,20 @@ export function DepositWithdrawDialog({
   const [error, setError] = useState("");
 
   // Read-only base-currency preview, refreshed whenever amount or date
-  // changes. Uses /api/financial/convert (same default FX chain as
-  // AssetLotService.toBase) so the user sees exactly the rate that will be
-  // applied at write time — no drift between preview and persisted value.
-  const [basePreview, setBasePreview] = useState<{ base: number; rate: number } | null>(null);
-  const [fetchingPreview, setFetchingPreview] = useState(false);
-
-  useEffect(() => {
-    if (!open || !isForeign) {
-      setBasePreview(null);
-      return;
-    }
-    const amt = parseFloat(amount);
-    if (Number.isNaN(amt) || amt <= 0) {
-      setBasePreview(null);
-      return;
-    }
-    const run = { cancelled: false };
-    setFetchingPreview(true);
-    void (async () => {
-      const params = new URLSearchParams({
-        amount: String(amt),
-        from: asset.currency,
-        to: baseCurrency,
-        date,
-      });
-      try {
-        const res = await fetch(`/api/financial/convert?${params}`);
-        if (!run.cancelled && res.ok) {
-          const data = (await res.json()) as { converted: number; rate: number };
-          setBasePreview({ base: data.converted, rate: data.rate });
-        } else if (!run.cancelled) {
-          setBasePreview(null);
-        }
-      } catch {
-        if (!run.cancelled) setBasePreview(null);
-      } finally {
-        if (!run.cancelled) setFetchingPreview(false);
-      }
-    })();
-    return () => {
-      run.cancelled = true;
-    };
-  }, [open, isForeign, amount, date, asset.currency, baseCurrency]);
+  // changes, through the same FX chain AssetLotService.toBase applies at write
+  // time — no drift between preview and persisted value.
+  const amt = parseFloat(amount);
+  const { preview: basePreview, fetching: fetchingPreview } = useFxPreview({
+    amount: open && isForeign && amt > 0 ? amt : null,
+    from: asset.currency,
+    to: baseCurrency,
+    date,
+  });
 
   function handleSubmit(e: React.SyntheticEvent): void {
     e.preventDefault();
     setError("");
 
-    const amt = parseFloat(amount);
     if (Number.isNaN(amt) || amt <= 0) {
       setError("Amount must be a positive number.");
       return;
@@ -176,9 +145,7 @@ export function DepositWithdrawDialog({
             >
               <div className="flex justify-between">
                 <span>Total ({asset.currency})</span>
-                <span className="font-mono">
-                  {formatCurrency(parseFloat(amount), asset.currency)}
-                </span>
+                <span className="font-mono">{formatCurrency(amt, asset.currency)}</span>
               </div>
               <div className="text-foreground flex justify-between font-medium">
                 <span>≈ {baseCurrency}</span>
@@ -196,7 +163,9 @@ export function DepositWithdrawDialog({
             </div>
           )}
 
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          {(error || submitError) && (
+            <p className="text-destructive text-sm">{error || submitError}</p>
+          )}
           <DialogFooter>
             <Button type="submit" disabled={loading}>
               {actionLabel}

@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
   SpendingSummarySchema,
   CategoryStatsSchema,
@@ -8,7 +7,7 @@ import {
   TopMerchantsSchema,
   SpendingSummaryResultSchema,
   CategoryStatsResultSchema,
-  BudgetStatsItemSchema,
+  BudgetStatsResultSchema,
   TrendsResultSchema,
   CategoryTrendsResultSchema,
   TopMerchantsResultSchema,
@@ -17,7 +16,7 @@ import { op } from "./helpers";
 
 const SummaryResult = SpendingSummaryResultSchema.meta({ id: "SpendingSummaryResult" });
 const CategoryStatsResult = CategoryStatsResultSchema.meta({ id: "CategoryStatsResult" });
-const BudgetStatsItem = BudgetStatsItemSchema.meta({ id: "BudgetStatsItem" });
+const BudgetStatsResult = BudgetStatsResultSchema.meta({ id: "BudgetStatsResult" });
 const TrendsResult = TrendsResultSchema.meta({ id: "TrendsResult" });
 const CategoryTrendsResult = CategoryTrendsResultSchema.meta({ id: "CategoryTrendsResult" });
 const TopMerchantsResult = TopMerchantsResultSchema.meta({ id: "TopMerchantsResult" });
@@ -49,11 +48,7 @@ export const reportPaths = {
       summary: "Per-category spending stats augmented with budget amounts for a month",
       tags: ["Reports"],
       query: BudgetStatsSchema,
-      response: z.object({
-        items: z.array(BudgetStatsItem),
-        inheritedFrom: z.string().nullable(),
-        currency: z.string(),
-      }),
+      response: BudgetStatsResult,
       errors: [400, 500],
     }),
   },

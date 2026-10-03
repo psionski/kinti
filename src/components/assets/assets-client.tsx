@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Plus, TrendingUp, TrendingDown, ArrowRight } from "lucide-react";
 import { PnlDisplay } from "@/components/shared/pnl-display";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -20,12 +21,16 @@ import {
   getBaseCurrency,
   holdingsUnit,
 } from "@/lib/format";
+import {
+  assetListQuery,
+  useBuyAsset,
+  useCreateAsset,
+  useRecordAssetPrice,
+  useSellAsset,
+} from "@/lib/queries/assets";
+import { portfolioQuery } from "@/lib/queries/portfolio";
 import type { AssetWithMetrics, PortfolioResponse } from "@/lib/validators/assets";
-
-interface AssetsClientProps {
-  initialAssets: AssetWithMetrics[];
-  portfolio: PortfolioResponse;
-}
+import { resetOnClose } from "@/components/shared/reset-on-close";
 
 const TYPE_LABELS: Record<string, string> = {
   deposit: "Deposit",
@@ -228,10 +233,10 @@ function SummaryCards({ portfolio }: { portfolio: PortfolioResponse }): React.Re
   );
 }
 
-export function AssetsClient({ initialAssets, portfolio }: AssetsClientProps): React.ReactElement {
-  const [assets, setAssets] = useState(initialAssets);
-  const [currentPortfolio, setCurrentPortfolio] = useState(portfolio);
-  const [loading, setLoading] = useState(false);
+export function AssetsClient(): React.ReactElement {
+  const assetList = useQuery(assetListQuery());
+  const assets = assetList.data;
+  const portfolio = useQuery(portfolioQuery()).data;
   const [showCreate, setShowCreate] = useState(false);
   const [buyingAsset, setBuyingAsset] = useState<AssetWithMetrics | null>(null);
   const [sellingAsset, setSellingAsset] = useState<AssetWithMetrics | null>(null);
@@ -239,103 +244,15 @@ export function AssetsClient({ initialAssets, portfolio }: AssetsClientProps): R
   const [withdrawingAsset, setWithdrawingAsset] = useState<AssetWithMetrics | null>(null);
   const [pricingAsset, setPricingAsset] = useState<AssetWithMetrics | null>(null);
 
-  async function refresh(): Promise<void> {
-    setLoading(true);
-    try {
-      const [assetsRes, portfolioRes] = await Promise.all([
-        fetch("/api/assets"),
-        fetch("/api/portfolio"),
-      ]);
-      if (assetsRes.ok) setAssets((await assetsRes.json()) as AssetWithMetrics[]);
-      if (portfolioRes.ok) setCurrentPortfolio((await portfolioRes.json()) as PortfolioResponse);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleCreate(data: {
-    name: string;
-    type: "deposit" | "investment" | "crypto" | "other";
-    currency: string;
-    icon?: string;
-  }): Promise<void> {
-    setLoading(true);
-    try {
-      await fetch("/api/assets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      setShowCreate(false);
-      await refresh();
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleBuy(
-    asset: AssetWithMetrics,
-    data: { quantity: number; pricePerUnit: number; date: string; description?: string },
-    closeDialog: () => void
-  ): Promise<void> {
-    setLoading(true);
-    try {
-      await fetch(`/api/assets/${asset.id}/buy`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      closeDialog();
-      await refresh();
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleSell(
-    asset: AssetWithMetrics,
-    data: { quantity: number; pricePerUnit: number; date: string; description?: string },
-    closeDialog: () => void
-  ): Promise<void> {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/assets/${asset.id}/sell`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) {
-        const err = (await res.json()) as { error: string };
-        alert(err.error);
-        return;
-      }
-      closeDialog();
-      await refresh();
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleRecordPrice(
-    asset: AssetWithMetrics,
-    data: { pricePerUnit: number; recordedAt?: string }
-  ): Promise<void> {
-    setLoading(true);
-    try {
-      await fetch(`/api/assets/${asset.id}/prices`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      setPricingAsset(null);
-      await refresh();
-    } finally {
-      setLoading(false);
-    }
-  }
+  const createAsset = useCreateAsset();
+  // A deposit is a buy at 1 per unit and a withdrawal a sell, so each pair of
+  // dialogs shares the endpoint's mutation; only one dialog is open at a time.
+  const buyAsset = useBuyAsset();
+  const sellAsset = useSellAsset();
+  const recordPrice = useRecordAssetPrice();
 
   return (
-    <div className={`space-y-6 ${loading ? "pointer-events-none opacity-60" : ""}`}>
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Assets</h1>
         <Button onClick={() => setShowCreate(true)}>
@@ -344,14 +261,20 @@ export function AssetsClient({ initialAssets, portfolio }: AssetsClientProps): R
         </Button>
       </div>
 
-      {assets.length === 0 ? (
+      {assetList.isError && (
+        <p className="text-destructive text-sm">
+          Couldn&apos;t load assets: {assetList.error.message}
+        </p>
+      )}
+
+      {!assets ? null : assets.length === 0 ? (
         <EmptyState
           message="No assets yet."
           description="Add a savings account, investment, or crypto holding to track your net worth."
         />
       ) : (
         <>
-          <SummaryCards portfolio={currentPortfolio} />
+          {portfolio && <SummaryCards portfolio={portfolio} />}
 
           <div
             data-tour="asset-cards"
@@ -448,75 +371,94 @@ export function AssetsClient({ initialAssets, portfolio }: AssetsClientProps): R
       {showCreate && (
         <AssetFormDialog
           open={showCreate}
-          onOpenChange={setShowCreate}
-          onSubmit={(data) => void handleCreate(data)}
-          loading={loading}
+          onOpenChange={resetOnClose(() => setShowCreate(false), createAsset)}
+          onSubmit={(data) => createAsset.mutate(data, { onSuccess: () => setShowCreate(false) })}
+          loading={createAsset.isPending}
+          submitError={createAsset.error?.message}
         />
       )}
 
       {buyingAsset && (
         <BuySellDialog
           open={!!buyingAsset}
-          onOpenChange={(o) => {
-            if (!o) setBuyingAsset(null);
-          }}
+          onOpenChange={resetOnClose(() => setBuyingAsset(null), buyAsset)}
           mode="buy"
           asset={buyingAsset}
-          onSubmit={(data) => void handleBuy(buyingAsset, data, () => setBuyingAsset(null))}
-          loading={loading}
+          onSubmit={(data) =>
+            buyAsset.mutate(
+              { id: buyingAsset.id, ...data },
+              { onSuccess: () => setBuyingAsset(null) }
+            )
+          }
+          loading={buyAsset.isPending}
+          submitError={buyAsset.error?.message}
         />
       )}
 
       {sellingAsset && (
         <BuySellDialog
           open={!!sellingAsset}
-          onOpenChange={(o) => {
-            if (!o) setSellingAsset(null);
-          }}
+          onOpenChange={resetOnClose(() => setSellingAsset(null), sellAsset)}
           mode="sell"
           asset={sellingAsset}
-          onSubmit={(data) => void handleSell(sellingAsset, data, () => setSellingAsset(null))}
-          loading={loading}
+          onSubmit={(data) =>
+            sellAsset.mutate(
+              { id: sellingAsset.id, ...data },
+              { onSuccess: () => setSellingAsset(null) }
+            )
+          }
+          loading={sellAsset.isPending}
+          submitError={sellAsset.error?.message}
         />
       )}
 
       {depositingAsset && (
         <DepositWithdrawDialog
           open={!!depositingAsset}
-          onOpenChange={(o) => {
-            if (!o) setDepositingAsset(null);
-          }}
+          onOpenChange={resetOnClose(() => setDepositingAsset(null), buyAsset)}
           mode="deposit"
           asset={depositingAsset}
-          onSubmit={(data) => void handleBuy(depositingAsset, data, () => setDepositingAsset(null))}
-          loading={loading}
+          onSubmit={(data) =>
+            buyAsset.mutate(
+              { id: depositingAsset.id, ...data },
+              { onSuccess: () => setDepositingAsset(null) }
+            )
+          }
+          loading={buyAsset.isPending}
+          submitError={buyAsset.error?.message}
         />
       )}
 
       {withdrawingAsset && (
         <DepositWithdrawDialog
           open={!!withdrawingAsset}
-          onOpenChange={(o) => {
-            if (!o) setWithdrawingAsset(null);
-          }}
+          onOpenChange={resetOnClose(() => setWithdrawingAsset(null), sellAsset)}
           mode="withdraw"
           asset={withdrawingAsset}
           onSubmit={(data) =>
-            void handleSell(withdrawingAsset, data, () => setWithdrawingAsset(null))
+            sellAsset.mutate(
+              { id: withdrawingAsset.id, ...data },
+              { onSuccess: () => setWithdrawingAsset(null) }
+            )
           }
-          loading={loading}
+          loading={sellAsset.isPending}
+          submitError={sellAsset.error?.message}
         />
       )}
 
       {pricingAsset && (
         <RecordPriceDialog
           open={!!pricingAsset}
-          onOpenChange={(o) => {
-            if (!o) setPricingAsset(null);
-          }}
+          onOpenChange={resetOnClose(() => setPricingAsset(null), recordPrice)}
           asset={pricingAsset}
-          onSubmit={(data) => void handleRecordPrice(pricingAsset, data)}
-          loading={loading}
+          onSubmit={(data) =>
+            recordPrice.mutate(
+              { id: pricingAsset.id, ...data },
+              { onSuccess: () => setPricingAsset(null) }
+            )
+          }
+          loading={recordPrice.isPending}
+          submitError={recordPrice.error?.message}
         />
       )}
     </div>

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { ValueChart } from "./value-chart";
 import { PriceChart } from "./price-chart";
 import { getBaseCurrency } from "@/lib/format";
-import type { AssetHistoryResult } from "@/lib/validators/portfolio-reports";
+import { assetHistoryQuery } from "@/lib/queries/assets";
 import type { AssetType } from "@/lib/validators/assets";
 
 const WINDOWS = ["3m", "6m", "12m", "all"] as const;
@@ -31,30 +32,13 @@ export function AssetDetailCharts({
   tracked,
 }: AssetDetailChartsProps): React.ReactElement {
   const [window, setWindow] = useState<Window>("6m");
-  const [history, setHistory] = useState<AssetHistoryResult | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    void (async () => {
-      try {
-        const res = await fetch(`/api/assets/${assetId}/history?window=${window}`, {
-          signal: controller.signal,
-        });
-        if (res.ok) {
-          setHistory((await res.json()) as AssetHistoryResult);
-        }
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") return;
-      } finally {
-        // A superseded request is aborted; its cleanup already started a fresh
-        // load, so don't clear the loading state on its behalf.
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    })();
-    return () => controller.abort();
-  }, [assetId, window]);
+  // While another window loads, the current series stays on screen, dimmed.
+  const historyQuery = useQuery({
+    ...assetHistoryQuery(assetId, { window }),
+    placeholderData: keepPreviousData,
+  });
+  const loading = historyQuery.isPending || historyQuery.isPlaceholderData;
+  const history = historyQuery.data ?? null;
 
   // What varies over time depends on the asset. A deposit's unit price is
   // pinned at 1 — one euro is one euro — so charting it draws a flat line that
@@ -94,6 +78,12 @@ export function AssetDetailCharts({
           </Button>
         ))}
       </div>
+
+      {historyQuery.isError && (
+        <p className="text-destructive text-sm">
+          Couldn&apos;t load history: {historyQuery.error.message}
+        </p>
+      )}
 
       <div className={loading ? "pointer-events-none opacity-60" : ""}>
         <div className={`grid grid-cols-1 gap-6 ${mode === "none" ? "" : "lg:grid-cols-2"}`}>

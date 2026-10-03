@@ -17,8 +17,12 @@ interface ChangeRow {
   deltaPercent: number;
 }
 
-export function CategoryChangesCard({ groups }: CategoryChangesCardProps): React.ReactElement {
-  const changes: ChangeRow[] = groups
+/** A change smaller than one unit of the base currency is noise, not a trend. */
+const MIN_CHANGE = 1;
+
+/** Each group's change against the comparison period, largest first. */
+export function spendingChanges(groups: SpendingGroup[]): ChangeRow[] {
+  return groups
     .filter((g) => g.compareTotal !== undefined)
     .map((g) => {
       const current = g.total;
@@ -33,8 +37,12 @@ export function CategoryChangesCard({ groups }: CategoryChangesCardProps): React
         deltaPercent: Math.round(deltaPercent * 10) / 10,
       };
     })
-    .filter((r) => Math.abs(r.delta) > 100) // filter out changes < €1
+    .filter((r) => Math.abs(r.delta) >= MIN_CHANGE)
     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+}
+
+export function CategoryChangesCard({ groups }: CategoryChangesCardProps): React.ReactElement {
+  const changes = spendingChanges(groups);
 
   return (
     <Card>

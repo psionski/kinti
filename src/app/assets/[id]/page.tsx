@@ -1,7 +1,12 @@
+import { HydrationBoundary } from "@tanstack/react-query";
 import { requireOnboarding } from "@/lib/api/require-timezone";
 import { notFound } from "next/navigation";
 import { getAssetService, getAssetLotService, getPortfolioReportService } from "@/lib/api/services";
 import { AssetDetailClient } from "@/components/assets/asset-detail-client";
+import { seedQueries } from "@/lib/queries/seed";
+import { assetLotsQuery, assetQuery } from "@/lib/queries/assets";
+import { realizedPnlQuery, type RealizedPnlParams } from "@/lib/queries/portfolio";
+import { RealizedPnlQuerySchema } from "@/lib/validators/portfolio-reports";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -16,23 +21,22 @@ export default async function AssetDetailPage({ params }: PageProps): Promise<Re
   const asset = getAssetService().getById(id);
   if (!asset) notFound();
 
-  const lots = getAssetLotService().listLots(id);
+  // Every sale to date; the client picks out this asset's row.
+  const realizedParams: RealizedPnlParams = {};
 
-  const reportService = getPortfolioReportService();
-  const realizedPnlResult = reportService.getRealizedPnL();
-  const assetRealizedPnl = realizedPnlResult.items.find((item) => item.assetId === id);
-  // Both denominations travel: the P&L card reports in base (so it agrees with
-  // the asset list and with every portfolio total), and keeps the native figure
-  // for the tooltip.
-  const realizedPnl = assetRealizedPnl?.realizedPnl ?? null;
-  const realizedPnlBase = assetRealizedPnl?.realizedPnlBase ?? null;
+  const state = seedQueries((client) => {
+    client.setQueryData(assetQuery(id).queryKey, asset);
+    client.setQueryData(assetLotsQuery(id).queryKey, getAssetLotService().listLots(id));
+    const realized = RealizedPnlQuerySchema.parse(realizedParams);
+    client.setQueryData(
+      realizedPnlQuery(realizedParams).queryKey,
+      getPortfolioReportService().getRealizedPnL(realized.from, realized.to)
+    );
+  });
 
   return (
-    <AssetDetailClient
-      initialAsset={asset}
-      initialLots={lots}
-      realizedPnl={realizedPnl}
-      realizedPnlBase={realizedPnlBase}
-    />
+    <HydrationBoundary state={state}>
+      <AssetDetailClient assetId={id} />
+    </HydrationBoundary>
   );
 }

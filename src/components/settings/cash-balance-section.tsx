@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getBaseCurrency } from "@/lib/format";
+import { useCreateTransaction } from "@/lib/queries/transactions";
 import { Section } from "./settings-section";
 
 /** Currency symbol for the configured base currency, derived via Intl. */
@@ -34,31 +35,23 @@ export function CashBalanceSection({
   onContinue,
 }: CashBalanceSectionProps): React.ReactElement {
   const [amount, setAmount] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const createTx = useCreateTransaction();
+  const saved = createTx.isSuccess;
 
-  async function handleSave(): Promise<void> {
+  function handleSave(): void {
     const value = parseFloat(amount);
     if (!value || value <= 0) {
       onContinue();
       return;
     }
-    setSaving(true);
-    try {
-      await fetch("/api/transactions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: value,
-          type: "transfer",
-          description: "Opening balance",
-        }),
-      });
-      setSaved(true);
-      if (isOnboarding) onContinue();
-    } finally {
-      setSaving(false);
-    }
+    createTx.mutate(
+      { amount: value, type: "transfer", description: "Opening balance" },
+      {
+        onSuccess: () => {
+          if (isOnboarding) onContinue();
+        },
+      }
+    );
   }
 
   return (
@@ -88,8 +81,8 @@ export function CashBalanceSection({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" onClick={() => void handleSave()} disabled={saving || saved}>
-            {saving ? "Saving..." : saved ? "Saved" : "Save"}
+          <Button size="sm" onClick={handleSave} disabled={createTx.isPending || saved}>
+            {createTx.isPending ? "Saving..." : saved ? "Saved" : "Save"}
           </Button>
           {isOnboarding && !saved && (
             <Button variant="ghost" size="sm" onClick={onContinue}>
@@ -97,6 +90,7 @@ export function CashBalanceSection({
             </Button>
           )}
         </div>
+        {createTx.error && <p className="text-destructive text-sm">{createTx.error.message}</p>}
       </div>
     </Section>
   );
