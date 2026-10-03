@@ -2,7 +2,10 @@
 
 AI-powered personal finance tracker. Track spending, scan receipts, manage budgets, monitor your portfolio — with an MCP interface so your AI assistant can do the heavy lifting.
 
-<!-- TODO: screenshots -->
+<p align="center">
+  <img src="docs/screenshots/cash-flow.png" width="49%" alt="Cash flow report: income vs expenses, savings rate, spending trends by category">
+  <img src="docs/screenshots/dashboard-portfolio.png" width="49%" alt="Dashboard: cash and net worth, top movers, allocation, and a year-long spending heatmap">
+</p>
 
 ## Features
 
