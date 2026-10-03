@@ -96,7 +96,7 @@ export function RecurringClient(): React.ReactElement {
 
       {/* Create dialog */}
       <RecurringFormDialog
-        key={String(showForm)}
+        key={`create-${showForm}`}
         open={showForm}
         onOpenChange={resetOnClose(() => setShowForm(false), createRecurring)}
         categories={categories}
@@ -107,7 +107,7 @@ export function RecurringClient(): React.ReactElement {
 
       {/* Edit dialog */}
       <RecurringFormDialog
-        key={editingItem?.id ?? "new"}
+        key={`edit-${editingItem?.id ?? "none"}`}
         open={!!editingItem}
         onOpenChange={resetOnClose(() => setEditingItem(null), updateRecurring)}
         categories={categories}

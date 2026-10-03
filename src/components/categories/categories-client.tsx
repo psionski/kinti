@@ -118,7 +118,7 @@ export function CategoriesClient({ month }: CategoriesClientProps): React.ReactE
 
       {/* Create dialog. Keyed so each opening starts from an empty form. */}
       <CategoryFormDialog
-        key={String(showCreateForm)}
+        key={`create-${showCreateForm}`}
         open={showCreateForm}
         onOpenChange={resetOnClose(() => setShowCreateForm(false), createCategory)}
         categories={categories}
@@ -129,7 +129,7 @@ export function CategoriesClient({ month }: CategoriesClientProps): React.ReactE
 
       {/* Edit dialog */}
       <CategoryFormDialog
-        key={editingCategory?.id ?? "new"}
+        key={`edit-${editingCategory?.id ?? "none"}`}
         open={!!editingCategory}
         onOpenChange={resetOnClose(() => setEditingCategory(null), updateCategory)}
         categories={categories}
@@ -141,7 +141,7 @@ export function CategoriesClient({ month }: CategoriesClientProps): React.ReactE
 
       {/* Merge dialog. Keyed by its source so no earlier target stays picked. */}
       <MergeCategoryDialog
-        key={mergingCategory?.id ?? "none"}
+        key={`merge-${mergingCategory?.id ?? "none"}`}
         open={!!mergingCategory}
         onOpenChange={resetOnClose(() => setMergingCategory(null), mergeCategories)}
         sourceCategory={mergingCategory}

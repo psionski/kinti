@@ -153,7 +153,7 @@ export function BudgetsClient({ currentMonth }: BudgetsClientProps): React.React
 
       {/* Create dialog */}
       <BudgetFormDialog
-        key={String(showForm)}
+        key={`create-${showForm}`}
         open={showForm}
         onOpenChange={resetOnClose(() => setShowForm(false), createBudget)}
         categories={categories}
@@ -165,7 +165,7 @@ export function BudgetsClient({ currentMonth }: BudgetsClientProps): React.React
 
       {/* Edit dialog */}
       <BudgetFormDialog
-        key={editingBudget?.categoryId ?? "new"}
+        key={`edit-${editingBudget?.categoryId ?? "none"}`}
         open={!!editingBudget}
         onOpenChange={resetOnClose(() => setEditingBudget(null), editBudget)}
         categories={categories}

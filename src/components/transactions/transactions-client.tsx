@@ -245,7 +245,7 @@ export function TransactionsClient(): React.ReactElement {
 
       {/* Add form dialog */}
       <TransactionFormDialog
-        key={String(showAddForm)}
+        key={`add-${showAddForm}`}
         open={showAddForm}
         onOpenChange={resetOnClose(() => setShowAddForm(false), createTx)}
         categories={categories}
@@ -256,7 +256,7 @@ export function TransactionsClient(): React.ReactElement {
 
       {/* Edit form dialog */}
       <TransactionFormDialog
-        key={editingTx?.id ?? "new"}
+        key={`edit-${editingTx?.id ?? "none"}`}
         open={!!editingTx}
         onOpenChange={resetOnClose(() => setEditingTx(null), updateTx)}
         categories={categories}
@@ -268,7 +268,7 @@ export function TransactionsClient(): React.ReactElement {
 
       {/* Recategorize dialog. Keyed so each opening starts with no category picked. */}
       <RecategorizeDialog
-        key={String(showRecategorize)}
+        key={`recategorize-${showRecategorize}`}
         open={showRecategorize}
         onOpenChange={resetOnClose(() => setShowRecategorize(false), recategorizeTx)}
         selectedCount={selectedIds.size}
