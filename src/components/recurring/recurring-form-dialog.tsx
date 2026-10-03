@@ -26,15 +26,42 @@ import { getBaseCurrency } from "@/lib/format";
 import type { CategoryWithCountResponse } from "@/lib/validators/categories";
 import type { RecurringResponse } from "@/lib/validators/recurring";
 
+type Frequency = RecurringResponse["frequency"];
+
+/**
+ * What the form collects. A blank text field is `""` and a blank choice
+ * `null`; the day fields are `null` unless they apply to the frequency.
+ * `recurring-request.ts` turns this into a create or an update body.
+ */
+export interface RecurringFormData {
+  type: RecurringResponse["type"];
+  description: string;
+  amount: number;
+  currency: string;
+  frequency: Frequency;
+  startDate: string;
+  merchant: string;
+  categoryId: number | null;
+  endDate: string;
+  notes: string;
+  dayOfMonth: number | null;
+  dayOfWeek: number | null;
+}
+
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** The category choice that removes the template's category; Radix forbids `""` as an item. */
+const NO_CATEGORY = "none";
 
 interface RecurringFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   categories: CategoryWithCountResponse[];
-  onSubmit: (data: Record<string, unknown>) => void;
+  onSubmit: (data: RecurringFormData) => void;
   initialData?: RecurringResponse | null;
   loading?: boolean;
+  /** Why the server refused the last submit, if it did. */
+  submitError?: string | null;
 }
 
 export function RecurringFormDialog({
@@ -44,10 +71,11 @@ export function RecurringFormDialog({
   onSubmit,
   initialData,
   loading,
+  submitError,
 }: RecurringFormDialogProps): React.ReactElement {
   const isEdit = !!initialData;
 
-  const [type, setType] = useState<string>(initialData?.type ?? "expense");
+  const [type, setType] = useState<RecurringResponse["type"]>(initialData?.type ?? "expense");
   const [description, setDescription] = useState(initialData?.description ?? "");
   const [amount, setAmount] = useState(initialData ? String(initialData.amount) : "");
   const [currency, setCurrency] = useState<string>(initialData?.currency ?? getBaseCurrency());
@@ -55,7 +83,7 @@ export function RecurringFormDialog({
   const [categoryId, setCategoryId] = useState<string>(
     initialData?.categoryId ? String(initialData.categoryId) : ""
   );
-  const [frequency, setFrequency] = useState<string>(initialData?.frequency ?? "monthly");
+  const [frequency, setFrequency] = useState<Frequency>(initialData?.frequency ?? "monthly");
   const [dayOfMonth, setDayOfMonth] = useState(
     initialData?.dayOfMonth != null ? String(initialData.dayOfMonth) : ""
   );
@@ -68,7 +96,8 @@ export function RecurringFormDialog({
   const [error, setError] = useState("");
 
   function handleFrequencyChange(value: string): void {
-    setFrequency(value);
+    // The select offers only the four frequencies.
+    setFrequency(value as Frequency);
     if (value !== "weekly") setDayOfWeek("");
     if (value !== "monthly") setDayOfMonth("");
   }
@@ -93,28 +122,20 @@ export function RecurringFormDialog({
       return;
     }
 
-    const data: Record<string, unknown> = {
+    onSubmit({
       type,
       description: description.trim(),
       amount: parsedAmount,
       currency,
       frequency,
       startDate,
-    };
-
-    if (merchant.trim()) data.merchant = merchant.trim();
-    if (categoryId) data.categoryId = Number(categoryId);
-    if (endDate) data.endDate = endDate;
-    if (notes.trim()) data.notes = notes.trim();
-
-    if (frequency === "monthly" && dayOfMonth) {
-      data.dayOfMonth = Number(dayOfMonth);
-    }
-    if (frequency === "weekly" && dayOfWeek) {
-      data.dayOfWeek = Number(dayOfWeek);
-    }
-
-    onSubmit(data);
+      merchant: merchant.trim(),
+      categoryId: categoryId && categoryId !== NO_CATEGORY ? Number(categoryId) : null,
+      endDate,
+      notes: notes.trim(),
+      dayOfMonth: frequency === "monthly" && dayOfMonth ? Number(dayOfMonth) : null,
+      dayOfWeek: frequency === "weekly" && dayOfWeek ? Number(dayOfWeek) : null,
+    });
   }
 
   return (
@@ -134,7 +155,10 @@ export function RecurringFormDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="recurring-type">Type</Label>
-            <Select value={type} onValueChange={setType}>
+            <Select
+              value={type}
+              onValueChange={(value) => setType(value === "income" ? "income" : "expense")}
+            >
               <SelectTrigger id="recurring-type">
                 <SelectValue />
               </SelectTrigger>
@@ -192,6 +216,7 @@ export function RecurringFormDialog({
                 <SelectValue placeholder="Select a category" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={NO_CATEGORY}>No category</SelectItem>
                 <CategorySelectItems categories={categories} />
               </SelectContent>
             </Select>
@@ -277,7 +302,9 @@ export function RecurringFormDialog({
             />
           </div>
 
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          {(error || submitError) && (
+            <p className="text-destructive text-sm">{error || submitError}</p>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

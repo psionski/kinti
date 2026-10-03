@@ -3,6 +3,7 @@ import { ZodError, type ZodType } from "zod";
 import type { ErrorCode, ErrorResponse } from "@/lib/validators/common";
 import { ValidationError } from "@/lib/errors";
 import { apiLogger } from "@/lib/logger";
+import { searchParamsToObject } from "./search-params";
 
 /** Return a structured JSON error response. */
 export function errorResponse(
@@ -28,26 +29,13 @@ export async function parseBody<T>(
   return parseWith(body, schema);
 }
 
-/** Parse query/search params into a plain object with number coercion, then validate. */
+/** Decode query/search params by the types `schema` declares, then validate. */
 export function parseSearchParams<T>(
   url: string,
   schema: ZodType<T>
 ): T | NextResponse<ErrorResponse> {
   const { searchParams } = new URL(url);
-  const raw: Record<string, unknown> = {};
-  for (const [key, value] of searchParams.entries()) {
-    // Support array params: ?tags=a&tags=b
-    if (raw[key] !== undefined) {
-      if (Array.isArray(raw[key])) {
-        (raw[key] as unknown[]).push(coerce(value));
-      } else {
-        raw[key] = [raw[key], coerce(value)];
-      }
-    } else {
-      raw[key] = coerce(value);
-    }
-  }
-  return parseWith(raw, schema);
+  return parseWith(searchParamsToObject(searchParams, schema), schema);
 }
 
 /** Validate data against a Zod schema and return the parsed result or an error response. */
@@ -62,16 +50,6 @@ function parseWith<T>(data: unknown, schema: ZodType<T>): T | NextResponse<Error
     );
   }
   return result.data;
-}
-
-/** Coerce a string value to a number or boolean when it looks like one. */
-function coerce(value: string): unknown {
-  if (value === "true") return true;
-  if (value === "false") return false;
-  if (value === "null") return null;
-  const num = Number(value);
-  if (!Number.isNaN(num) && value.trim() !== "") return num;
-  return value;
 }
 
 function formatZodError(error: ZodError): { issues: Array<{ path: string; message: string }> } {

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { ArrowLeft, MoreHorizontal, Pencil, Trash2, AlertTriangle, X } from "lucide-react";
 import { PnlDisplay } from "@/components/shared/pnl-display";
@@ -31,27 +32,43 @@ import {
   holdingsUnit,
 } from "@/lib/format";
 import { PROVIDER_LABELS } from "@/lib/providers/labels";
-import type { AssetWithMetrics, AssetLotResponse, SymbolMap } from "@/lib/validators/assets";
+import {
+  assetLotsQuery,
+  assetQuery,
+  useBuyAsset,
+  useDeleteAsset,
+  useRecordAssetPrice,
+  useSellAsset,
+  useUpdateAsset,
+} from "@/lib/queries/assets";
+import { realizedPnlQuery } from "@/lib/queries/portfolio";
+import type { AssetWithMetrics, SymbolMap } from "@/lib/validators/assets";
+import { resetOnClose } from "@/components/shared/reset-on-close";
 
 interface AssetDetailClientProps {
-  initialAsset: AssetWithMetrics;
-  initialLots: AssetLotResponse[];
-  realizedPnl: number | null;
-  realizedPnlBase: number | null;
+  assetId: number;
 }
 
-export function AssetDetailClient({
-  initialAsset,
-  initialLots,
-  realizedPnl: initialRealizedPnl,
-  realizedPnlBase: initialRealizedPnlBase,
-}: AssetDetailClientProps): React.ReactElement {
+interface LotFormData {
+  quantity: number;
+  pricePerUnit: number;
+  date: string;
+  description?: string;
+}
+
+export function AssetDetailClient({ assetId }: AssetDetailClientProps): React.ReactElement {
   const router = useRouter();
-  const [asset, setAsset] = useState(initialAsset);
-  const [lots, setLots] = useState(initialLots);
-  const [realizedPnl] = useState(initialRealizedPnl);
-  const [realizedPnlBase] = useState(initialRealizedPnlBase);
-  const [loading, setLoading] = useState(false);
+  const assetResult = useQuery(assetQuery(assetId));
+  const lots = useQuery(assetLotsQuery(assetId)).data ?? [];
+  // Realized P&L is reported for every asset at once; this page needs one row.
+  const realized = useQuery(realizedPnlQuery({})).data?.items.find(
+    (item) => item.assetId === assetId
+  );
+  // Both denominations travel: the P&L card reports in base (so it agrees with
+  // the asset list and with every portfolio total), and keeps the native figure
+  // for the tooltip.
+  const realizedPnl = realized?.realizedPnl ?? null;
+  const realizedPnlBase = realized?.realizedPnlBase ?? null;
 
   // Dialog states
   const [showEdit, setShowEdit] = useState(false);
@@ -62,6 +79,30 @@ export function AssetDetailClient({
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [showPrice, setShowPrice] = useState(false);
   const [showTracking, setShowTracking] = useState(false);
+
+  const updateAsset = useUpdateAsset();
+  // Tracking changes come from the card's own controls, so they fail there
+  // rather than in the edit dialog.
+  const updateTracking = useUpdateAsset();
+  const deleteAsset = useDeleteAsset();
+  // A deposit is a buy at 1 per unit and a withdrawal a sell, so each pair of
+  // dialogs shares the endpoint's mutation; only one dialog is open at a time.
+  const buyAsset = useBuyAsset();
+  const sellAsset = useSellAsset();
+  const recordPrice = useRecordAssetPrice();
+
+  // A refetch that fails keeps the asset it last read — including the one
+  // that follows deleting it, while the page navigates away.
+  const asset = assetResult.data;
+  if (!asset) {
+    return assetResult.isError ? (
+      <p className="text-destructive text-sm">
+        Couldn&apos;t load asset: {assetResult.error.message}
+      </p>
+    ) : (
+      <p className="text-muted-foreground text-sm">Loading…</p>
+    );
+  }
 
   // `PnlDisplay` formats in the base currency, so everything handed to it must
   // already be in base — a native figure there renders a dollar amount under a
@@ -74,10 +115,10 @@ export function AssetDetailClient({
       : asset.pnlBase;
 
   /** The same figure in the asset's own currency, for the tooltips. */
-  function nativeHint(native: number | null, base: number | null): string | undefined {
+  const nativeHint = (native: number | null, base: number | null): string | undefined => {
     if (native === null || base === null || native === base) return undefined;
     return `${native >= 0 ? "+" : ""}${formatCurrency(native, asset.currency)} in ${asset.currency}`;
-  }
+  };
 
   const unrealizedPnl =
     asset.pnl !== null && realizedPnl !== null ? asset.pnl - realizedPnl : asset.pnl;
@@ -87,113 +128,39 @@ export function AssetDetailClient({
   // tracking via the symbol map.
   const showTrackingSection = asset.type !== "deposit" || asset.currency !== getBaseCurrency();
 
-  async function refresh(): Promise<void> {
-    setLoading(true);
-    try {
-      const [assetRes, lotsRes] = await Promise.all([
-        fetch(`/api/assets/${asset.id}`),
-        fetch(`/api/assets/${asset.id}/lots`),
-      ]);
-      if (assetRes.ok) setAsset((await assetRes.json()) as AssetWithMetrics);
-      if (lotsRes.ok) setLots((await lotsRes.json()) as AssetLotResponse[]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleEdit(data: {
+  function handleEdit(data: {
     name: string;
     type: "deposit" | "investment" | "crypto" | "other";
     currency: string;
     symbolMap?: SymbolMap;
     icon?: string;
-  }): Promise<void> {
-    setLoading(true);
-    try {
-      await fetch(`/api/assets/${asset.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      setShowEdit(false);
-      await refresh();
-    } finally {
-      setLoading(false);
-    }
+  }): void {
+    updateAsset.mutate({ id: assetId, ...data }, { onSuccess: () => setShowEdit(false) });
   }
 
-  async function handleDelete(): Promise<void> {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/assets/${asset.id}`, { method: "DELETE" });
-      if (res.ok) {
-        router.push("/assets");
-      }
-    } finally {
-      setLoading(false);
-    }
+  function handleDelete(): void {
+    deleteAsset.mutate(assetId, { onSuccess: () => router.push("/assets") });
   }
 
-  async function handleUpdateTracking(sm: SymbolMap): Promise<void> {
-    setLoading(true);
-    try {
-      const hasSymbols = Object.keys(sm).length > 0;
-      await fetch(`/api/assets/${asset.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbolMap: hasSymbols ? sm : null }),
-      });
-      await refresh();
-    } finally {
-      setLoading(false);
-    }
+  function handleUpdateTracking(sm: SymbolMap): void {
+    const hasSymbols = Object.keys(sm).length > 0;
+    updateTracking.mutate({ id: assetId, symbolMap: hasSymbols ? sm : null });
   }
 
-  async function handleBuySell(
-    data: { quantity: number; pricePerUnit: number; date: string; description?: string },
-    mode: "buy" | "sell",
-    closeDialog: () => void
-  ): Promise<void> {
-    setLoading(true);
-    try {
-      const endpoint = mode === "buy" ? "buy" : "sell";
-      const res = await fetch(`/api/assets/${asset.id}/${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok && mode === "sell") {
-        const err = (await res.json()) as { error: string };
-        alert(err.error);
-        return;
-      }
-      closeDialog();
-      await refresh();
-    } finally {
-      setLoading(false);
-    }
+  function handleBuy(data: LotFormData, close: () => void): void {
+    buyAsset.mutate({ id: assetId, ...data }, { onSuccess: close });
   }
 
-  async function handleRecordPrice(data: {
-    pricePerUnit: number;
-    recordedAt?: string;
-  }): Promise<void> {
-    setLoading(true);
-    try {
-      await fetch(`/api/assets/${asset.id}/prices`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      setShowPrice(false);
-      await refresh();
-    } finally {
-      setLoading(false);
-    }
+  function handleSell(data: LotFormData, close: () => void): void {
+    sellAsset.mutate({ id: assetId, ...data }, { onSuccess: close });
+  }
+
+  function handleRecordPrice(data: { pricePerUnit: number; recordedAt?: string }): void {
+    recordPrice.mutate({ id: assetId, ...data }, { onSuccess: () => setShowPrice(false) });
   }
 
   return (
-    <div className={`space-y-6 ${loading ? "pointer-events-none opacity-60" : ""}`}>
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
@@ -351,7 +318,7 @@ export function AssetDetailClient({
 
       {/* Price Tracking */}
       {showTrackingSection && (
-        <Card>
+        <Card className={updateTracking.isPending ? "pointer-events-none opacity-60" : ""}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-base">
               {asset.type === "deposit" ? "Exchange Rate Tracking" : "Price Tracking"}
@@ -376,13 +343,12 @@ export function AssetDetailClient({
                     <button
                       type="button"
                       className="hover:text-destructive relative ml-0.5 after:absolute after:-inset-2"
-                      disabled={loading}
+                      disabled={updateTracking.isPending}
                       onClick={() => {
                         const next = Object.fromEntries(
                           Object.entries(asset.symbolMap ?? {}).filter(([k]) => k !== provider)
                         ) as SymbolMap;
-                        const hasSymbols = Object.keys(next).length > 0;
-                        void handleUpdateTracking(hasSymbols ? next : {});
+                        handleUpdateTracking(next);
                       }}
                     >
                       <X className="size-3" />
@@ -395,6 +361,9 @@ export function AssetDetailClient({
                 No automatic {asset.type === "deposit" ? "exchange rate" : "price"} tracking
                 configured.
               </p>
+            )}
+            {updateTracking.isError && (
+              <p className="text-destructive mt-2 text-sm">{updateTracking.error.message}</p>
             )}
           </CardContent>
         </Card>
@@ -422,21 +391,24 @@ export function AssetDetailClient({
       {showEdit && (
         <AssetFormDialog
           open={showEdit}
-          onOpenChange={setShowEdit}
-          onSubmit={(data) => void handleEdit(data)}
+          onOpenChange={resetOnClose(() => setShowEdit(false), updateAsset)}
+          onSubmit={handleEdit}
           initialData={asset}
-          loading={loading}
+          loading={updateAsset.isPending}
+          submitError={updateAsset.error?.message}
         />
       )}
 
       {showDelete && (
         <ConfirmDeleteDialog
           open={showDelete}
-          onOpenChange={setShowDelete}
+          onOpenChange={resetOnClose(() => setShowDelete(false), deleteAsset)}
           title="Delete Asset"
           description={`Are you sure you want to delete "${asset.name}"?`}
-          onConfirm={() => void handleDelete()}
-          loading={loading}
+          onConfirm={handleDelete}
+          // Stays busy after success, until the navigation away lands.
+          loading={deleteAsset.isPending || deleteAsset.isSuccess}
+          error={deleteAsset.error?.message}
         >
           {asset.currentHoldings > 0 && (
             <p className="flex items-start gap-2 text-sm text-amber-600">
@@ -464,71 +436,66 @@ export function AssetDetailClient({
         open={showTracking}
         onOpenChange={setShowTracking}
         value={asset.symbolMap ? { ...asset.symbolMap } : {}}
-        onDone={(sm) => void handleUpdateTracking(sm)}
+        onDone={handleUpdateTracking}
         assetType={asset.type}
       />
 
       {showBuy && (
         <BuySellDialog
           open={showBuy}
-          onOpenChange={(o) => {
-            if (!o) setShowBuy(false);
-          }}
+          onOpenChange={resetOnClose(() => setShowBuy(false), buyAsset)}
           mode="buy"
           asset={asset}
-          onSubmit={(data) => void handleBuySell(data, "buy", () => setShowBuy(false))}
-          loading={loading}
+          onSubmit={(data) => handleBuy(data, () => setShowBuy(false))}
+          loading={buyAsset.isPending}
+          submitError={buyAsset.error?.message}
         />
       )}
 
       {showSell && (
         <BuySellDialog
           open={showSell}
-          onOpenChange={(o) => {
-            if (!o) setShowSell(false);
-          }}
+          onOpenChange={resetOnClose(() => setShowSell(false), sellAsset)}
           mode="sell"
           asset={asset}
-          onSubmit={(data) => void handleBuySell(data, "sell", () => setShowSell(false))}
-          loading={loading}
+          onSubmit={(data) => handleSell(data, () => setShowSell(false))}
+          loading={sellAsset.isPending}
+          submitError={sellAsset.error?.message}
         />
       )}
 
       {showDeposit && (
         <DepositWithdrawDialog
           open={showDeposit}
-          onOpenChange={(o) => {
-            if (!o) setShowDeposit(false);
-          }}
+          onOpenChange={resetOnClose(() => setShowDeposit(false), buyAsset)}
           mode="deposit"
           asset={asset}
-          onSubmit={(data) => void handleBuySell(data, "buy", () => setShowDeposit(false))}
-          loading={loading}
+          onSubmit={(data) => handleBuy(data, () => setShowDeposit(false))}
+          loading={buyAsset.isPending}
+          submitError={buyAsset.error?.message}
         />
       )}
 
       {showWithdraw && (
         <DepositWithdrawDialog
           open={showWithdraw}
-          onOpenChange={(o) => {
-            if (!o) setShowWithdraw(false);
-          }}
+          onOpenChange={resetOnClose(() => setShowWithdraw(false), sellAsset)}
           mode="withdraw"
           asset={asset}
-          onSubmit={(data) => void handleBuySell(data, "sell", () => setShowWithdraw(false))}
-          loading={loading}
+          onSubmit={(data) => handleSell(data, () => setShowWithdraw(false))}
+          loading={sellAsset.isPending}
+          submitError={sellAsset.error?.message}
         />
       )}
 
       {showPrice && (
         <RecordPriceDialog
           open={showPrice}
-          onOpenChange={(o) => {
-            if (!o) setShowPrice(false);
-          }}
+          onOpenChange={resetOnClose(() => setShowPrice(false), recordPrice)}
           asset={asset}
-          onSubmit={(data) => void handleRecordPrice(data)}
-          loading={loading}
+          onSubmit={handleRecordPrice}
+          loading={recordPrice.isPending}
+          submitError={recordPrice.error?.message}
         />
       )}
     </div>

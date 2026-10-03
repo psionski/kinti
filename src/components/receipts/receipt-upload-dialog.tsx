@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { isoToday } from "@/lib/date-ranges";
+import { useUploadReceipt } from "@/lib/queries/receipts";
 import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,8 +43,9 @@ export function ReceiptUploadDialog({
   const [date, setDate] = useState(isoToday());
   const [total, setTotal] = useState("");
   const [dragging, setDragging] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  // What's wrong with the picked file; the upload's own failure is `upload.error`.
   const [error, setError] = useState<string | null>(null);
+  const upload = useUploadReceipt();
 
   function reset(): void {
     setFile(null);
@@ -51,6 +53,7 @@ export function ReceiptUploadDialog({
     setDate(isoToday());
     setTotal("");
     setError(null);
+    upload.reset();
   }
 
   function handleOpenChange(next: boolean): void {
@@ -88,41 +91,33 @@ export function ReceiptUploadDialog({
     if (f) acceptFile(f);
   }
 
-  async function handleSubmit(e: React.SyntheticEvent): Promise<void> {
+  function handleSubmit(e: React.SyntheticEvent): void {
     e.preventDefault();
     if (!file) {
       setError("Please select a file.");
       return;
     }
 
-    setUploading(true);
     setError(null);
-    try {
-      const form = new FormData();
-      form.append("image", file);
-      if (merchant) form.append("merchant", merchant);
-      if (date) form.append("date", date);
-      if (total) {
-        const parsed = parseFloat(total);
-        if (!Number.isNaN(parsed)) form.append("total", String(parsed));
-      }
-
-      const res = await fetch("/api/receipts/upload", { method: "POST", body: form });
-      if (!res.ok) {
-        const json = (await res.json()) as { error?: string };
-        setError(json.error ?? "Upload failed.");
-        return;
-      }
-      const { receipt_id } = (await res.json()) as { receipt_id: number };
-      reset();
-      onOpenChange(false);
-      onUploaded(receipt_id);
-    } catch {
-      setError("Upload failed. Please try again.");
-    } finally {
-      setUploading(false);
+    const form = new FormData();
+    form.append("image", file);
+    if (merchant) form.append("merchant", merchant);
+    if (date) form.append("date", date);
+    if (total) {
+      const parsed = parseFloat(total);
+      if (!Number.isNaN(parsed)) form.append("total", String(parsed));
     }
+
+    upload.mutate(form, {
+      onSuccess: ({ receipt_id }) => {
+        reset();
+        onOpenChange(false);
+        onUploaded(receipt_id);
+      },
+    });
   }
+
+  const shownError = error ?? upload.error?.message;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -130,7 +125,7 @@ export function ReceiptUploadDialog({
         <DialogHeader>
           <DialogTitle>Upload Receipt</DialogTitle>
         </DialogHeader>
-        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           {/* Drop zone */}
           <div
             className={`cursor-pointer rounded-md border-2 border-dashed p-6 text-center transition-colors ${
@@ -165,7 +160,7 @@ export function ReceiptUploadDialog({
             />
           </div>
 
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          {shownError && <p className="text-destructive text-sm">{shownError}</p>}
 
           {/* Optional metadata */}
           <div className="space-y-3">
@@ -206,8 +201,8 @@ export function ReceiptUploadDialog({
             <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!file || uploading}>
-              {uploading ? "Uploading…" : "Upload"}
+            <Button type="submit" disabled={!file || upload.isPending}>
+              {upload.isPending ? "Uploading…" : "Upload"}
             </Button>
           </DialogFooter>
         </form>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pie, PieChart, Cell, Tooltip } from "recharts";
+import { Pie, PieChart, Sector, Tooltip, type PieSectorShapeProps } from "recharts";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -98,11 +98,10 @@ export function AllocationChart({ data }: AllocationChartProps): React.ReactElem
                   animationBegin={0}
                   animationDuration={300}
                   animationEasing="ease-out"
-                >
-                  {chartData.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
-                  ))}
-                </Pie>
+                  shape={(props: PieSectorShapeProps) => (
+                    <Sector {...props} fill={chartData[props.index]?.color} />
+                  )}
+                />
                 <Tooltip content={<CustomTooltip />} />
               </PieChart>
             </ChartContainer>

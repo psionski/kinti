@@ -117,7 +117,7 @@ Pushing the `v*` tag triggers the publish workflow. Monitor it under the Actions
 
 ### What the workflow does
 
-1. Checks out the repo and sets up Node 20 with the npm registry.
+1. Checks out the repo and sets up Node 24 with the npm registry.
 2. Runs `npm ci`, `npx tsc --noEmit`, `npm run check`, and `npm test`.
 3. Runs `npm run build` to produce the `.next/` output included in the package.
 4. Runs `npm publish` authenticated via `NODE_AUTH_TOKEN`.

@@ -74,7 +74,9 @@ export function CategoryTrendsChart({ data }: CategoryTrendsChartProps): React.R
                 content={
                   <ChartTooltipContent
                     reverse
-                    labelFormatter={(label) => formatMonth(label as string)}
+                    labelFormatter={(label) =>
+                      typeof label === "string" ? formatMonth(label) : label
+                    }
                     formatter={(value, name) => {
                       const label = chartConfig[name as string]?.label ?? name;
                       return (

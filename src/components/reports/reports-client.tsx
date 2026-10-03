@@ -1,126 +1,66 @@
 "use client";
 
 import { useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { DateRangeFilter } from "./date-range-filter";
-import { computeCompareRange, type ComputedRange, type DateRange } from "@/lib/date-ranges";
+import { computeCompareRange, type ComputedRange } from "@/lib/date-ranges";
 import { IncomeExpensesCard } from "./income-expenses-card";
 import { SavingsRateChart } from "@/components/charts/savings-rate-chart";
 import { AverageSpendPills } from "./average-spend-pills";
 import { CategoryTrendsChart } from "@/components/charts/category-trends-chart";
 import { CategoryChangesCard } from "./category-changes-card";
 import { MerchantTable } from "./merchant-table";
-import type {
-  NetIncomeResult,
-  TrendsResult,
-  CategoryTrendsResult,
-  SpendingSummaryResult,
-  TopMerchantsResult,
-} from "@/lib/validators/reports";
-import type { CategoryWithCountResponse } from "@/lib/validators/categories";
-
-export interface ReportsData {
-  balance: NetIncomeResult;
-  incomeTrend: TrendsResult;
-  expenseTrend: TrendsResult;
-  categoryTrends: CategoryTrendsResult;
-  summary: SpendingSummaryResult;
-  topMerchants: TopMerchantsResult;
-}
+import { ReportSection } from "./report-section";
+import { cashFlowParams, showsTrends } from "./cash-flow-query";
+import {
+  categoryTrendsQuery,
+  netIncomeQuery,
+  spendingSummaryQuery,
+  topMerchantsQuery,
+  trendsQuery,
+} from "@/lib/queries/reports";
+import { categoryListQuery } from "@/lib/queries/categories";
 
 interface ReportsClientProps {
-  initialData: ReportsData;
-  initialDateRange: DateRange;
-  categories: CategoryWithCountResponse[];
+  /** The range the server seeded the report for. */
+  initialRange: ComputedRange;
 }
 
-export function ReportsClient({
-  initialData,
-  initialDateRange,
-  categories,
-}: ReportsClientProps): React.ReactElement {
-  const [data, setData] = useState<ReportsData>(initialData);
-  const [loading, setLoading] = useState(false);
-  const [range, setRange] = useState<ComputedRange>(computeCompareRange(initialDateRange));
-  const isLongRange = range.months >= 3;
+export function ReportsClient({ initialRange }: ReportsClientProps): React.ReactElement {
+  const [range, setRange] = useState<ComputedRange>(initialRange);
+  const trendsShown = showsTrends(range);
+  const params = cashFlowParams(range);
 
-  async function fetchAll(r: ComputedRange): Promise<void> {
-    setLoading(true);
-    try {
-      const params = (extra: Record<string, string>): string =>
-        new URLSearchParams(extra).toString();
-
-      const [
-        balanceRes,
-        incomeTrendRes,
-        expenseTrendRes,
-        categoryTrendsRes,
-        summaryRes,
-        merchantsRes,
-      ] = await Promise.all([
-        fetch(`/api/reports/income?${params({ dateFrom: r.dateFrom, dateTo: r.dateTo })}`),
-        fetch(`/api/reports/trends?${params({ months: String(r.months), type: "income" })}`),
-        fetch(`/api/reports/trends?${params({ months: String(r.months), type: "expense" })}`),
-        fetch(
-          `/api/reports/category-trends?${params({
-            dateFrom: r.dateFrom,
-            dateTo: r.dateTo,
-            type: "expense",
-          })}`
-        ),
-        fetch(
-          `/api/reports/summary?${params({
-            dateFrom: r.dateFrom,
-            dateTo: r.dateTo,
-            groupBy: "category",
-            type: "expense",
-            compareDateFrom: r.compareDateFrom,
-            compareDateTo: r.compareDateTo,
-          })}`
-        ),
-        fetch(
-          `/api/reports/top-merchants?${params({
-            dateFrom: r.dateFrom,
-            dateTo: r.dateTo,
-            type: "expense",
-          })}`
-        ),
-      ]);
-
-      if (
-        balanceRes.ok &&
-        incomeTrendRes.ok &&
-        expenseTrendRes.ok &&
-        categoryTrendsRes.ok &&
-        summaryRes.ok &&
-        merchantsRes.ok
-      ) {
-        const [balance, incomeTrend, expenseTrend, categoryTrends, summary, topMerchants] =
-          await Promise.all([
-            balanceRes.json() as Promise<NetIncomeResult>,
-            incomeTrendRes.json() as Promise<TrendsResult>,
-            expenseTrendRes.json() as Promise<TrendsResult>,
-            categoryTrendsRes.json() as Promise<CategoryTrendsResult>,
-            summaryRes.json() as Promise<SpendingSummaryResult>,
-            merchantsRes.json() as Promise<TopMerchantsResult>,
-          ]);
-        setData({
-          balance,
-          incomeTrend,
-          expenseTrend,
-          categoryTrends,
-          summary,
-          topMerchants,
-        });
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function handleRangeChange(newRange: ComputedRange): void {
-    setRange(newRange);
-    void fetchAll(newRange);
-  }
+  // While a new range loads, each section keeps the previous range's figures
+  // on screen, dimmed, until its own arrive.
+  const balance = useQuery({
+    ...netIncomeQuery(params.netIncome),
+    placeholderData: keepPreviousData,
+  });
+  const incomeTrend = useQuery({
+    ...trendsQuery(params.incomeTrend),
+    placeholderData: keepPreviousData,
+    enabled: trendsShown,
+  });
+  const expenseTrend = useQuery({
+    ...trendsQuery(params.expenseTrend),
+    placeholderData: keepPreviousData,
+    enabled: trendsShown,
+  });
+  const categoryTrends = useQuery({
+    ...categoryTrendsQuery(params.categoryTrends),
+    placeholderData: keepPreviousData,
+    enabled: trendsShown,
+  });
+  const summary = useQuery({
+    ...spendingSummaryQuery(params.spendingSummary),
+    placeholderData: keepPreviousData,
+  });
+  const merchants = useQuery({
+    ...topMerchantsQuery(params.topMerchants),
+    placeholderData: keepPreviousData,
+  });
+  const categories = useQuery(categoryListQuery()).data ?? [];
 
   return (
     <div className="space-y-6">
@@ -128,45 +68,57 @@ export function ReportsClient({
         <h1 className="text-3xl font-bold tracking-tight">Cash Flow Report</h1>
       </div>
 
-      <DateRangeFilter onChange={handleRangeChange} />
+      <DateRangeFilter onChange={setRange} />
 
-      <div className={loading ? "pointer-events-none opacity-60" : ""}>
-        <div className="space-y-6">
-          {isLongRange ? (
-            <>
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+      {trendsShown ? (
+        <>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+            <ReportSection
+              title="Income vs Expenses"
+              queries={[balance, incomeTrend, expenseTrend]}
+            >
+              {(balanceData, income, expense) => (
                 <IncomeExpensesCard
-                  balance={data.balance}
-                  incomeTrend={data.incomeTrend.points}
-                  expenseTrend={data.expenseTrend.points}
+                  balance={balanceData}
+                  trends={{ income: income.points, expense: expense.points }}
                 />
-                <SavingsRateChart
-                  incomeTrend={data.incomeTrend.points}
-                  expenseTrend={data.expenseTrend.points}
-                />
+              )}
+            </ReportSection>
+            <ReportSection title="Savings Rate" queries={[incomeTrend, expenseTrend]}>
+              {(income, expense) => (
+                <SavingsRateChart incomeTrend={income.points} expenseTrend={expense.points} />
+              )}
+            </ReportSection>
+            <ReportSection title="Average Spend by Category" queries={[summary]}>
+              {(summaryData) => (
                 <AverageSpendPills
-                  groups={data.summary.groups}
-                  months={range.months}
+                  groups={summaryData.groups}
+                  // The months of the period these totals cover, which while a
+                  // new range loads is still the previous one.
+                  months={computeCompareRange(summaryData.period).months}
                   categories={categories}
                 />
-              </div>
-              <CategoryTrendsChart data={data.categoryTrends} />
-            </>
-          ) : (
-            <>
-              <IncomeExpensesCard
-                balance={data.balance}
-                incomeTrend={data.incomeTrend.points}
-                expenseTrend={data.expenseTrend.points}
-                showChart={false}
-              />
-              <CategoryChangesCard groups={data.summary.groups} />
-            </>
-          )}
+              )}
+            </ReportSection>
+          </div>
+          <ReportSection title="Spending Trends" queries={[categoryTrends]}>
+            {(data) => <CategoryTrendsChart data={data} />}
+          </ReportSection>
+        </>
+      ) : (
+        <>
+          <ReportSection title="Income vs Expenses" queries={[balance]}>
+            {(balanceData) => <IncomeExpensesCard balance={balanceData} />}
+          </ReportSection>
+          <ReportSection title="Spending Changes vs Previous Period" queries={[summary]}>
+            {(summaryData) => <CategoryChangesCard groups={summaryData.groups} />}
+          </ReportSection>
+        </>
+      )}
 
-          <MerchantTable data={data.topMerchants.merchants} />
-        </div>
-      </div>
+      <ReportSection title="Top Merchants" queries={[merchants]}>
+        {(data) => <MerchantTable data={data.merchants} />}
+      </ReportSection>
     </div>
   );
 }

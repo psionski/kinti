@@ -1,95 +1,43 @@
 "use client";
 
 import { useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { ReportSection } from "@/components/reports/report-section";
 import { NetWorthChart } from "./net-worth-chart";
 import { AllocationChart } from "./allocation-chart";
 import { PerformanceTable } from "./performance-table";
 import { CurrencyExposure } from "./currency-exposure";
 import { PnlSummary } from "./pnl-summary";
-import type { NetWorthPoint } from "@/lib/validators/portfolio-reports";
-import type { AssetPerformanceItem } from "@/lib/validators/portfolio-reports";
-import type { AllocationResult } from "@/lib/validators/portfolio-reports";
-import type { CurrencyExposureItem } from "@/lib/validators/portfolio-reports";
-import type { RealizedPnlResult } from "@/lib/validators/portfolio-reports";
-const WINDOWS = ["3m", "6m", "12m", "ytd", "all"] as const;
-type Window = (typeof WINDOWS)[number];
+import {
+  DEFAULT_PORTFOLIO_WINDOW,
+  PORTFOLIO_WINDOWS,
+  portfolioReportParams,
+  unrealizedPnl,
+} from "./portfolio-report-query";
+import {
+  allocationQuery,
+  assetPerformanceQuery,
+  currencyExposureQuery,
+  netWorthQuery,
+  realizedPnlQuery,
+} from "@/lib/queries/portfolio";
+import type { Window } from "@/lib/validators/portfolio-reports";
 
-export interface PortfolioReportsData {
-  netWorth: NetWorthPoint[];
-  performance: AssetPerformanceItem[];
-  allocation: AllocationResult;
-  currencyExposure: CurrencyExposureItem[];
-  realizedPnl: RealizedPnlResult;
-  unrealizedPnl: number | null;
-}
+export function PortfolioReportsClient(): React.ReactElement {
+  const [window, setWindow] = useState<Window>(DEFAULT_PORTFOLIO_WINDOW);
+  const params = portfolioReportParams(window);
 
-interface PortfolioReportsClientProps {
-  initialData: PortfolioReportsData;
-  initialWindow: Window;
-}
-
-export function PortfolioReportsClient({
-  initialData,
-  initialWindow,
-}: PortfolioReportsClientProps): React.ReactElement {
-  const [data, setData] = useState(initialData);
-  const [window, setWindow] = useState<Window>(initialWindow);
-  const [loading, setLoading] = useState(false);
-
-  async function fetchAll(w: Window): Promise<void> {
-    setLoading(true);
-    try {
-      const [netWorthRes, perfRes, allocRes, currRes, pnlRes] = await Promise.all([
-        fetch(`/api/portfolio/net-worth?window=${w}&interval=monthly`),
-        fetch("/api/portfolio/performance"),
-        fetch("/api/portfolio/allocation"),
-        fetch("/api/portfolio/currency-exposure"),
-        fetch("/api/portfolio/realized-pnl"),
-      ]);
-
-      if (netWorthRes.ok && perfRes.ok && allocRes.ok && currRes.ok && pnlRes.ok) {
-        const [netWorth, performance, allocation, currencyExposure, realizedPnl] =
-          await Promise.all([
-            netWorthRes.json() as Promise<NetWorthPoint[]>,
-            perfRes.json() as Promise<AssetPerformanceItem[]>,
-            allocRes.json() as Promise<AllocationResult>,
-            currRes.json() as Promise<CurrencyExposureItem[]>,
-            pnlRes.json() as Promise<RealizedPnlResult>,
-          ]);
-
-        // Compute unrealized P&L from performance data using base-currency
-        // numbers so cross-currency assets aggregate correctly. Assets that
-        // don't yet have a current FX rate (currentValueBase === null) are
-        // skipped — partial total beats wrong-unit total.
-        let totalCostBasisBase = 0;
-        let totalCurrentValueBase = 0;
-        for (const p of performance) {
-          if (p.currentValueBase !== null) {
-            totalCostBasisBase += p.costBasisBase;
-            totalCurrentValueBase += p.currentValueBase;
-          }
-        }
-        const unrealizedPnl = totalCurrentValueBase - totalCostBasisBase;
-
-        setData({
-          netWorth,
-          performance,
-          allocation,
-          currencyExposure,
-          realizedPnl,
-          unrealizedPnl,
-        });
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function handleWindowChange(w: Window): void {
-    setWindow(w);
-    void fetchAll(w);
-  }
+  // Only the net-worth chart follows the window. While a new window loads it
+  // keeps the previous one's line on screen, dimmed.
+  const netWorth = useQuery({
+    ...netWorthQuery(params.netWorth),
+    placeholderData: keepPreviousData,
+  });
+  const performance = useQuery(assetPerformanceQuery(params.performance));
+  const allocation = useQuery(allocationQuery());
+  const currencyExposure = useQuery(currencyExposureQuery());
+  const realizedPnl = useQuery(realizedPnlQuery(params.realizedPnl));
 
   return (
     <div className="space-y-6">
@@ -98,32 +46,40 @@ export function PortfolioReportsClient({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {WINDOWS.map((w) => (
+        {PORTFOLIO_WINDOWS.map((w) => (
           <Button
             key={w}
             variant={window === w ? "default" : "outline"}
             size="sm"
-            onClick={() => handleWindowChange(w)}
+            onClick={() => setWindow(w)}
           >
             {w.toUpperCase()}
           </Button>
         ))}
       </div>
 
-      <div className={loading ? "pointer-events-none opacity-60" : ""}>
-        <div className="space-y-6">
-          <NetWorthChart data={data.netWorth} />
+      <ReportSection title="Net Worth Over Time" queries={[netWorth]}>
+        {(data) => <NetWorthChart data={data} />}
+      </ReportSection>
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <AllocationChart data={data.allocation} />
-            <CurrencyExposure data={data.currencyExposure} />
-          </div>
-
-          <PerformanceTable data={data.performance} />
-
-          <PnlSummary realizedPnl={data.realizedPnl} unrealizedPnl={data.unrealizedPnl} />
-        </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <ReportSection title="Allocation" queries={[allocation]}>
+          {(data) => <AllocationChart data={data} />}
+        </ReportSection>
+        <ReportSection title="Currency Exposure" queries={[currencyExposure]}>
+          {(data) => <CurrencyExposure data={data} />}
+        </ReportSection>
       </div>
+
+      <ReportSection title="Performance" queries={[performance]}>
+        {(data) => <PerformanceTable data={data} />}
+      </ReportSection>
+
+      <ReportSection title="Profit & Loss" queries={[realizedPnl, performance]}>
+        {(realized, performanceData) => (
+          <PnlSummary realizedPnl={realized} unrealizedPnl={unrealizedPnl(performanceData)} />
+        )}
+      </ReportSection>
     </div>
   );
 }

@@ -22,6 +22,8 @@ interface RecordPriceDialogProps {
   asset: AssetWithMetrics;
   onSubmit: (data: { pricePerUnit: number; recordedAt?: string }) => void;
   loading?: boolean;
+  /** Why the server refused the last submit, if it did. */
+  submitError?: string | null;
 }
 
 export function RecordPriceDialog({
@@ -30,6 +32,7 @@ export function RecordPriceDialog({
   asset,
   onSubmit,
   loading,
+  submitError,
 }: RecordPriceDialogProps): React.ReactElement {
   const currentDisplay =
     asset.latestPrice !== null
@@ -96,7 +99,9 @@ export function RecordPriceDialog({
               disabled={loading}
             />
           </div>
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          {(error || submitError) && (
+            <p className="text-destructive text-sm">{error || submitError}</p>
+          )}
           <DialogFooter>
             <Button type="submit" disabled={loading}>
               Save Price

@@ -1,6 +1,6 @@
 "use client";
 
-import { Area, AreaChart } from "recharts";
+import { Area, AreaChart, type TooltipValueType } from "recharts";
 import {
   ChartContainer,
   ChartTooltip,
@@ -26,16 +26,15 @@ interface ChartDatum {
   total: number;
 }
 
-function toEuros(data: NetWorthPoint[]): ChartDatum[] {
+function toChartData(data: NetWorthPoint[]): ChartDatum[] {
   return data.map((p) => ({
     date: p.date,
     total: p.total,
   }));
 }
 
-function tooltipFormatter(value: string | number | (string | number)[]): string {
-  const num = typeof value === "number" ? value : Number(value);
-  return formatCurrency(num);
+function tooltipFormatter(value: TooltipValueType | undefined): string {
+  return formatCurrency(Number(value));
 }
 
 export function NetWorthSparkline({ data }: NetWorthSparklineProps): React.ReactElement {
@@ -43,7 +42,7 @@ export function NetWorthSparkline({ data }: NetWorthSparklineProps): React.React
     return <></>;
   }
 
-  const chartData = toEuros(data);
+  const chartData = toChartData(data);
 
   return (
     <ChartContainer config={chartConfig} className="h-[60px] w-full">

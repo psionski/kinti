@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pie, PieChart, Cell, Label } from "recharts";
+import { Label, Pie, PieChart, Sector, type PieSectorShapeProps } from "recharts";
 import { ArrowLeft } from "lucide-react";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import { formatCurrency } from "@/lib/format";
@@ -131,7 +131,7 @@ export function CategoryDonutChart({
               <PieChart accessibilityLayer key={currentParentId ?? "root"}>
                 <ChartTooltip
                   content={({ payload }) => {
-                    const item = payload?.[0];
+                    const item = payload[0];
                     if (!item) return null;
                     return (
                       <div className="border-border/50 bg-background rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
@@ -154,14 +154,17 @@ export function CategoryDonutChart({
                   animationBegin={0}
                   animationDuration={300}
                   animationEasing="ease-out"
+                  shape={(props: PieSectorShapeProps) => {
+                    const entry = chartData[props.index];
+                    return (
+                      <Sector
+                        {...props}
+                        fill={entry?.color}
+                        style={{ cursor: entry?.hasChildren ? "pointer" : "default" }}
+                      />
+                    );
+                  }}
                 >
-                  {chartData.map((entry, i) => (
-                    <Cell
-                      key={i}
-                      fill={entry.color}
-                      style={{ cursor: entry.hasChildren ? "pointer" : "default" }}
-                    />
-                  ))}
                   <Label
                     content={() => (
                       <g>

@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { providerFetch } from "@/lib/providers/rate-limit";
 
 // Vitest sets the interval to 0 globally so the rest of the suite never sleeps
-// (see vitest.config.ts). These tests are about the spacing itself, so they set
+// (see vitest.config.mts). These tests are about the spacing itself, so they set
 // a small real interval and restore it afterwards.
 const TEST_INTERVAL_MS = 60;
 const original = process.env.PROVIDER_MIN_INTERVAL_MS;
@@ -53,6 +53,25 @@ describe("providerFetch", () => {
     expect(sentAt[2]! - sentAt[1]!).toBeGreaterThanOrEqual(TEST_INTERVAL_MS);
   });
 
+  it("waits out the full interval when its timer fires early", async () => {
+    vi.useFakeTimers({ now: 1_000_000 });
+    try {
+      await providerFetch("coinmarketcap", "https://example.test/1");
+      const second = providerFetch("coinmarketcap", "https://example.test/2");
+      await vi.advanceTimersByTimeAsync(0);
+      // Put the wall clock a millisecond behind the timer queue, which is how
+      // an early-firing timer looks from inside the sleep.
+      vi.setSystemTime(Date.now() - 1);
+      await vi.advanceTimersByTimeAsync(TEST_INTERVAL_MS + 1);
+      await second;
+
+      expect(sentAt).toHaveLength(2);
+      expect(sentAt[1]! - sentAt[0]!).toBeGreaterThanOrEqual(TEST_INTERVAL_MS);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not make one provider wait on another", async () => {
     const started = Date.now();
     await Promise.all([
@@ -75,7 +94,7 @@ describe("providerFetch", () => {
         .mockRejectedValueOnce(new Error("network down"))
         .mockImplementation(async () => {
           sentAt.push(Date.now());
-          return { ok: true, json: async () => ({}) } as unknown as Response;
+          return { ok: true, json: async () => ({}) };
         })
     );
 

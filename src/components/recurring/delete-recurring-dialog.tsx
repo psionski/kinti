@@ -10,6 +10,8 @@ interface DeleteRecurringDialogProps {
   item: RecurringResponse | null;
   onConfirm: () => void;
   loading?: boolean;
+  /** Why the last attempt failed, if it did. */
+  error?: string | null;
 }
 
 export function DeleteRecurringDialog({
@@ -18,6 +20,7 @@ export function DeleteRecurringDialog({
   item,
   onConfirm,
   loading,
+  error,
 }: DeleteRecurringDialogProps): React.ReactElement {
   return (
     <ConfirmDeleteDialog
@@ -31,11 +34,13 @@ export function DeleteRecurringDialog({
       }
       onConfirm={onConfirm}
       loading={loading}
+      error={error}
     >
       {item && (
         <p>
-          This will remove the recurring template for <strong>{formatCurrency(item.amount)}</strong>{" "}
-          ({formatFrequency(item)}). Already-generated transactions will be kept.
+          This will remove the recurring template for{" "}
+          <strong>{formatCurrency(item.amount, item.currency)}</strong> ({formatFrequency(item)}).
+          Already-generated transactions will be kept.
         </p>
       )}
     </ConfirmDeleteDialog>

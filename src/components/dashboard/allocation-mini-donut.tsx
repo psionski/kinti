@@ -1,6 +1,6 @@
 "use client";
 
-import { Pie, PieChart, Cell } from "recharts";
+import { Pie, PieChart, Sector, type PieSectorShapeProps } from "recharts";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -68,11 +68,10 @@ export function AllocationMiniDonut({ data }: AllocationMiniDonutProps): React.R
               innerRadius={30}
               outerRadius={45}
               strokeWidth={1}
-            >
-              {data.map((entry, index) => (
-                <Cell key={entry.name} fill={colors[index]} />
-              ))}
-            </Pie>
+              shape={(props: PieSectorShapeProps) => (
+                <Sector {...props} fill={colors[props.index]} />
+              )}
+            />
           </PieChart>
         </ChartContainer>
 

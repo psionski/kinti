@@ -88,7 +88,9 @@ export function SavingsRateChart({
                         ]?.label ?? name;
                       return `${label}: ${value as number}%`;
                     }}
-                    labelFormatter={formatMonth}
+                    labelFormatter={(label) =>
+                      typeof label === "string" ? formatMonth(label) : label
+                    }
                   />
                 }
               />

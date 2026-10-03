@@ -2,21 +2,26 @@
 
 import * as React from "react";
 import * as RechartsPrimitive from "recharts";
+import type { TooltipValueType } from "recharts";
 
 import { cn } from "@/lib/utils";
 
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const;
 
-export type ChartConfig = {
-  [k in string]: {
+const INITIAL_DIMENSION = { width: 320, height: 200 } as const;
+type TooltipNameType = number | string;
+
+export type ChartConfig = Record<
+  string,
+  {
     label?: React.ReactNode;
     icon?: React.ComponentType;
   } & (
     | { color?: string; theme?: never }
     | { color?: never; theme: Record<keyof typeof THEMES, string> }
-  );
-};
+  )
+>;
 
 type ChartContextProps = {
   config: ChartConfig;
@@ -39,18 +44,24 @@ function ChartContainer({
   className,
   children,
   config,
+  initialDimension = INITIAL_DIMENSION,
   ...props
 }: React.ComponentProps<"div"> & {
   config: ChartConfig;
   children: React.ComponentProps<typeof RechartsPrimitive.ResponsiveContainer>["children"];
+  initialDimension?: {
+    width: number;
+    height: number;
+  };
 }) {
   const uniqueId = React.useId();
-  const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`;
+  const chartId = `chart-${id ?? uniqueId.replace(/:/g, "")}`;
 
   // No default aspect ratio: every chart sets an explicit height in className.
-  // With a height derived from `aspect-video` clamped by min/max-height,
-  // WebKit sizes the ResponsiveContainer's `height: 100%` differently from
-  // Blink and the chart renders squashed on iOS.
+  // WebKit resolves the ResponsiveContainer's `height: 100%` against the
+  // aspect-ratio height *before* min/max-height clamp it, so with
+  // `aspect-video min-h-[250px]` a 329px-wide phone chart draws 185px tall
+  // inside a 250px box. Blink uses the clamped height, which hides this.
   return (
     <ChartContext.Provider value={{ config }}>
       <div
@@ -63,14 +74,16 @@ function ChartContainer({
         {...props}
       >
         <ChartStyle id={chartId} config={config} />
-        <RechartsPrimitive.ResponsiveContainer>{children}</RechartsPrimitive.ResponsiveContainer>
+        <RechartsPrimitive.ResponsiveContainer initialDimension={initialDimension}>
+          {children}
+        </RechartsPrimitive.ResponsiveContainer>
       </div>
     </ChartContext.Provider>
   );
 }
 
 const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
-  const colorConfig = Object.entries(config).filter(([, config]) => config.theme || config.color);
+  const colorConfig = Object.entries(config).filter(([, config]) => config.theme ?? config.color);
 
   if (!colorConfig.length) {
     return null;
@@ -85,7 +98,7 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
 ${prefix} [data-chart=${id}] {
 ${colorConfig
   .map(([key, itemConfig]) => {
-    const color = itemConfig.theme?.[theme as keyof typeof itemConfig.theme] || itemConfig.color;
+    const color = itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ?? itemConfig.color;
     return color ? `  --color-${key}: ${color};` : null;
   })
   .join("\n")}
@@ -99,20 +112,6 @@ ${colorConfig
 };
 
 const ChartTooltip = RechartsPrimitive.Tooltip;
-
-/**
- * A single item in a Recharts tooltip/legend payload. Recharts types the
- * `payload` field of each entry as `any`; we narrow it to the fields this
- * component actually reads so downstream access is type-safe.
- */
-interface ChartPayloadItem {
-  value?: number | string;
-  name?: number | string;
-  dataKey?: number | string;
-  type?: string;
-  color?: string;
-  payload?: { fill?: string } & Record<string, unknown>;
-}
 
 function ChartTooltipContent({
   active,
@@ -136,8 +135,12 @@ function ChartTooltipContent({
     indicator?: "line" | "dot" | "dashed";
     nameKey?: string;
     labelKey?: string;
+    /** List the series bottom-up, matching the visual order of a stacked chart. */
     reverse?: boolean;
-  }) {
+  } & Omit<
+    RechartsPrimitive.DefaultTooltipContentProps<TooltipValueType, TooltipNameType>,
+    "accessibilityLayer"
+  >) {
   const { config } = useChart();
 
   const tooltipLabel = React.useMemo(() => {
@@ -146,10 +149,10 @@ function ChartTooltipContent({
     }
 
     const [item] = payload;
-    const key = `${labelKey || item?.dataKey || item?.name || "value"}`;
+    const key = `${labelKey ?? item?.dataKey ?? item?.name ?? "value"}`;
     const itemConfig = getPayloadConfigFromPayload(config, item, key);
     const value =
-      !labelKey && typeof label === "string" ? config[label]?.label || label : itemConfig?.label;
+      !labelKey && typeof label === "string" ? (config[label]?.label ?? label) : itemConfig?.label;
 
     if (labelFormatter) {
       return (
@@ -181,28 +184,21 @@ function ChartTooltipContent({
       <div className="grid gap-1.5">
         {(reverse ? [...payload].reverse() : payload)
           .filter((item) => item.type !== "none")
-          .map((rawItem, index) => {
-            const item = rawItem as ChartPayloadItem;
-            const key = `${nameKey || item.name || item.dataKey || "value"}`;
+          .map((item, index) => {
+            const key = `${nameKey ?? item.name ?? item.dataKey ?? "value"}`;
             const itemConfig = getPayloadConfigFromPayload(config, item, key);
-            const indicatorColor = color || item.payload?.fill || item.color;
+            const indicatorColor = color ?? datumFill(item.payload) ?? item.color;
 
             return (
               <div
-                key={item.dataKey}
+                key={index}
                 className={cn(
                   "[&>svg]:text-muted-foreground flex w-full flex-wrap items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5",
                   indicator === "dot" && "items-center"
                 )}
               >
                 {formatter && item.value !== undefined && item.name ? (
-                  formatter(
-                    item.value,
-                    item.name,
-                    rawItem,
-                    index,
-                    rawItem.payload as typeof payload
-                  )
+                  formatter(item.value, item.name, item, index, payload)
                 ) : (
                   <>
                     {itemConfig?.icon ? (
@@ -238,12 +234,14 @@ function ChartTooltipContent({
                       <div className="grid gap-1.5">
                         {nestLabel ? tooltipLabel : null}
                         <span className="text-muted-foreground">
-                          {itemConfig?.label || item.name}
+                          {itemConfig?.label ?? item.name}
                         </span>
                       </div>
-                      {item.value && (
+                      {item.value != null && (
                         <span className="text-foreground font-mono font-medium tabular-nums">
-                          {item.value.toLocaleString()}
+                          {typeof item.value === "number"
+                            ? item.value.toLocaleString()
+                            : String(item.value)}
                         </span>
                       )}
                     </div>
@@ -263,13 +261,14 @@ function ChartLegendContent({
   className,
   hideIcon = false,
   payload,
-  verticalAlign = "bottom",
+  position,
   nameKey,
-}: React.ComponentProps<"div"> &
-  Pick<RechartsPrimitive.LegendProps, "payload" | "verticalAlign"> & {
-    hideIcon?: boolean;
-    nameKey?: string;
-  }) {
+}: React.ComponentProps<"div"> & {
+  hideIcon?: boolean;
+  nameKey?: string;
+  /** Passed through from `ChartLegend`; decides which side the gap to the chart goes on. */
+  position?: RechartsPrimitive.LegendProps["position"];
+} & RechartsPrimitive.DefaultLegendContentProps) {
   const { config } = useChart();
 
   if (!payload?.length) {
@@ -280,20 +279,19 @@ function ChartLegendContent({
     <div
       className={cn(
         "flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5",
-        verticalAlign === "top" ? "pb-3" : "pt-3",
+        position === "top" ? "pb-3" : "pt-3",
         className
       )}
     >
       {payload
         .filter((item) => item.type !== "none")
-        .map((rawItem) => {
-          const item = rawItem as ChartPayloadItem;
-          const key = `${nameKey || item.dataKey || "value"}`;
+        .map((item, index) => {
+          const key = `${nameKey ?? item.dataKey ?? "value"}`;
           const itemConfig = getPayloadConfigFromPayload(config, item, key);
 
           return (
             <div
-              key={item.value}
+              key={index}
               className={cn(
                 "[&>svg]:text-muted-foreground flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3"
               )}
@@ -316,6 +314,7 @@ function ChartLegendContent({
   );
 }
 
+// Helper to extract item config from a payload.
 function getPayloadConfigFromPayload(config: ChartConfig, payload: unknown, key: string) {
   if (typeof payload !== "object" || payload === null) {
     return undefined;
@@ -329,16 +328,29 @@ function getPayloadConfigFromPayload(config: ChartConfig, payload: unknown, key:
   let configLabelKey: string = key;
 
   if (key in payload && typeof payload[key as keyof typeof payload] === "string") {
-    configLabelKey = payload[key as keyof typeof payload] as string;
+    configLabelKey = payload[key as keyof typeof payload];
   } else if (
     payloadPayload &&
     key in payloadPayload &&
     typeof payloadPayload[key as keyof typeof payloadPayload] === "string"
   ) {
-    configLabelKey = payloadPayload[key as keyof typeof payloadPayload] as string;
+    configLabelKey = payloadPayload[key as keyof typeof payloadPayload];
   }
 
   return configLabelKey in config ? config[configLabelKey] : config[key];
+}
+
+/**
+ * The `fill` a chart datum carries for itself, as pie slices built from
+ * colour-bearing data do. Recharts types a payload's datum as `any`.
+ */
+function datumFill(datum: unknown): string | undefined {
+  return typeof datum === "object" &&
+    datum !== null &&
+    "fill" in datum &&
+    typeof datum.fill === "string"
+    ? datum.fill
+    : undefined;
 }
 
 export {

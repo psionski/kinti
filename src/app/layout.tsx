@@ -10,6 +10,7 @@ import { getSettingsService } from "@/lib/api/services";
 import { TimezoneInit } from "@/components/timezone-init";
 import { BaseCurrencyInit } from "@/components/base-currency-init";
 import { RouteMemory } from "@/components/route-memory";
+import { QueryProvider } from "@/components/query-provider";
 import { buildRouteRestoreScript } from "@/lib/route-memory";
 import { setBaseCurrencyCache, getBaseCurrency } from "@/lib/format";
 import { SampleDataBar } from "@/components/sample-data-bar";
@@ -71,34 +72,36 @@ export default function RootLayout({
         <TimezoneInit timezone={timezone} />
         <BaseCurrencyInit currency={effectiveBaseCurrency} />
         <RouteMemory />
-        <LazyTour initialTutorial={tutorial} />
-        <TooltipProvider>
-          <SidebarProvider>
-            <AppSidebar />
-            <SidebarInset>
-              <div className="bg-background sticky top-0 z-10">
-                <header className="relative flex h-14 items-center gap-2 border-b px-4">
-                  {/* Desktop: icon-only trigger */}
-                  <SidebarTrigger
-                    className="hidden md:inline-flex"
-                    data-testid="sidebar-trigger-desktop"
-                  />
-                  {/* Mobile: hamburger left-aligned */}
-                  <SidebarTrigger className="md:hidden" data-testid="sidebar-trigger-mobile">
-                    <Menu className="size-4" />
-                    <span className="sr-only">Toggle Sidebar</span>
-                  </SidebarTrigger>
-                  {/* Mobile: centered Kinti branding, also opens sidebar */}
-                  <SidebarTrigger className="absolute left-1/2 -translate-x-1/2 gap-2 px-0 md:hidden">
-                    <span className="text-base font-bold tracking-tight">Kinti</span>
-                  </SidebarTrigger>
-                </header>
-                <SampleDataBar show={sampleData} initiallyHidden={tutorial} />
-              </div>
-              <div className="flex-1 p-4 pb-20 md:p-6 md:pb-6">{children}</div>
-            </SidebarInset>
-          </SidebarProvider>
-        </TooltipProvider>
+        <QueryProvider>
+          <LazyTour initialTutorial={tutorial} />
+          <TooltipProvider>
+            <SidebarProvider>
+              <AppSidebar />
+              <SidebarInset>
+                <div className="bg-background sticky top-0 z-10">
+                  <header className="relative flex h-14 items-center gap-2 border-b px-4">
+                    {/* Desktop: icon-only trigger */}
+                    <SidebarTrigger
+                      className="hidden md:inline-flex"
+                      data-testid="sidebar-trigger-desktop"
+                    />
+                    {/* Mobile: hamburger left-aligned */}
+                    <SidebarTrigger className="md:hidden" data-testid="sidebar-trigger-mobile">
+                      <Menu className="size-4" />
+                      <span className="sr-only">Toggle Sidebar</span>
+                    </SidebarTrigger>
+                    {/* Mobile: centered Kinti branding, also opens sidebar */}
+                    <SidebarTrigger className="absolute left-1/2 -translate-x-1/2 gap-2 px-0 md:hidden">
+                      <span className="text-base font-bold tracking-tight">Kinti</span>
+                    </SidebarTrigger>
+                  </header>
+                  <SampleDataBar show={sampleData} initiallyHidden={tutorial} />
+                </div>
+                <div className="flex-1 p-4 pb-20 md:p-6 md:pb-6">{children}</div>
+              </SidebarInset>
+            </SidebarProvider>
+          </TooltipProvider>
+        </QueryProvider>
       </body>
     </html>
   );

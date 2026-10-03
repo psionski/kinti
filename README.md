@@ -78,7 +78,7 @@ Your biggest controllable levers are **dining out** (€899 over 3 months, 73 tr
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 24+
 - npm
 
 ### Install

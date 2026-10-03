@@ -18,7 +18,7 @@ import {
   type NetIncomeInput,
   type SpendingGroup,
   type CategorySpendingItem,
-  type BudgetStatsItem,
+  type BudgetStatsResult,
   type TrendPoint,
   type CategoryTrendsResult,
   type CategoryTrendSeries,
@@ -98,8 +98,7 @@ export class ReportService {
     const period = periodTotal(this.db, dateFrom, dateTo, type);
 
     let comparePeriod:
-      | { dateFrom: string; dateTo: string; total: number; count: number }
-      | undefined;
+      { dateFrom: string; dateTo: string; total: number; count: number } | undefined;
     if (input.compareDateFrom && input.compareDateTo) {
       const ct = periodTotal(this.db, input.compareDateFrom, input.compareDateTo, type);
       comparePeriod = { dateFrom: input.compareDateFrom, dateTo: input.compareDateTo, ...ct };
@@ -394,11 +393,7 @@ export class ReportService {
     return { items, currency: getBaseCurrency() };
   }
 
-  getBudgetStats(input: BudgetStatsInput): {
-    items: BudgetStatsItem[];
-    inheritedFrom: string | null;
-    currency: string;
-  } {
+  getBudgetStats(input: BudgetStatsInput): BudgetStatsResult {
     const stats = this.getCategoryStats({
       month: input.month,
       type: input.type,
@@ -417,7 +412,16 @@ export class ReportService {
   }
 
   trends(input: TrendsInput): TrendsResult {
-    const currentMonth = getCurrentMonth();
+    // A range names its own months; otherwise the series looks back from now.
+    const lastMonth = input.dateTo
+      ? Temporal.PlainDate.from(input.dateTo).toPlainYearMonth()
+      : Temporal.PlainYearMonth.from(getCurrentMonth());
+    const firstMonth = input.dateFrom
+      ? Temporal.PlainDate.from(input.dateFrom).toPlainYearMonth()
+      : lastMonth.subtract({ months: input.months - 1 });
+    const first = firstMonth.toString();
+    const last = lastMonth.toString();
+
     // Build month series with start/end dates so the LEFT JOIN uses
     // range comparisons (t.date >= … AND t.date < …) instead of
     // strftime('%Y-%m', t.date) = …, allowing SQLite to seek the date index.
@@ -425,16 +429,16 @@ export class ReportService {
       sql`
         WITH RECURSIVE months(m, m_start, m_end) AS (
           SELECT
-            strftime('%Y-%m', ${currentMonth} || '-01', '-' || (${input.months} - 1) || ' months'),
-            strftime('%Y-%m-%d', ${currentMonth} || '-01', '-' || (${input.months} - 1) || ' months'),
-            strftime('%Y-%m-%d', ${currentMonth} || '-01', '-' || (${input.months} - 1) || ' months', '+1 month')
+            ${first},
+            ${first} || '-01',
+            strftime('%Y-%m-%d', ${first} || '-01', '+1 month')
           UNION ALL
           SELECT
             strftime('%Y-%m', m || '-01', '+1 month'),
             strftime('%Y-%m-%d', m || '-01', '+1 month'),
             strftime('%Y-%m-%d', m || '-01', '+2 months')
           FROM months
-          WHERE m < ${currentMonth}
+          WHERE m < ${last}
         )
         SELECT
           months.m AS month,
